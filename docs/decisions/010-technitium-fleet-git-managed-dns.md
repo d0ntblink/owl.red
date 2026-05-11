@@ -43,7 +43,7 @@ Adopt the following operating model:
 Fleet scope expansion:
 - Phase 1: `gitops/technitium`
 - Phase 2: `gitops/metallb`, `gitops/cert-manager`
-- Phase 3: `gitops/traefik` via explicit Fleet Helm bundle once existing release ownership migration is planned.
+- Phase 3: `gitops/traefik` via explicit Fleet Helm bundle (release `traefik`, chart `traefik` from `https://traefik.github.io/charts`, values from Git).
 
 ## Consequences
 

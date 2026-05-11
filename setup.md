@@ -431,6 +431,9 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
          meta.helm.sh/release-namespace=metallb-system --overwrite
 
       kubectl get gitrepo -A
+
+      # Traefik is managed by Fleet as Helm release 'traefik' from gitops/traefik/fleet.yaml.
+      kubectl -n traefik get deploy,svc
       ```
 
 12. [KUBECTL] Create required Technitium secrets.

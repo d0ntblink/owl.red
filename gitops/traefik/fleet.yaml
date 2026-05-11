@@ -1,0 +1,9 @@
+defaultNamespace: traefik
+helm:
+  repo: https://traefik.github.io/charts
+  chart: traefik
+  version: 40.0.0
+  releaseName: traefik
+  takeOwnership: true
+  valuesFiles:
+    - values.yaml

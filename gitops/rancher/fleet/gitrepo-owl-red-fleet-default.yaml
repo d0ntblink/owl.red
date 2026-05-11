@@ -11,3 +11,4 @@ spec:
     - gitops/technitium
     - gitops/metallb
     - gitops/cert-manager
+    - gitops/traefik

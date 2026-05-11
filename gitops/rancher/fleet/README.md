@@ -51,6 +51,7 @@ Expected outcome: Fleet starts reconciling these paths from `https://github.com/
 - `gitops/technitium`
 - `gitops/metallb`
 - `gitops/cert-manager`
+- `gitops/traefik`
 
 ## Adoption Strategy
 
@@ -58,7 +59,14 @@ This bootstrap now targets:
 - `gitops/technitium`
 - `gitops/metallb`
 - `gitops/cert-manager`
+- `gitops/traefik`
 
 Reason: Fleet uses Helm under the hood for bundle deployment. Existing resources that were installed outside Fleet (for example MetalLB objects) can fail ownership checks if included immediately.
 
-Traefik is intentionally deferred in this phase. Current Traefik configuration is values-only (`gitops/traefik/values.yaml`) and should be onboarded as an explicit Fleet Helm bundle in a dedicated step.
+Traefik is onboarded as a dedicated Fleet Helm bundle:
+- chart repo: `https://traefik.github.io/charts`
+- chart: `traefik`
+- release name: `traefik`
+- values source: `gitops/traefik/values.yaml`
+
+This preserves continuity with the existing Helm release and makes future Traefik changes fully Git-driven.
