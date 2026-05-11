@@ -1,0 +1,206 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dashboard-flame-auth
+  namespace: dashboards
+type: Opaque
+stringData:
+  password: change-me-flame-dashboard
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flame
+  namespace: dashboards
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flame-dashboard
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flame-dashboard
+subjects:
+  - kind: ServiceAccount
+    name: flame
+    namespace: dashboards
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flame-dashboard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flame-bootstrap
+  namespace: dashboards
+data:
+  config.json: |
+    {
+      "customTitle": "Flame: Cappuccino Command Deck",
+      "pinAppsByDefault": true,
+      "pinCategoriesByDefault": true,
+      "showTime": true,
+      "kubernetesApps": true,
+      "defaultSearchProvider": "g",
+      "hideDate": false,
+      "defaultTheme": "tron"
+    }
+  flame.css: |
+    :root {
+      --cp-base: #1e1e2e;
+      --cp-mantle: #181825;
+      --cp-surface: #313244;
+      --cp-text: #cdd6f4;
+      --cp-subtext: #bac2de;
+      --cp-blue: #89b4fa;
+      --cp-mauve: #cba6f7;
+      --cp-green: #a6e3a1;
+      --cp-peach: #fab387;
+    }
+
+    body {
+      background: radial-gradient(circle at top right, rgba(137, 180, 250, 0.15), transparent 45%), var(--cp-base) !important;
+      color: var(--cp-text) !important;
+    }
+
+    .Header,
+    .SearchBar,
+    .Apps {
+      background-color: var(--cp-mantle) !important;
+      border: 1px solid rgba(203, 166, 247, 0.35) !important;
+    }
+
+    .AppCard {
+      background: var(--cp-surface) !important;
+      border: 1px solid rgba(166, 227, 161, 0.2) !important;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .AppCardTitle,
+    .BookmarksTitle,
+    .HeaderTitle {
+      color: var(--cp-text) !important;
+    }
+
+    a,
+    .AppCardLink {
+      color: var(--cp-blue) !important;
+    }
+
+    a:hover,
+    .AppCardLink:hover {
+      color: var(--cp-peach) !important;
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flame
+  namespace: dashboards
+  labels:
+    app.kubernetes.io/name: flame
+    app.kubernetes.io/part-of: dashboards
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flame
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flame
+        app.kubernetes.io/part-of: dashboards
+    spec:
+      serviceAccountName: flame
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: flame
+          image: pawelmalak/flame:2.4.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dashboard-flame-auth
+                  key: password
+          ports:
+            - name: http
+              containerPort: 5005
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: flame-bootstrap
+              mountPath: /app/data/config.json
+              subPath: config.json
+              readOnly: true
+            - name: flame-bootstrap
+              mountPath: /app/data/flame.css
+              subPath: flame.css
+              readOnly: true
+      volumes:
+        - name: flame-bootstrap
+          configMap:
+            name: flame-bootstrap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flame
+  namespace: dashboards
+  labels:
+    app.kubernetes.io/name: flame
+    app.kubernetes.io/part-of: dashboards
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: flame
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flame
+  namespace: dashboards
+  annotations:
+    flame.pawelmalak/type: application
+    flame.pawelmalak/name: Flame Dashboard
+    flame.pawelmalak/url: https://flame.owl.red
+    flame.pawelmalak/icon: fire
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: flame.owl.red
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: flame
+                port:
+                  number: 80

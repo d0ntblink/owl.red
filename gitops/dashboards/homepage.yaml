@@ -1,0 +1,285 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage-config
+  namespace: dashboards
+data:
+  settings.yaml: |
+    ---
+    title: Owl.red Homepage
+    description: Cappuccino command center for now and next
+    theme: dark
+    color: slate
+    headerStyle: boxed
+    target: _blank
+  services.yaml: |
+    ---
+    - Core Platform:
+        - Rancher:
+            href: https://rancher.owl.red
+            description: Kubernetes operations and lifecycle
+            icon: rancher
+        - Technitium DNS:
+            href: http://dns.owl.red:5380
+            description: Authoritative DNS management UI
+            icon: dns
+        - Flame:
+            href: https://flame.owl.red
+            description: Application-first launcher experience
+            icon: flame
+        - Homer:
+            href: https://homer.owl.red
+            description: Fast static dashboard view
+            icon: homer
+
+    - Infrastructure:
+        - OPNsense:
+            href: https://edge.owl.red
+            description: Firewall, routing, and policy control
+            icon: opnsense
+        - MikroTik Switch:
+            href: http://switch.owl.red
+            description: CSS326 switching fabric management
+            icon: mikrotik
+        - PDM:
+            href: http://pdm.owl.red
+            description: Proxmox Datacenter Manager
+            icon: proxmox
+        - PBS:
+            href: https://pbs.owl.red
+            description: Backup operations and restore readiness
+            icon: proxmox-backup-server
+        - Unraid:
+            href: http://nas.owl.red
+            description: Storage and media backbone
+            icon: unraid
+        - cp1 Proxmox:
+            href: https://cp1.pve.owl.red:8006
+            description: Control plane host 1
+            icon: proxmox
+        - cp2 Proxmox:
+            href: https://cp2.pve.owl.red:8006
+            description: Control plane host 2
+            icon: proxmox
+        - cp3 Proxmox:
+            href: https://cp3.pve.owl.red:8006
+            description: Control plane host 3
+            icon: proxmox
+        - worker1 Proxmox:
+            href: https://worker1.pve.owl.red:8006
+            description: Worker host
+            icon: proxmox
+
+    - Future Roadmap:
+        - Plex:
+            href: https://plex.owl.red
+            description: Planned media streaming endpoint
+            icon: plex
+        - Sonarr:
+            href: https://sonarr.owl.red
+            description: Planned TV automation endpoint
+            icon: sonarr
+        - Radarr:
+            href: https://radarr.owl.red
+            description: Planned movie automation endpoint
+            icon: radarr
+        - Bazarr:
+            href: https://bazarr.owl.red
+            description: Planned subtitle automation endpoint
+            icon: bazarr
+        - Prowlarr:
+            href: https://prowlarr.owl.red
+            description: Planned indexer management endpoint
+            icon: prowlarr
+        - qBittorrent:
+            href: https://qbittorrent.owl.red
+            description: Planned download control endpoint
+            icon: qbittorrent
+        - Tautulli:
+            href: https://tautulli.owl.red
+            description: Planned Plex analytics endpoint
+            icon: tautulli
+        - Speedtest Tracker:
+            href: https://speedtest.owl.red
+            description: Planned WAN telemetry endpoint
+            icon: speedtest-tracker
+  bookmarks.yaml: |
+    ---
+    - Dashboards:
+        - Rancher:
+            - abbr: RA
+              href: https://rancher.owl.red
+        - Flame:
+            - abbr: FL
+              href: https://flame.owl.red
+        - Homepage:
+            - abbr: HP
+              href: https://homepage.owl.red
+        - Homer:
+            - abbr: HM
+              href: https://homer.owl.red
+
+    - Infrastructure:
+        - DNS UI:
+            - abbr: DNS
+              href: http://dns.owl.red:5380
+        - OPNsense:
+            - abbr: FW
+              href: https://edge.owl.red
+        - Unraid:
+            - abbr: NAS
+              href: http://nas.owl.red
+  widgets.yaml: |
+    ---
+    - search:
+        provider: duckduckgo
+        target: _blank
+
+    - datetime:
+        text_size: xl
+        format:
+          dateStyle: long
+          timeStyle: short
+  custom.css: |
+    :root {
+      --cp-base: #1e1e2e;
+      --cp-mantle: #181825;
+      --cp-surface: #313244;
+      --cp-text: #cdd6f4;
+      --cp-subtext: #bac2de;
+      --cp-blue: #89b4fa;
+      --cp-mauve: #cba6f7;
+      --cp-green: #a6e3a1;
+      --cp-peach: #fab387;
+    }
+
+    body {
+      background: radial-gradient(circle at 15% 0%, rgba(203, 166, 247, 0.25), transparent 45%), var(--cp-base) !important;
+      color: var(--cp-text) !important;
+    }
+
+    [class*="card"], .card {
+      background: var(--cp-surface) !important;
+      border: 1px solid rgba(166, 227, 161, 0.18) !important;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    a {
+      color: var(--cp-blue) !important;
+    }
+
+    a:hover {
+      color: var(--cp-peach) !important;
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: dashboards
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homepage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homepage
+        app.kubernetes.io/part-of: dashboards
+    spec:
+      containers:
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:v1.13.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: homepage.owl.red
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/settings.yaml
+              subPath: settings.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/services.yaml
+              subPath: services.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/bookmarks.yaml
+              subPath: bookmarks.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/widgets.yaml
+              subPath: widgets.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/custom.css
+              subPath: custom.css
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: homepage-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homepage
+  namespace: dashboards
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: homepage
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homepage
+  namespace: dashboards
+  annotations:
+    flame.pawelmalak/type: application
+    flame.pawelmalak/name: Homepage Dashboard
+    flame.pawelmalak/url: https://homepage.owl.red
+    flame.pawelmalak/icon: dashboard
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: homepage.owl.red
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 80

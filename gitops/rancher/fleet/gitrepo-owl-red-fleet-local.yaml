@@ -12,3 +12,4 @@ spec:
     - gitops/metallb
     - gitops/cert-manager
     - gitops/traefik
+    - gitops/dashboards

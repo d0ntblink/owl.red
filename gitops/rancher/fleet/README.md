@@ -52,6 +52,7 @@ Expected outcome: Fleet starts reconciling these paths from `https://github.com/
 - `gitops/metallb`
 - `gitops/cert-manager`
 - `gitops/traefik`
+- `gitops/dashboards`
 
 ## Adoption Strategy
 
@@ -60,6 +61,7 @@ This bootstrap now targets:
 - `gitops/metallb`
 - `gitops/cert-manager`
 - `gitops/traefik`
+- `gitops/dashboards`
 
 Reason: Fleet uses Helm under the hood for bundle deployment. Existing resources that were installed outside Fleet (for example MetalLB objects) can fail ownership checks if included immediately.
 

@@ -67,6 +67,9 @@ Each VLAN uses its own OPNsense interface-local gateway.
 | `10.0.10.30` | `dns.owl.red` | Technitium (on k8s cluster) | DNS service endpoint (HA via k8s) |
 | `10.0.10.31` | `pdm.owl.red` | PDM VM | Proxmox Datacenter Manager |
 | `10.0.10.201` | `rancher.owl.red` | Rancher service endpoint | Rancher UI/API ingress endpoint (via Traefik/MetalLB VIP) |
+| `10.0.10.201` | `flame.owl.red` | Flame service endpoint | Dashboard candidate #1 (GitOps-managed via Fleet) |
+| `10.0.10.201` | `homepage.owl.red` | Homepage service endpoint | Dashboard candidate #2 (GitOps-managed via Fleet) |
+| `10.0.10.201` | `homer.owl.red` | Homer service endpoint | Dashboard candidate #3 (GitOps-managed via Fleet) |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM | Proxmox Backup Server |
 | `10.0.10.200–250` | MetalLB VIP pool (active) | Kubernetes LoadBalancer address pool | Active for Traefik and future services |
 
@@ -352,6 +355,9 @@ Memory tuning rule: start with reserved memory (no overcommit), then adjust afte
 | Service exposure strategy | Selected: MetalLB with explicit VIP assignment for ingress and selected services |
 | cert-manager | Manages TLS certificates from Let's Encrypt via DNS-01 challenge |
 | Rancher | Kubernetes management plane, deployed on k8s for high availability and manages the cluster itself |
+| Flame | Lightweight app launcher dashboard candidate, deployed on k8s and managed via Fleet |
+| Homepage | Feature-rich dashboard candidate with flexible widgets/layout, deployed on k8s and managed via Fleet |
+| Homer | Static YAML-driven dashboard candidate with low operational overhead, deployed on k8s and managed via Fleet |
 | Technitium DNS | Deployed on k8s cluster for high availability. Authoritative DNS server for `owl.red` domain. Records are Git-managed and reconciled via Fleet-managed sync job. DHCP remains on OPNsense in the initial build; Option 114 is delivered by OPNsense DHCP on guest VLAN. |
 | Proxmox Datacenter Manager | Centralized management for multiple Proxmox hosts/clusters, deployed on k8s for high availability |
 | Proxmox Backup Server | Backup target for k8s cluster state and VM backups |
