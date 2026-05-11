@@ -352,7 +352,7 @@ Memory tuning rule: start with reserved memory (no overcommit), then adjust afte
 | Service exposure strategy | Selected: MetalLB with explicit VIP assignment for ingress and selected services |
 | cert-manager | Manages TLS certificates from Let's Encrypt via DNS-01 challenge |
 | Rancher | Kubernetes management plane, deployed on k8s for high availability and manages the cluster itself |
-| Technitium DNS | Deployed on k8s cluster for high availability. Authoritative DNS server for `owl.red` domain. DHCP remains on OPNsense in the initial build; Option 114 is delivered by OPNsense DHCP on guest VLAN. |
+| Technitium DNS | Deployed on k8s cluster for high availability. Authoritative DNS server for `owl.red` domain. Records are Git-managed and reconciled via Fleet-managed sync job. DHCP remains on OPNsense in the initial build; Option 114 is delivered by OPNsense DHCP on guest VLAN. |
 | Proxmox Datacenter Manager | Centralized management for multiple Proxmox hosts/clusters, deployed on k8s for high availability |
 | Proxmox Backup Server | Backup target for k8s cluster state and VM backups |
 | Plex Media Server | Placement pending final decision (`docs/decisions/002-plex-k8s-quicksync.md`): target is k8s on QuickSync-capable nodes; fallback is Unraid VM |
@@ -443,6 +443,11 @@ HTTP-01 challenge will not work for internal services (they are not reachable fr
 ### DNS Authority : Technitium on k8s
 
 **Authority & High Availability:** Technitium DNS is deployed on the k8s cluster at service endpoint `10.0.10.30`.
+
+**GitOps ownership model (selected):**
+- Fleet is the reconciler for Kubernetes DNS manifests.
+- The authoritative `owl.red` zone file is stored in Git (`gitops/technitium/dns-zone-configmap.yaml`).
+- A Fleet-managed CronJob imports the zone into Technitium on schedule to correct drift.
 
 **Failure domain:** DNS depends on k8s health and storage availability. This is acceptable now because DHCP remains on OPNsense during initial rollout.
 

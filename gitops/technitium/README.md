@@ -1,6 +1,6 @@
-# Technitium DNS (DNS-first Baseline)
+# Technitium DNS (Fleet + Git-Managed Records)
 
-This folder deploys Technitium DNS on Kubernetes with a static MetalLB VIP.
+This folder deploys Technitium DNS on Kubernetes with a static MetalLB VIP and enforces the `owl.red` zone records from Git.
 
 ## What This Deploys
 
@@ -13,6 +13,11 @@ This folder deploys Technitium DNS on Kubernetes with a static MetalLB VIP.
 - Static temporary node-local storage via:
   - PV: `technitium-pv`
   - PVC: `technitium-data`
+- Fleet bundle metadata: `fleet.yaml`
+- Git-owned DNS zone source: `dns-zone-configmap.yaml`
+- In-cluster drift correction:
+  - `dns-sync-script-configmap.yaml`
+  - `dns-zone-sync-cronjob.yaml`
 
 Temporary storage mode details:
 - This deployment intentionally avoids NAS/NFS dependencies.
@@ -21,15 +26,25 @@ Temporary storage mode details:
 
 ## Security Model
 
-- Admin password is not stored in git.
-- Create secret before deploy:
+Secrets are not stored in Git.
+
+1. Create the Technitium admin password secret:
 
 ```bash
 kubectl -n technitium-namespace create secret generic technitium-admin \
   --from-literal=admin-password='<strong-password>'
 ```
 
+2. Create an API token in Technitium (recommended: dedicated automation user with least privilege), then create the Kubernetes secret used by the sync CronJob:
+
+```bash
+kubectl -n technitium-namespace create secret generic technitium-api-token \
+  --from-literal=token='<technitium-api-token>'
+```
+
 ## Deployment
+
+Fleet is the preferred path. If you need break-glass/manual apply, use:
 
 ```bash
 kubectl apply -f gitops/technitium/namespace.yaml
@@ -38,6 +53,9 @@ kubectl apply -f gitops/technitium/persistent-volume-claim.yaml
 kubectl apply -f gitops/technitium/service-headless.yaml
 kubectl apply -f gitops/technitium/service-dns-lb.yaml
 kubectl apply -f gitops/technitium/statefulset.yaml
+kubectl apply -f gitops/technitium/dns-zone-configmap.yaml
+kubectl apply -f gitops/technitium/dns-sync-script-configmap.yaml
+kubectl apply -f gitops/technitium/dns-zone-sync-cronjob.yaml
 ```
 
 ## Readiness Check (Bounded Timeout)
@@ -54,8 +72,25 @@ kubectl rollout status statefulset/technitium -n technitium-namespace --timeout=
 }
 ```
 
+## DNS Drift Protection Check
+
+Run one manual sync job to validate API token + import path immediately:
+
+```bash
+kubectl -n technitium-namespace create job --from=cronjob/technitium-zone-sync technitium-zone-sync-manual
+kubectl -n technitium-namespace logs job/technitium-zone-sync-manual --tail=200
+```
+
+Then verify a known record:
+
+```bash
+dig @10.0.10.30 rancher.owl.red +short
+```
+
 ## Notes
 
 - This is DNS-first. DHCP remains on OPNsense during stabilization.
 - Do not expose admin UI publicly; keep it LAN-only.
+- Update the SOA serial in `dns-zone-configmap.yaml` whenever records are changed.
+- Manual web UI record edits are temporary and will be overwritten by the scheduled sync.
 - When stable storage is available again, migrate this PV/PVC back to the final storage backend.

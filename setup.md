@@ -399,13 +399,49 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
       --set ingressClassName=traefik
     ```
 
-11. [DNS] Create A record: `rancher.owl.red` → Traefik MetalLB VIP.
+11. [KUBECTL] Bootstrap Fleet GitRepo for this repository.
+      ```bash
+      kubectl get ns | rg '^fleet-(local|default)$'
+
+      # Create git credential secret in the matching Fleet namespace first:
+      kubectl -n fleet-local create secret generic owl-red-github-auth \
+         --type=kubernetes.io/basic-auth \
+         --from-literal=username='<github-username>' \
+         --from-literal=password='<github-personal-access-token>'
+
+      # Use one of the two manifests below based on namespace availability:
+      kubectl apply -f gitops/rancher/fleet/gitrepo-owl-red-fleet-local.yaml
+      # or
+      kubectl apply -f gitops/rancher/fleet/gitrepo-owl-red-fleet-default.yaml
+
+      kubectl get gitrepo -A
+      ```
+
+12. [KUBECTL] Create required Technitium secrets.
+      ```bash
+      kubectl -n technitium-namespace create secret generic technitium-admin \
+         --from-literal=admin-password='<strong-password>'
+
+      kubectl -n technitium-namespace create secret generic technitium-api-token \
+         --from-literal=token='<technitium-api-token>'
+      ```
+
+13. [DNS] Validate first zone sync from Git source.
+      ```bash
+      kubectl -n technitium-namespace create job \
+         --from=cronjob/technitium-zone-sync technitium-zone-sync-manual
+      kubectl -n technitium-namespace logs job/technitium-zone-sync-manual --tail=200
+      dig @10.0.10.30 rancher.owl.red +short
+      ```
 
 ### Exit Gates
 
 - `kubectl get nodes` shows all 4 nodes `Ready`.
 - Rancher UI reachable at `https://rancher.owl.red`.
 - MetalLB VIP pool visible in Rancher network view.
+- Fleet GitRepo object for `owl-red` is `Ready`.
+- `technitium-zone-sync` CronJob has at least one successful run.
+- `dig @10.0.10.30 rancher.owl.red +short` returns the Git-defined VIP.
 
 ### Rollback
 

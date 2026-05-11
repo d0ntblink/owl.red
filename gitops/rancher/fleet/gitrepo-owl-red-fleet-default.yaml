@@ -1,0 +1,11 @@
+apiVersion: fleet.cattle.io/v1alpha1
+kind: GitRepo
+metadata:
+  name: owl-red
+  namespace: fleet-default
+spec:
+  repo: https://github.com/d0ntblink/owl.red.git
+  branch: main
+  clientSecretName: owl-red-github-auth
+  paths:
+    - gitops/technitium

@@ -1,0 +1,3 @@
+defaultNamespace: technitium-namespace
+ignore:
+  - README.md
