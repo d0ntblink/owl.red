@@ -1,0 +1,278 @@
+---
+- name: Ensure proxmox health output directory exists on control node
+  ansible.builtin.file:
+    path: "{{ proxmox_health_output_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - proxmox_prep
+    - artifact
+
+- name: Check for legacy enterprise repository list
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/pve-enterprise.list
+  register: proxmox_legacy_enterprise_list
+  changed_when: false
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Disable enterprise repository in deb822 format
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pve-enterprise.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: {{ proxmox_enterprise_repo_uri }}
+      Suites: {{ proxmox_repo_suite }}
+      Components: pve-enterprise
+      Signed-By: {{ proxmox_repo_signed_by }}
+      Enabled: no
+  when: proxmox_disable_enterprise_repo | bool
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Comment legacy enterprise repository entries
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/pve-enterprise.list
+    regexp: "^(deb\\s+https?://enterprise\\.proxmox\\.com/debian/pve\\s+\\S+\\s+pve-enterprise.*)$"
+    replace: "# \\1"
+  when:
+    - proxmox_disable_enterprise_repo | bool
+    - proxmox_legacy_enterprise_list.stat.exists
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Ensure no-subscription repository stanza is configured
+  ansible.builtin.blockinfile:
+    path: /etc/apt/sources.list.d/proxmox.sources
+    create: true
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: proxmox-no-subscription"
+    block: |
+      Types: deb
+      URIs: {{ proxmox_no_subscription_repo_uri }}
+      Suites: {{ proxmox_repo_suite }}
+      Components: pve-no-subscription
+      Signed-By: {{ proxmox_repo_signed_by }}
+  when: proxmox_manage_no_subscription_repo | bool
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Remove unmanaged Ceph repository files when Ceph repo is disabled
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/ceph.list
+    - /etc/apt/sources.list.d/ceph.sources
+  when: not (proxmox_manage_ceph_repo | bool)
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Build Ceph repository values
+  ansible.builtin.set_fact:
+    proxmox_ceph_repo_uri_effective: >-
+      {{
+        (
+          'https://enterprise.proxmox.com/debian/' ~ proxmox_ceph_release
+        ) if proxmox_ceph_repo_channel == 'enterprise' else (
+          'http://download.proxmox.com/debian/' ~ proxmox_ceph_release
+        )
+      }}
+    proxmox_ceph_component_effective: "{{ proxmox_ceph_repo_channel }}"
+  when: proxmox_manage_ceph_repo | bool
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Ensure Ceph repository is configured when enabled
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/ceph.sources
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: {{ proxmox_ceph_repo_uri_effective }}
+      Suites: {{ proxmox_repo_suite }}
+      Components: {{ proxmox_ceph_component_effective }}
+      Signed-By: {{ proxmox_repo_signed_by }}
+  when: proxmox_manage_ceph_repo | bool
+  tags:
+    - proxmox_prep
+    - repositories
+
+- name: Ensure monitoring packages are installed
+  ansible.builtin.apt:
+    name: "{{ proxmox_monitoring_packages }}"
+    state: present
+  tags:
+    - proxmox_prep
+    - monitoring
+
+- name: Ensure smartmontools service is enabled and running
+  ansible.builtin.service:
+    name: smartmontools
+    enabled: true
+    state: started
+  tags:
+    - proxmox_prep
+    - monitoring
+
+- name: Collect Proxmox version
+  ansible.builtin.command: pveversion
+  register: proxmox_pveversion
+  changed_when: false
+  failed_when: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Collect lm-sensors output
+  ansible.builtin.command: sensors
+  register: proxmox_sensors_output
+  changed_when: false
+  failed_when: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Collect thermal zone readings
+  ansible.builtin.shell: |
+    set -euo pipefail
+    shopt -s nullglob
+    for zone in /sys/class/thermal/thermal_zone*; do
+      zone_name="${zone##*/}"
+      zone_type="$(cat "${zone}/type" 2>/dev/null || echo unknown)"
+      zone_temp="$(cat "${zone}/temp" 2>/dev/null || echo unknown)"
+      printf "%s\t%s\t%s\n" "${zone_name}" "${zone_type}" "${zone_temp}"
+    done
+  args:
+    executable: /bin/bash
+  register: proxmox_thermal_zones
+  changed_when: false
+  failed_when: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Discover SMART devices
+  ansible.builtin.command: smartctl --scan-open
+  register: proxmox_smart_scan
+  changed_when: false
+  failed_when: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Build SMART device list
+  ansible.builtin.set_fact:
+    proxmox_smart_devices: >-
+      {{
+        proxmox_smart_scan.stdout_lines
+        | default([])
+        | map('regex_search', '^(\\S+)')
+        | select('string')
+        | list
+      }}
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Collect SMART health status
+  ansible.builtin.command: "smartctl -H {{ item }}"
+  loop: "{{ proxmox_smart_devices | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  register: proxmox_smart_health
+  changed_when: false
+  failed_when: false
+  when:
+    - proxmox_collect_health_facts | bool
+    - (proxmox_smart_devices | default([]) | length) > 0
+  tags:
+    - proxmox_prep
+    - monitoring
+    - artifact
+
+- name: Check repository files for artifact export
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/apt/sources.list.d/pve-enterprise.sources
+    - /etc/apt/sources.list.d/proxmox.sources
+    - /etc/apt/sources.list.d/ceph.sources
+  register: proxmox_repo_stats
+  changed_when: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - repositories
+    - artifact
+
+- name: Slurp repository files
+  ansible.builtin.slurp:
+    path: "{{ item.stat.path }}"
+  loop: "{{ proxmox_repo_stats.results | default([]) }}"
+  when:
+    - proxmox_collect_health_facts | bool
+    - item.stat.exists
+  register: proxmox_repo_file_slurps
+  tags:
+    - proxmox_prep
+    - repositories
+    - artifact
+
+- name: Build repository content map
+  ansible.builtin.set_fact:
+    proxmox_repo_contents: "{{ proxmox_repo_contents | default({}) | combine({ item.source: (item.content | b64decode).splitlines() }) }}"
+  loop: "{{ proxmox_repo_file_slurps.results | default([]) | selectattr('content', 'defined') | list }}"
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - repositories
+    - artifact
+
+- name: Write Proxmox prep artifact
+  ansible.builtin.copy:
+    dest: "{{ proxmox_health_output_dir }}/{{ inventory_hostname }}.json"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'generated_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
+          'inventory_hostname': inventory_hostname,
+          'ansible_host': ansible_host | default(inventory_hostname),
+          'distribution': ansible_facts.distribution | default('unknown'),
+          'distribution_release': ansible_facts.distribution_release | default('unknown'),
+          'kernel': ansible_facts.kernel | default('unknown'),
+          'pveversion': proxmox_pveversion.stdout | default(''),
+          'repositories': proxmox_repo_contents | default({}),
+          'sensors_output': proxmox_sensors_output.stdout_lines | default([]),
+          'thermal_zones': proxmox_thermal_zones.stdout_lines | default([]),
+          'smart_scan': proxmox_smart_scan.stdout_lines | default([]),
+          'smart_health': proxmox_smart_health.results | default([])
+        } | to_nice_json
+      }}
+  delegate_to: localhost
+  become: false
+  when: proxmox_collect_health_facts | bool
+  tags:
+    - proxmox_prep
+    - artifact

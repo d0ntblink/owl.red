@@ -1,0 +1,15 @@
+machine:
+  network:
+    hostname: cp2-talos
+    interfaces:
+      - interface: eth0
+        addresses:
+          - 10.0.10.22/16
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 10.0.10.1
+        vip:
+          ip: 10.0.10.20
+    nameservers:
+      - 10.0.10.1
+      - 1.1.1.1

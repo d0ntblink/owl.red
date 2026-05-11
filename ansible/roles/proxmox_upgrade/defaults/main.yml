@@ -1,0 +1,7 @@
+---
+proxmox_upgrade_run_apt_update: true
+proxmox_upgrade_run_dist_upgrade: false
+proxmox_upgrade_reboot_after_upgrade: false
+proxmox_upgrade_reboot_timeout: 1200
+proxmox_upgrade_reboot_pre_delay: 5
+proxmox_upgrade_reboot_post_delay: 20

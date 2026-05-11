@@ -1,0 +1,61 @@
+# Security-sensitive generated artifacts (never commit)
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/.terraform/
+terraform/**/*.tfplan
+terraform/**/*.tfvars
+terraform/**/*.auto.tfvars
+talos/config/talosconfig
+talos/config/controlplane.yaml
+talos/config/worker.yaml
+*.pem
+*.key
+*.p12
+*.pfx
+*.kubeconfig
+kubeconfig
+
+# OPNsense backups - commit only after stripping secrets
+opnsense/backups/*.xml
+
+# Generated automation artifacts
+ansible/artifacts/
+
+# Ansible retry files
+*.retry
+
+# Local env / session files
+.env
+.env.*
+!.env.example
+.bw-session
+*.bw-session
+
+# Backup files
+*.bak
+*.orig
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.iml
+
+# Ansible vault password file (never commit)
+.vault-pass
+vault-password.txt
+
+# Downloaded cloud images (too large for git)
+ansible/roles/rke2-node/files/*.img
+ansible/roles/rke2-node/files/*.qcow2

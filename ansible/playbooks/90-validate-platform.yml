@@ -1,0 +1,108 @@
+---
+- name: Validate Linux host networking and DNS
+  hosts: "{{ validation_target_group | default('phase1_linux_baseline') }}"
+  gather_facts: "{{ validation_linux_checks_enabled | default(true) | bool }}"
+  become: false
+  serial: 1
+  tasks:
+    - name: Validate host reachability
+      ansible.builtin.ping:
+      when: validation_linux_checks_enabled | default(true) | bool
+      tags:
+        - validate
+        - reachability
+
+    - name: Validate default route
+      ansible.builtin.command: ip -4 route show default
+      register: validation_default_route
+      changed_when: false
+      failed_when: validation_default_route.rc != 0 or (validation_default_route.stdout | trim | length) == 0
+      when: validation_linux_checks_enabled | default(true) | bool
+      tags:
+        - validate
+        - route
+
+    - name: Validate DNS forward lookups
+      ansible.builtin.command: "getent hosts {{ item }}"
+      loop: "{{ dns_forward_checks }}"
+      loop_control:
+        label: "{{ item }}"
+      register: validation_dns_lookup
+      changed_when: false
+      when: validation_linux_checks_enabled | default(true) | bool
+      tags:
+        - validate
+        - dns
+
+- name: Validate management endpoints and write summary
+  hosts: localhost
+  gather_facts: false
+  vars:
+    endpoint_check_timeout: 3
+  tasks:
+    - name: Ensure validation output directory exists
+      ansible.builtin.file:
+        path: "{{ validation_output_dir }}"
+        state: directory
+        mode: "0755"
+      tags:
+        - validate
+        - artifact
+
+    - name: Validate required management endpoints
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        timeout: "{{ endpoint_check_timeout }}"
+        state: started
+      loop: "{{ management_tcp_checks | selectattr('required', 'equalto', true) | list }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.host }}:{{ item.port }})"
+      register: required_endpoint_checks
+      changed_when: false
+      failed_when: false
+      tags:
+        - validate
+        - endpoints
+
+    - name: Enforce required management endpoint checks in strict mode
+      ansible.builtin.assert:
+        that:
+          - (required_endpoint_checks.results | selectattr('failed', 'defined') | selectattr('failed') | list | length) == 0
+        fail_msg: "One or more required management endpoints are unavailable."
+      when: validation_enforce_required_endpoints | default(true) | bool
+      tags:
+        - validate
+        - endpoints
+
+    - name: Validate optional management endpoints
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        timeout: "{{ endpoint_check_timeout }}"
+        state: started
+      loop: "{{ management_tcp_checks | selectattr('required', 'equalto', false) | list }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.host }}:{{ item.port }})"
+      register: optional_endpoint_checks
+      changed_when: false
+      failed_when: false
+      tags:
+        - validate
+        - endpoints
+
+    - name: Write validation summary artifact
+      ansible.builtin.copy:
+        dest: "{{ validation_output_dir }}/phase1-validation-summary.json"
+        mode: "0644"
+        content: >-
+          {{
+            {
+              'generated_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
+              'required_endpoint_checks': required_endpoint_checks.results,
+              'optional_endpoint_checks': optional_endpoint_checks.results
+            } | to_nice_json
+          }}
+      tags:
+        - validate
+        - artifact

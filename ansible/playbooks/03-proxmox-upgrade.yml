@@ -1,0 +1,49 @@
+---
+- name: Proxmox package update and upgrade
+  hosts: "{{ proxmox_upgrade_target_group | default('proxmox_hosts') }}"
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  ignore_unreachable: "{{ proxmox_upgrade_ignore_unreachable | default(false) | bool }}"
+
+  pre_tasks:
+    - name: Skip planned hosts unless explicitly included
+      ansible.builtin.meta: end_host
+      when:
+        - not (proxmox_upgrade_include_planned_hosts | default(false) | bool)
+        - state | default('planned') != 'current'
+      tags:
+        - proxmox_upgrade
+
+    - name: Gather facts for proxmox upgrade
+      ansible.builtin.setup:
+      when: proxmox_upgrade_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_upgrade
+
+    - name: Assert Debian-family host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Host {{ inventory_hostname }} is {{ ansible_facts.os_family }}; Proxmox upgrade supports Debian-family hosts only."
+      when: proxmox_upgrade_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_upgrade
+
+    - name: Assert platform is proxmox
+      ansible.builtin.assert:
+        that:
+          - platform | default('unknown') == 'proxmox'
+        fail_msg: "Host {{ inventory_hostname }} platform is {{ platform | default('unknown') }}; expected proxmox."
+      when: proxmox_upgrade_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_upgrade
+
+  tasks:
+    - name: Apply proxmox upgrade role
+      ansible.builtin.include_role:
+        name: proxmox_upgrade
+      when: proxmox_upgrade_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_upgrade

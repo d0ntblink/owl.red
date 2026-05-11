@@ -1,0 +1,52 @@
+---
+- name: Refresh apt package cache
+  ansible.builtin.apt:
+    update_cache: true
+  when: proxmox_upgrade_run_apt_update | bool
+  tags:
+    - proxmox_upgrade
+    - updates
+
+- name: Run dist-upgrade when explicitly enabled
+  ansible.builtin.apt:
+    upgrade: dist
+    dpkg_options: force-confdef,force-confold
+  when: proxmox_upgrade_run_dist_upgrade | bool
+  tags:
+    - proxmox_upgrade
+    - updates
+
+- name: Check whether reboot is required after dist-upgrade
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: proxmox_upgrade_reboot_required
+  changed_when: false
+  when: proxmox_upgrade_run_dist_upgrade | bool
+  tags:
+    - proxmox_upgrade
+    - updates
+
+- name: Report pending reboot when automatic reboot is disabled
+  ansible.builtin.debug:
+    msg: "Reboot is required on {{ inventory_hostname }} but proxmox_upgrade_reboot_after_upgrade is false."
+  when:
+    - proxmox_upgrade_run_dist_upgrade | bool
+    - proxmox_upgrade_reboot_required.stat.exists | default(false)
+    - not (proxmox_upgrade_reboot_after_upgrade | bool)
+  tags:
+    - proxmox_upgrade
+    - updates
+
+- name: Reboot host when required and enabled
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ proxmox_upgrade_reboot_timeout | int }}"
+    pre_reboot_delay: "{{ proxmox_upgrade_reboot_pre_delay | int }}"
+    post_reboot_delay: "{{ proxmox_upgrade_reboot_post_delay | int }}"
+    msg: "Ansible initiated reboot after Proxmox dist-upgrade."
+  when:
+    - proxmox_upgrade_run_dist_upgrade | bool
+    - proxmox_upgrade_reboot_after_upgrade | bool
+    - proxmox_upgrade_reboot_required.stat.exists | default(false)
+  tags:
+    - proxmox_upgrade
+    - updates

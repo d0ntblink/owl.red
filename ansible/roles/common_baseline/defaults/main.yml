@@ -1,0 +1,10 @@
+---
+baseline_manage_authorized_keys: false
+baseline_authorized_keys: []
+baseline_packages:
+  - curl
+  - ca-certificates
+  - chrony
+  - jq
+  - net-tools
+  - iproute2

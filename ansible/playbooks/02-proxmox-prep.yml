@@ -1,0 +1,48 @@
+---
+- name: Pre-Phase-2 Proxmox repository and health preparation
+  hosts: "{{ proxmox_prep_target_group | default('proxmox_hosts') }}"
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  ignore_unreachable: "{{ proxmox_prep_ignore_unreachable | default(true) | bool }}"
+  pre_tasks:
+    - name: Skip planned hosts unless explicitly included
+      ansible.builtin.meta: end_host
+      when:
+        - not (proxmox_prep_include_planned_hosts | default(false) | bool)
+        - state | default('planned') != 'current'
+      tags:
+        - proxmox_prep
+
+    - name: Gather facts for proxmox preparation
+      ansible.builtin.setup:
+      when: proxmox_prep_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_prep
+
+    - name: Assert Debian-family host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Host {{ inventory_hostname }} is {{ ansible_facts.os_family }}; Proxmox prep currently supports Debian-family hosts only."
+      when: proxmox_prep_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_prep
+
+    - name: Assert platform is proxmox
+      ansible.builtin.assert:
+        that:
+          - platform | default('unknown') == 'proxmox'
+        fail_msg: "Host {{ inventory_hostname }} platform is {{ platform | default('unknown') }}; expected proxmox."
+      when: proxmox_prep_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_prep
+
+  tasks:
+    - name: Apply proxmox prep role
+      ansible.builtin.include_role:
+        name: proxmox_prep
+      when: proxmox_prep_execution_enabled | default(true) | bool
+      tags:
+        - proxmox_prep

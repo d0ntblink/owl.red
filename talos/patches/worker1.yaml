@@ -1,0 +1,13 @@
+machine:
+  network:
+    hostname: worker1-talos
+    interfaces:
+      - interface: eth0
+        addresses:
+          - 10.0.10.24/16
+        routes:
+          - network: 0.0.0.0/0
+            gateway: 10.0.10.1
+    nameservers:
+      - 10.0.10.1
+      - 1.1.1.1

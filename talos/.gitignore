@@ -1,0 +1,4 @@
+# Talos cluster secrets - NEVER commit these
+config/talosconfig
+config/controlplane.yaml
+config/worker.yaml

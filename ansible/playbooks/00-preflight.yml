@@ -1,0 +1,117 @@
+---
+- name: Phase 1 preflight checks from control node
+  hosts: localhost
+  gather_facts: false
+  vars:
+    endpoint_check_timeout: 3
+  tasks:
+    - name: Ensure artifact directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ artifact_root }}"
+        - "{{ baseline_facts_output_dir }}"
+        - "{{ validation_output_dir }}"
+
+    - name: Check required backup artifacts exist
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ backup_artifacts_required }}"
+      register: backup_artifact_stats
+      changed_when: false
+      when: preflight_require_backup_artifacts | default(true) | bool
+      tags:
+        - preflight
+        - backups
+
+    - name: Fail when a required backup artifact is missing
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Missing required backup artifact: {{ item.item.description }} ({{ item.item.path }})"
+      loop: "{{ backup_artifact_stats.results }}"
+      loop_control:
+        label: "{{ item.item.description }}"
+      when: preflight_require_backup_artifacts | default(true) | bool
+      tags:
+        - preflight
+        - backups
+
+    - name: Check required management endpoints
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        timeout: "{{ endpoint_check_timeout }}"
+        state: started
+      loop: "{{ management_tcp_checks | selectattr('required', 'equalto', true) | list }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.host }}:{{ item.port }})"
+      register: required_endpoint_checks
+      changed_when: false
+      failed_when: false
+      tags:
+        - preflight
+        - endpoints
+
+    - name: Enforce required management endpoint checks in strict mode
+      ansible.builtin.assert:
+        that:
+          - (required_endpoint_checks.results | selectattr('failed', 'defined') | selectattr('failed') | list | length) == 0
+        fail_msg: "One or more required management endpoints are unavailable."
+      when: preflight_enforce_required_endpoints | default(true) | bool
+      tags:
+        - preflight
+        - endpoints
+
+    - name: Check optional management endpoints
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        timeout: "{{ endpoint_check_timeout }}"
+        state: started
+      loop: "{{ management_tcp_checks | selectattr('required', 'equalto', false) | list }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.host }}:{{ item.port }})"
+      changed_when: false
+      failed_when: false
+      tags:
+        - preflight
+        - endpoints
+
+- name: Phase 1 preflight checks on managed Linux hosts
+  hosts: "{{ baseline_target_group | default('phase1_linux_baseline') }}"
+  gather_facts: "{{ preflight_linux_checks_enabled | default(true) | bool }}"
+  become: false
+  serial: 1
+  any_errors_fatal: true
+  ignore_unreachable: false
+  tasks:
+    - name: Verify host is reachable
+      ansible.builtin.ping:
+      when: preflight_linux_checks_enabled | default(true) | bool
+      tags:
+        - preflight
+        - reachability
+
+    - name: Verify default route exists
+      ansible.builtin.command: ip -4 route show default
+      register: default_route_check
+      changed_when: false
+      failed_when: default_route_check.rc != 0 or (default_route_check.stdout | trim | length) == 0
+      when: preflight_linux_checks_enabled | default(true) | bool
+      tags:
+        - preflight
+        - route
+
+    - name: Verify DNS forward lookups for critical records
+      ansible.builtin.command: "getent hosts {{ item }}"
+      loop: "{{ dns_forward_checks }}"
+      loop_control:
+        label: "{{ item }}"
+      changed_when: false
+      when: preflight_linux_checks_enabled | default(true) | bool
+      tags:
+        - preflight
+        - dns

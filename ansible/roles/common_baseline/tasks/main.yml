@@ -1,0 +1,96 @@
+---
+- name: Ensure baseline facts output directory exists on control node
+  ansible.builtin.file:
+    path: "{{ baseline_facts_output_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags:
+    - baseline
+    - facts
+
+- name: Ensure SSH keys are present when explicitly enabled
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ item }}"
+    state: present
+    manage_dir: true
+  loop: "{{ baseline_authorized_keys }}"
+  when:
+    - baseline_manage_authorized_keys | bool
+    - baseline_authorized_keys | length > 0
+  tags:
+    - baseline
+    - ssh
+
+- name: Refresh apt package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts.os_family == 'Debian'
+  tags:
+    - baseline
+    - packages
+
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name: "{{ baseline_packages }}"
+    state: present
+  when: ansible_facts.os_family == 'Debian'
+  tags:
+    - baseline
+    - packages
+
+- name: Ensure chrony service is enabled and running
+  ansible.builtin.service:
+    name: chrony
+    enabled: true
+    state: started
+  when: ansible_facts.os_family == 'Debian'
+  tags:
+    - baseline
+    - ntp
+
+- name: Collect default route
+  ansible.builtin.command: ip -4 route show default
+  register: baseline_default_route
+  changed_when: false
+  tags:
+    - baseline
+    - facts
+
+- name: Collect resolver config
+  ansible.builtin.command: cat /etc/resolv.conf
+  register: baseline_resolver_config
+  changed_when: false
+  tags:
+    - baseline
+    - facts
+
+- name: Write host baseline facts artifact
+  ansible.builtin.copy:
+    dest: "{{ baseline_facts_output_dir }}/{{ inventory_hostname }}.json"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'inventory_hostname': inventory_hostname,
+          'fqdn': ansible_facts.fqdn,
+          'ansible_host': ansible_host | default(inventory_hostname),
+          'platform': platform | default('unknown'),
+          'os_family': ansible_facts.os_family,
+          'distribution': ansible_facts.distribution,
+          'distribution_version': ansible_facts.distribution_version,
+          'kernel': ansible_facts.kernel,
+          'default_ipv4': ansible_facts.default_ipv4,
+          'default_route': baseline_default_route.stdout_lines,
+          'resolver_config': baseline_resolver_config.stdout_lines
+        } | to_nice_json
+      }}
+  delegate_to: localhost
+  become: false
+  tags:
+    - baseline
+    - facts

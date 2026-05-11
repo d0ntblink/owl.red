@@ -1,0 +1,43 @@
+---
+target_network_model:
+  cidr_template: "10.0.<vlan>.0/24"
+  gateways:
+    "10": 10.0.10.1
+    "20": 10.0.20.1
+    "30": 10.0.30.1
+    "40": 10.0.40.1
+    "50": 10.0.50.1
+  vlans:
+    - id: 10
+      name: network-devices
+      subnet: 10.0.10.0/24
+      gateway: 10.0.10.1
+      dhcp_enabled: false
+    - id: 20
+      name: private-net
+      subnet: 10.0.20.0/24
+      gateway: 10.0.20.1
+      dhcp_enabled: true
+    - id: 30
+      name: guest-net
+      subnet: 10.0.30.0/24
+      gateway: 10.0.30.1
+      dhcp_enabled: true
+      dhcp_option_114_required: true
+    - id: 40
+      name: iot-no-inter
+      subnet: 10.0.40.0/24
+      gateway: 10.0.40.1
+      dhcp_enabled: true
+    - id: 50
+      name: iot-with-inter
+      subnet: 10.0.50.0/24
+      gateway: 10.0.50.1
+      dhcp_enabled: true
+
+phase_constraints:
+  kubernetes_distro: talos_vanilla_kubernetes
+  loadbalancer_strategy: metallb_l2
+  dhcp_authority_initial: opnsense
+  dns_authority_initial: technitium_on_kubernetes
+  break_glass_required: true

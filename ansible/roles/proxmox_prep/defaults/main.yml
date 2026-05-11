@@ -1,0 +1,20 @@
+---
+proxmox_disable_enterprise_repo: true
+proxmox_manage_no_subscription_repo: true
+proxmox_manage_ceph_repo: false
+
+proxmox_repo_suite: "{{ ansible_facts.distribution_release | default('bookworm') }}"
+proxmox_enterprise_repo_uri: "https://enterprise.proxmox.com/debian/pve"
+proxmox_no_subscription_repo_uri: "http://download.proxmox.com/debian/pve"
+proxmox_repo_signed_by: "/usr/share/keyrings/proxmox-archive-keyring.gpg"
+
+proxmox_ceph_release: "ceph-squid"
+proxmox_ceph_repo_channel: "no-subscription"
+
+proxmox_monitoring_packages:
+  - smartmontools
+  - lm-sensors
+  - nvme-cli
+
+proxmox_collect_health_facts: true
+proxmox_health_output_dir: "{{ validation_output_dir }}/proxmox-prep"

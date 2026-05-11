@@ -1,0 +1,18 @@
+---
+- name: Prepare Proxmox Nodes with Talos ISO
+  hosts: proxmox_hosts
+  gather_facts: false
+  vars:
+    talos_version: "v1.7.5"
+    talos_iso_url: "https://github.com/siderolabs/talos/releases/download/{{ talos_version }}/metal-amd64.iso"
+    dest_iso_name: "talos-{{ talos_version }}-metal-amd64.iso"
+    proxmox_iso_dir: "/var/lib/vz/template/iso"
+    
+  tasks:
+    - name: Download Talos Linux ISO to local storage
+      ansible.builtin.get_url:
+        url: "{{ talos_iso_url }}"
+        dest: "{{ proxmox_iso_dir }}/{{ dest_iso_name }}"
+        mode: '0644'
+        owner: root
+        group: root

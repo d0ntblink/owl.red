@@ -1,0 +1,33 @@
+---
+- name: Apply common baseline to current Linux hosts
+  hosts: "{{ baseline_target_group | default('phase1_linux_baseline') }}"
+  become: true
+  gather_facts: "{{ baseline_execution_enabled | default(true) | bool }}"
+  serial: 1
+  ignore_unreachable: "{{ baseline_ignore_unreachable | default(false) | bool }}"
+  pre_tasks:
+    - name: Assert host is marked current
+      ansible.builtin.assert:
+        that:
+          - state | default('current') == 'current'
+        fail_msg: "Host {{ inventory_hostname }} is marked {{ state | default('unknown') }}; baseline role is for current hosts only."
+      when: baseline_execution_enabled | default(true) | bool
+      tags:
+        - baseline
+
+    - name: Assert Debian-family for baseline role
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Host {{ inventory_hostname }} is {{ ansible_facts.os_family }}; this baseline currently supports Debian-family hosts only."
+      when: baseline_execution_enabled | default(true) | bool
+      tags:
+        - baseline
+
+  tasks:
+    - name: Apply common baseline role
+      ansible.builtin.include_role:
+        name: common_baseline
+      when: baseline_execution_enabled | default(true) | bool
+      tags:
+        - baseline

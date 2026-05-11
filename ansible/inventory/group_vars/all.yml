@@ -1,0 +1,88 @@
+---
+domain_name: owl.red
+mgmt_vlan_id: 10
+
+default_nameservers:
+  - 10.0.10.30
+
+artifact_root: "{{ playbook_dir }}/../artifacts"
+baseline_facts_output_dir: "{{ artifact_root }}/facts"
+validation_output_dir: "{{ artifact_root }}/validation"
+
+backup_artifacts_required:
+  - path: "{{ playbook_dir }}/../artifacts/backups/opnsense/config.xml"
+    description: OPNsense XML backup
+  - path: "{{ playbook_dir }}/../artifacts/backups/swos/switch_swos.backup"
+    description: SwOS backup file
+
+management_tcp_checks:
+  - name: opnsense_web
+    host: 10.0.10.1
+    port: 443
+    required: true
+  - name: switch_swos_web
+    host: 10.0.10.2
+    port: 80
+    required: true
+  - name: edge_proxmox_web
+    host: 10.0.10.3
+    port: 8006
+    required: true
+  - name: ap_openwrt_web
+    host: 10.0.10.20
+    port: 443
+    required: false
+  - name: unraid_web
+    host: 10.0.10.5
+    port: 443
+    required: false
+
+dns_forward_checks:
+  - edge.owl.red
+  - switch.owl.red
+  - dns.owl.red
+
+baseline_manage_authorized_keys: true
+baseline_authorized_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDqoyepjR/SOCv/Hc2LRR11sd292weLQrgRmBZFtpdIG ansible@owl.red"
+baseline_timezone: UTC
+baseline_packages:
+  - curl
+  - ca-certificates
+  - chrony
+  - jq
+  - net-tools
+  - iproute2
+
+preflight_require_backup_artifacts: true
+preflight_enforce_required_endpoints: true
+preflight_linux_checks_enabled: true
+
+validation_enforce_required_endpoints: true
+validation_linux_checks_enabled: true
+
+baseline_ignore_unreachable: false
+baseline_execution_enabled: true
+
+proxmox_prep_target_group: proxmox_hosts
+proxmox_prep_execution_enabled: true
+proxmox_prep_include_planned_hosts: false
+proxmox_prep_ignore_unreachable: true
+
+proxmox_disable_enterprise_repo: true
+proxmox_manage_no_subscription_repo: true
+proxmox_manage_ceph_repo: false
+
+proxmox_upgrade_target_group: proxmox_hosts
+proxmox_upgrade_execution_enabled: true
+proxmox_upgrade_include_planned_hosts: false
+proxmox_upgrade_ignore_unreachable: false
+
+proxmox_upgrade_run_apt_update: true
+proxmox_upgrade_run_dist_upgrade: false
+proxmox_upgrade_reboot_after_upgrade: false
+proxmox_upgrade_reboot_timeout: 1200
+proxmox_upgrade_reboot_pre_delay: 5
+proxmox_upgrade_reboot_post_delay: 20
+
+proxmox_collect_health_facts: true
