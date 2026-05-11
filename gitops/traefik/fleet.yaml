@@ -4,5 +4,6 @@ helm:
   chart: traefik
   version: 40.0.0
   releaseName: traefik
+  force: true
   valuesFiles:
     - values.yaml
