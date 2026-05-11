@@ -414,6 +414,22 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
       # or
       kubectl apply -f gitops/rancher/fleet/gitrepo-owl-red-fleet-default.yaml
 
+      # If MetalLB resources already existed before Fleet, adopt ownership metadata once:
+      kubectl -n metallb-system label ipaddresspool owl-vip-pool app.kubernetes.io/managed-by=Helm --overwrite
+      kubectl -n metallb-system annotate ipaddresspool owl-vip-pool \
+         meta.helm.sh/release-name=owl-red-gitops-metallb \
+         meta.helm.sh/release-namespace=metallb-system --overwrite
+
+      kubectl -n metallb-system label ipaddresspool technitium-vip-pool app.kubernetes.io/managed-by=Helm --overwrite
+      kubectl -n metallb-system annotate ipaddresspool technitium-vip-pool \
+         meta.helm.sh/release-name=owl-red-gitops-metallb \
+         meta.helm.sh/release-namespace=metallb-system --overwrite
+
+      kubectl -n metallb-system label l2advertisement owl-l2-advert app.kubernetes.io/managed-by=Helm --overwrite
+      kubectl -n metallb-system annotate l2advertisement owl-l2-advert \
+         meta.helm.sh/release-name=owl-red-gitops-metallb \
+         meta.helm.sh/release-namespace=metallb-system --overwrite
+
       kubectl get gitrepo -A
       ```
 

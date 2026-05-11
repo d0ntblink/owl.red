@@ -47,12 +47,18 @@ kubectl get bundle -A | rg owl-red
 kubectl get bundledeployment -A | rg owl-red
 ```
 
-Expected outcome: Fleet starts reconciling `gitops/technitium` from `https://github.com/d0ntblink/owl.red.git` on branch `main`.
+Expected outcome: Fleet starts reconciling these paths from `https://github.com/d0ntblink/owl.red.git` on branch `main`:
+- `gitops/technitium`
+- `gitops/metallb`
+- `gitops/cert-manager`
 
 ## Adoption Strategy
 
-This bootstrap intentionally targets only `gitops/technitium` first.
+This bootstrap now targets:
+- `gitops/technitium`
+- `gitops/metallb`
+- `gitops/cert-manager`
 
 Reason: Fleet uses Helm under the hood for bundle deployment. Existing resources that were installed outside Fleet (for example MetalLB objects) can fail ownership checks if included immediately.
 
-After DNS reconciliation is stable, expand scope gradually by adding additional paths and migrating ownership per component.
+Traefik is intentionally deferred in this phase. Current Traefik configuration is values-only (`gitops/traefik/values.yaml`) and should be onboarded as an explicit Fleet Helm bundle in a dedicated step.

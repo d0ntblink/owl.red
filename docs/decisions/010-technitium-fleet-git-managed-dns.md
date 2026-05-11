@@ -42,7 +42,8 @@ Adopt the following operating model:
 
 Fleet scope expansion:
 - Phase 1: `gitops/technitium`
-- Later phases: additional component paths after ownership migration to avoid Helm adoption conflicts on pre-existing resources.
+- Phase 2: `gitops/metallb`, `gitops/cert-manager`
+- Phase 3: `gitops/traefik` via explicit Fleet Helm bundle once existing release ownership migration is planned.
 
 ## Consequences
 

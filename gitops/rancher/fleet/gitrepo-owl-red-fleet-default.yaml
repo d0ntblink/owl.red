@@ -9,3 +9,5 @@ spec:
   clientSecretName: owl-red-github-auth
   paths:
     - gitops/technitium
+    - gitops/metallb
+    - gitops/cert-manager
