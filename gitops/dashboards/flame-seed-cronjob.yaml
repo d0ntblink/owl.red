@@ -37,7 +37,7 @@ data:
 
     PASSWORD="$(tr -d '\r\n' < "${PASSWORD_FILE}")"
     PASSWORD_ESCAPED="$(escape_json "${PASSWORD}")"
-    LOGIN_PAYLOAD="$(printf '{\"password\":\"%s\",\"duration\":\"14d\"}' "${PASSWORD_ESCAPED}")"
+    LOGIN_PAYLOAD="$(printf '{"password":"%s","duration":"14d"}' "${PASSWORD_ESCAPED}")"
 
     AUTH_RESPONSE_FILE="/tmp/flame-auth-response.json"
     AUTH_CODE="$(curl -sS -o "${AUTH_RESPONSE_FILE}" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "${LOGIN_PAYLOAD}" "${BASE_URL}/api/auth")"
@@ -46,7 +46,7 @@ data:
       exit 1
     fi
 
-    TOKEN="$(sed -n 's/.*\"token\":\"\([^\"]*\)\".*/\1/p' "${AUTH_RESPONSE_FILE}")"
+    TOKEN="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "${AUTH_RESPONSE_FILE}")"
     rm -f "${AUTH_RESPONSE_FILE}"
 
     if [ -z "${TOKEN}" ]; then
@@ -77,9 +77,9 @@ data:
         return 0
       fi
 
-      payload="$(printf '{\"name\":\"%s\",\"url\":\"%s\",\"description\":\"%s\",\"icon\":\"%s\",\"isPublic\":1}' "${name}" "${url}" "${description}" "${icon}")"
+      payload="$(printf '{"name":"%s","url":"%s","description":"%s","icon":"%s","isPublic":1}' "${name}" "${url}" "${description}" "${icon}")"
       curl -fsS -X POST -H "${AUTH_HEADER}" -H 'Content-Type: application/json' -d "${payload}" "${BASE_URL}/api/apps" >/dev/null
-      APPS_JSON="$(printf '%s' "${APPS_JSON}"; printf '{\"name\":\"%s\"}' "${name}")"
+      APPS_JSON="$(printf '%s' "${APPS_JSON}"; printf '{"name":"%s"}' "${name}")"
       echo "INFO: created app ${name}"
     }
 
