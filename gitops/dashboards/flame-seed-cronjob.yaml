@@ -30,10 +30,24 @@ data:
       exit 1
     fi
 
-    PASSWORD="$(tr -d '\r\n' < "${PASSWORD_FILE}")"
-    LOGIN_PAYLOAD="$(printf '{\"password\":\"%s\",\"duration\":31536000}' "${PASSWORD}")"
+    escape_json() {
+      # Escape backslashes and quotes for safe JSON string embedding.
+      printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+    }
 
-    TOKEN="$(curl -fsS -X POST -H 'Content-Type: application/json' -d "${LOGIN_PAYLOAD}" "${BASE_URL}/api/auth" | sed -n 's/.*\"token\":\"\([^\"]*\)\".*/\1/p')"
+    PASSWORD="$(tr -d '\r\n' < "${PASSWORD_FILE}")"
+    PASSWORD_ESCAPED="$(escape_json "${PASSWORD}")"
+    LOGIN_PAYLOAD="$(printf '{\"password\":\"%s\",\"duration\":\"14d\"}' "${PASSWORD_ESCAPED}")"
+
+    AUTH_RESPONSE_FILE="/tmp/flame-auth-response.json"
+    AUTH_CODE="$(curl -sS -o "${AUTH_RESPONSE_FILE}" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "${LOGIN_PAYLOAD}" "${BASE_URL}/api/auth")"
+    if [ "${AUTH_CODE}" -lt 200 ] || [ "${AUTH_CODE}" -ge 300 ]; then
+      echo "ERROR: flame auth failed with HTTP ${AUTH_CODE}: $(cat "${AUTH_RESPONSE_FILE}")" >&2
+      exit 1
+    fi
+
+    TOKEN="$(sed -n 's/.*\"token\":\"\([^\"]*\)\".*/\1/p' "${AUTH_RESPONSE_FILE}")"
+    rm -f "${AUTH_RESPONSE_FILE}"
 
     if [ -z "${TOKEN}" ]; then
       echo "ERROR: failed to obtain Flame auth token" >&2
