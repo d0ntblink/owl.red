@@ -121,6 +121,23 @@ spec:
       serviceAccountName: flame
       securityContext:
         fsGroup: 1000
+      initContainers:
+        - name: flame-bootstrap-copy
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              cp /bootstrap/config.json /app/data/config.json
+              cp /bootstrap/flame.css /app/data/flame.css
+          volumeMounts:
+            - name: flame-bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+            - name: flame-data
+              mountPath: /app/data
       containers:
         - name: flame
           image: pawelmalak/flame:2.4.0
@@ -150,15 +167,14 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
           volumeMounts:
+            - name: flame-data
+              mountPath: /app/data
             - name: flame-bootstrap
-              mountPath: /app/data/config.json
-              subPath: config.json
-              readOnly: true
-            - name: flame-bootstrap
-              mountPath: /app/data/flame.css
-              subPath: flame.css
+              mountPath: /bootstrap
               readOnly: true
       volumes:
+        - name: flame-data
+          emptyDir: {}
         - name: flame-bootstrap
           configMap:
             name: flame-bootstrap

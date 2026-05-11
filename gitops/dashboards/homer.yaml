@@ -154,7 +154,7 @@ spec:
     spec:
       containers:
         - name: homer
-          image: b4bz/homer:26.04.2
+          image: b4bz/homer:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: INIT_ASSETS
