@@ -1,7 +1,7 @@
 service:
   type: LoadBalancer
   annotations:
-    metallb.universe.tf/loadBalancerIPs: "10.0.10.201"
+    metallb.io/loadBalancerIPs: "10.0.10.201"
 
 deployment:
   replicas: 2
@@ -29,12 +29,16 @@ ports:
     expose:
       default: true
     exposedPort: 80
-    redirectTo:
-      port: websecure
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
   websecure:
     port: 8443
     expose:
       default: true
     exposedPort: 443
-    tls:
-      enabled: true
+    http:
+      tls:
+        enabled: true

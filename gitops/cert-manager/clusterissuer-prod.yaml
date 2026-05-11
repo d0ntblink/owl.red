@@ -6,13 +6,13 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@owl.red
+    email: root@owl.red
     privateKeySecretRef:
       name: letsencrypt-prod-key
     solvers:
       - dns01:
           cloudflare:
-            email: admin@owl.red
+            email: root@owl.red
             apiTokenSecretRef:
               name: cloudflare-api-token
               key: api-token
@@ -24,13 +24,13 @@ metadata:
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
-    email: admin@owl.red
+    email: root@owl.red
     privateKeySecretRef:
       name: letsencrypt-staging-key
     solvers:
       - dns01:
           cloudflare:
-            email: admin@owl.red
+            email: root@owl.red
             apiTokenSecretRef:
               name: cloudflare-api-token
               key: api-token

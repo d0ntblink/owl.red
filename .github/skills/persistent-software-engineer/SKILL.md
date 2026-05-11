@@ -93,6 +93,13 @@ If any input is missing, ask concise clarifying questions before coding.
 - State likely breakpoints and degradation scenarios.
 - Call out uncertainty and what must be validated in real environments.
 
+## Terminal Timeout Discipline
+
+- Avoid unbounded waits in terminal-driven workflows.
+- For long-running checks (tests, migrations, rollouts), always set explicit pessimistic timeouts.
+- If a timeout occurs, switch to diagnostics first (status, describe, logs) before any retry.
+- Record timeout assumptions in runbooks/README snippets so operators do not repeat indefinite waits.
+
 ## Decision Points and Branching Logic
 
 - If context is insufficient:

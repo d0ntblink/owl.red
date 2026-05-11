@@ -70,6 +70,8 @@ Each VLAN uses its own OPNsense interface-local gateway.
 | `10.0.10.33` | `pbs.owl.red` | PBS VM | Proxmox Backup Server |
 | `10.0.10.200–250` | MetalLB VIP pool (active) | Kubernetes LoadBalancer address pool | Active for Traefik and future services |
 
+Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it uses physical PCIe NIC passthrough (`hostpci`). Do not plan live/offline migration of this VM as part of normal operations.
+
 ---
 
 ## Current Rack Layout (Physical)

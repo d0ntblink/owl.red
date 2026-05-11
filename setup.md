@@ -226,6 +226,7 @@ Implications:
 6. [MANUAL] Create Proxmox cluster and join nodes.
    - Use documented `pvecm create` and `pvecm add` workflows.
    - Respect quorum behavior and avoid joining nodes with conflicting guest config.
+   - `edge.owl.red` is pinned to `edge.pve.owl.red` due physical PCIe NIC passthrough; do not schedule VM migration for this router workload.
 
 7. [ANSIBLE] Apply post-install baseline and host hardening.
 
