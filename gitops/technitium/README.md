@@ -6,13 +6,15 @@ This folder deploys Technitium DNS on Kubernetes with a static MetalLB VIP and e
 
 - Namespace: `technitium-namespace`
 - StatefulSet: `technitium` (single replica)
-- Service type `LoadBalancer` at `10.0.10.30` on ports:
+- DNS service type `LoadBalancer` at `10.0.10.30` on ports:
   - `53/udp` (DNS)
   - `53/tcp` (DNS)
-  - `5380/tcp` (Technitium web UI)
+- Internal web service: `technitium-web` (`ClusterIP`)
+- Web UI ingress host: `https://dns.owl.red` (Traefik)
 - Static temporary node-local storage via:
-  - PV: `technitium-pv`
-  - PVC: `technitium-data`
+  - Active PV: `technitium-pv-ha`
+  - Active PVC: `technitium-data-ha`
+  - Legacy PV/PVC retained for rollback: `technitium-pv`, `technitium-data`
 - Fleet bundle metadata: `fleet.yaml`
 - Git-owned DNS zone source: `dns-zone-configmap.yaml`
 - In-cluster drift correction:
@@ -21,7 +23,8 @@ This folder deploys Technitium DNS on Kubernetes with a static MetalLB VIP and e
 
 Temporary storage mode details:
 - This deployment intentionally avoids NAS/NFS dependencies.
-- Data is stored on the `worker1-talos` node local filesystem (`hostPath`).
+- Active storage is node-local (`hostPath`) and no longer explicitly pinned to `worker1-talos`.
+- Because this is still local `hostPath` storage, true stateful failover is limited until shared storage is adopted.
 - This is an interim mode until Unraid is migrated and cluster storage is finalized.
 
 ## Security Model
@@ -48,10 +51,14 @@ Fleet is the preferred path. If you need break-glass/manual apply, use:
 
 ```bash
 kubectl apply -f gitops/technitium/namespace.yaml
+kubectl apply -f gitops/technitium/persistent-volume-ha.yaml
+kubectl apply -f gitops/technitium/persistent-volume-claim-ha.yaml
 kubectl apply -f gitops/technitium/persistent-volume.yaml
 kubectl apply -f gitops/technitium/persistent-volume-claim.yaml
 kubectl apply -f gitops/technitium/service-headless.yaml
 kubectl apply -f gitops/technitium/service-dns-lb.yaml
+kubectl apply -f gitops/technitium/service-web.yaml
+kubectl apply -f gitops/technitium/ingress-web.yaml
 kubectl apply -f gitops/technitium/statefulset.yaml
 kubectl apply -f gitops/technitium/dns-zone-configmap.yaml
 kubectl apply -f gitops/technitium/dns-sync-script-configmap.yaml
@@ -90,6 +97,7 @@ dig @10.0.10.30 rancher.owl.red +short
 ## Notes
 
 - This is DNS-first. DHCP remains on OPNsense during stabilization.
+- Technitium web UI is reachable at `https://dns.owl.red`.
 - Do not expose admin UI publicly; keep it LAN-only.
 - Update the SOA serial in `dns-zone-configmap.yaml` whenever records are changed.
 - Manual web UI record edits are temporary and will be overwritten by the scheduled sync.

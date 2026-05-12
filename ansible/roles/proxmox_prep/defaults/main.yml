@@ -18,3 +18,15 @@ proxmox_monitoring_packages:
 
 proxmox_collect_health_facts: true
 proxmox_health_output_dir: "{{ validation_output_dir }}/proxmox-prep"
+
+proxmox_nic_hardening_enabled: true
+proxmox_nic_hardening_target_interfaces:
+  - nic0
+  - onboard
+proxmox_nic_hardening_disable_eee: true
+proxmox_nic_hardening_set_e1000e_module_options: true
+proxmox_nic_hardening_e1000e_module_options:
+  SmartPowerDownEnable: 0
+proxmox_nic_hardening_disable_pcie_aspm: true
+proxmox_nic_hardening_reboot_if_needed: false
+proxmox_nic_hardening_reboot_timeout: 1200

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium-web
+  namespace: technitium-namespace
+  labels:
+    app.kubernetes.io/name: technitium
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: technitium
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5380
+      protocol: TCP

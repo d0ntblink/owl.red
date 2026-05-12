@@ -43,6 +43,32 @@ ansible-galaxy collection install ansible.posix
 - `playbooks/03-proxmox-upgrade.yml` skips `state: planned` hosts by default. Set `-e proxmox_upgrade_include_planned_hosts=true` to include them.
 - Dist-upgrade remains disabled unless `-e proxmox_upgrade_run_dist_upgrade=true` is set.
 - Automatic reboot after dist-upgrade is disabled by default; set `-e proxmox_upgrade_reboot_after_upgrade=true` to reboot nodes one-at-a-time when `/var/run/reboot-required` exists.
+- `playbooks/02-proxmox-prep.yml` now includes NIC stability hardening for Proxmox hosts (managed EEE disable, e1000e module options, and optional PCIe ASPM disable via GRUB drop-in).
+- NIC hardening is enabled by default but does not reboot hosts unless explicitly requested with `-e proxmox_nic_hardening_reboot_if_needed=true`.
+- Use host-level `proxmox_nic_hardening_enabled: false` to opt out critical hosts (for example `edge_pve` router host) from this hardening profile.
+
+## NIC Hang Hardening (e1000e)
+
+The Proxmox prep role now enforces a deterministic NIC hardening path intended to reduce Intel e1000e management-link hang events:
+
+- Boot-time EEE disable on configured interfaces (`proxmox_nic_hardening_target_interfaces`, default `nic0,onboard`) when driver is `e1000e`.
+- e1000e module options (`proxmox_nic_hardening_e1000e_module_options`, default `SmartPowerDownEnable=0`).
+- Runtime ASPM policy set to `performance` plus GRUB drop-in with `pcie_aspm=off` when `proxmox_nic_hardening_disable_pcie_aspm=true`.
+
+Apply hardening without reboot:
+
+```bash
+../scripts/ansible-run.sh ansible-playbook -i inventory/hosts.yml playbooks/02-proxmox-prep.yml \
+	--limit cp1_pve,cp2_pve,cp3_pve,worker1_pve
+```
+
+Apply hardening and reboot one host at a time when kernel-level settings changed:
+
+```bash
+../scripts/ansible-run.sh ansible-playbook -i inventory/hosts.yml playbooks/02-proxmox-prep.yml \
+	--limit cp1_pve,cp2_pve,cp3_pve,worker1_pve \
+	-e proxmox_nic_hardening_reboot_if_needed=true
+```
 
 ## cp1-cp3-worker1 Update and Upgrade Workflow
 

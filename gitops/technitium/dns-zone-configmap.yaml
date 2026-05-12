@@ -10,20 +10,20 @@ data:
   owl.red.zone: |
     $ORIGIN owl.red.
     $TTL 300
-    @ IN SOA dns.owl.red. hostmaster.owl.red. (
-      2026051002 ; serial (update on every record change)
+    @ IN SOA ns1.owl.red. hostmaster.owl.red. (
+      2026051201 ; serial (update on every record change)
       3600       ; refresh
       600        ; retry
       1209600    ; expire
       300        ; minimum
     )
-    @ IN NS dns.owl.red.
+    @ IN NS ns1.owl.red.
 
-    dns             IN A 10.0.10.30
+    ns1             IN A 10.0.10.30
+    dns             IN A 10.0.10.201
     rancher         IN A 10.0.10.201
-    flame           IN A 10.0.10.201
-    homepage        IN A 10.0.10.201
-    homer           IN A 10.0.10.201
+    home            IN A 10.0.10.201
+    traefik         IN A 10.0.10.201
     edge            IN A 10.0.10.1
     switch          IN A 10.0.10.2
     edge.pve        IN A 10.0.10.3

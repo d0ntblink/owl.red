@@ -1,0 +1,45 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: technitium
+  namespace: technitium-namespace
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: technitium
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rancher
+  namespace: cattle-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: rancher
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fleet-agent
+  namespace: cattle-fleet-local-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: fleet-agent
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: metallb-controller
+  namespace: metallb-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/instance: metallb
+      app.kubernetes.io/name: metallb

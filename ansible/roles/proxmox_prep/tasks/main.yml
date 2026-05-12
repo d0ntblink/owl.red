@@ -125,6 +125,217 @@
     - proxmox_prep
     - monitoring
 
+- name: Remove managed NIC hardening artifacts when disabled
+  block:
+    - name: Disable managed NIC hardening service when present
+      ansible.builtin.service:
+        name: proxmox-nic-hardening
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove managed NIC hardening service unit file
+      ansible.builtin.file:
+        path: /etc/systemd/system/proxmox-nic-hardening.service
+        state: absent
+      notify:
+        - Reload systemd daemon
+
+    - name: Remove managed NIC hardening script
+      ansible.builtin.file:
+        path: /usr/local/sbin/proxmox-nic-hardening.sh
+        state: absent
+
+    - name: Remove managed e1000e module options file
+      ansible.builtin.file:
+        path: /etc/modprobe.d/e1000e-hang-mitigation.conf
+        state: absent
+      notify:
+        - Update initramfs
+
+    - name: Remove managed GRUB ASPM drop-in
+      ansible.builtin.file:
+        path: /etc/default/grub.d/99-owl-red-nic-hardening.cfg
+        state: absent
+      notify:
+        - Update grub
+  when: not (proxmox_nic_hardening_enabled | bool)
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Ensure ethtool is installed for NIC hardening
+  ansible.builtin.apt:
+    name: ethtool
+    state: present
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Disable legacy per-host EEE service if present
+  ansible.builtin.service:
+    name: ethtool-eee-nic0
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Remove legacy per-host EEE service unit file
+  ansible.builtin.file:
+    path: /etc/systemd/system/ethtool-eee-nic0.service
+    state: absent
+  notify:
+    - Reload systemd daemon
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Install managed NIC hardening script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/proxmox-nic-hardening.sh
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      for iface in {{ proxmox_nic_hardening_target_interfaces | join(' ') }}; do
+        if ! ip link show "${iface}" >/dev/null 2>&1; then
+          continue
+        fi
+
+        driver="$(ethtool -i "${iface}" 2>/dev/null | awk -F': ' '/^driver:/ {print $2}')"
+        if [[ "${driver}" != "e1000e" ]]; then
+          continue
+        fi
+
+        if {{ 'true' if proxmox_nic_hardening_disable_eee else 'false' }}; then
+          ethtool --set-eee "${iface}" eee off >/dev/null 2>&1 || true
+        fi
+      done
+
+      if {{ 'true' if proxmox_nic_hardening_disable_pcie_aspm else 'false' }}; then
+        if [[ -w /sys/module/pcie_aspm/parameters/policy ]]; then
+          echo performance > /sys/module/pcie_aspm/parameters/policy || true
+        fi
+      fi
+  notify:
+    - Reload systemd daemon
+    - Restart proxmox NIC hardening service
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Install managed NIC hardening systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/proxmox-nic-hardening.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Apply owl.red NIC stability hardening
+      Wants=network.target
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/proxmox-nic-hardening.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Reload systemd daemon
+    - Restart proxmox NIC hardening service
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Enable and start managed NIC hardening service
+  ansible.builtin.service:
+    name: proxmox-nic-hardening.service
+    enabled: true
+    state: started
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Configure e1000e module options for stability
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/e1000e-hang-mitigation.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible (owl.red): mitigate Intel e1000e link hangs.
+      options e1000e {% for key, value in proxmox_nic_hardening_e1000e_module_options.items() %}{{ key }}={{ value }} {% endfor %}
+  register: proxmox_e1000e_modprobe_options
+  notify:
+    - Update initramfs
+  when:
+    - proxmox_nic_hardening_enabled | bool
+    - proxmox_nic_hardening_set_e1000e_module_options | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Ensure /etc/default/grub.d exists
+  ansible.builtin.file:
+    path: /etc/default/grub.d
+    state: directory
+    mode: "0755"
+  when:
+    - proxmox_nic_hardening_enabled | bool
+    - proxmox_nic_hardening_disable_pcie_aspm | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Configure GRUB drop-in to disable PCIe ASPM
+  ansible.builtin.copy:
+    dest: /etc/default/grub.d/99-owl-red-nic-hardening.cfg
+    mode: "0644"
+    content: |
+      # Managed by Ansible (owl.red): reduce PCIe power-state transitions for NIC stability.
+      GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT:+$GRUB_CMDLINE_LINUX_DEFAULT }pcie_aspm=off"
+  register: proxmox_grub_aspm_dropin
+  notify:
+    - Update grub
+  when:
+    - proxmox_nic_hardening_enabled | bool
+    - proxmox_nic_hardening_disable_pcie_aspm | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Track whether reboot is needed for NIC hardening kernel changes
+  ansible.builtin.set_fact:
+    proxmox_nic_hardening_reboot_required: >-
+      {{
+        (proxmox_e1000e_modprobe_options is defined and proxmox_e1000e_modprobe_options.changed)
+        or (proxmox_grub_aspm_dropin is defined and proxmox_grub_aspm_dropin.changed)
+      }}
+  when: proxmox_nic_hardening_enabled | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
+- name: Reboot host when NIC hardening requires it and reboot is enabled
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ proxmox_nic_hardening_reboot_timeout }}"
+    msg: "Reboot triggered by owl.red NIC hardening settings"
+  when:
+    - proxmox_nic_hardening_enabled | bool
+    - proxmox_nic_hardening_reboot_if_needed | bool
+    - proxmox_nic_hardening_reboot_required | default(false) | bool
+  tags:
+    - proxmox_prep
+    - nic_hardening
+
 - name: Collect Proxmox version
   ansible.builtin.command: pveversion
   register: proxmox_pveversion

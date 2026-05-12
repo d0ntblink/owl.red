@@ -1,0 +1,161 @@
+apiVersion: fleet.cattle.io/v1alpha1
+kind: Bundle
+metadata:
+  name: fleet-agent-local
+  namespace: fleet-local
+spec:
+  resources:
+    - name: agent.yaml
+      content: |
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: cattle-fleet-local-system-fleet-agent-role
+        rules:
+          - apiGroups:
+              - '*'
+            resources:
+              - '*'
+            verbs:
+              - '*'
+          - nonResourceURLs:
+              - '*'
+            verbs:
+              - '*'
+
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: cattle-fleet-local-system-fleet-agent-role-binding
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: cattle-fleet-local-system-fleet-agent-role
+        subjects:
+          - kind: ServiceAccount
+            name: fleet-agent
+            namespace: cattle-fleet-local-system
+
+        ---
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: fleet-agent
+          namespace: cattle-fleet-local-system
+
+        ---
+        apiVersion: v1
+        automountServiceAccountToken: false
+        kind: ServiceAccount
+        metadata:
+          name: default
+          namespace: cattle-fleet-local-system
+
+        ---
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: fleet-agent
+          namespace: cattle-fleet-local-system
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
+              app: fleet-agent
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                app: fleet-agent
+            spec:
+              affinity:
+                nodeAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                    - preference:
+                        matchExpressions:
+                          - key: fleet.cattle.io/agent
+                            operator: In
+                            values:
+                              - "true"
+                      weight: 1
+              containers:
+                - command:
+                    - fleetagent
+                  env:
+                    - name: BUNDLEDEPLOYMENT_RECONCILER_WORKERS
+                      value: "50"
+                    - name: DRIFT_RECONCILER_WORKERS
+                      value: "50"
+                    - name: NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.namespace
+                    - name: AGENT_SCOPE
+                      value: cattle-fleet-local-system
+                    - name: CHECKIN_INTERVAL
+                      value: 15m0s
+                    - name: CATTLE_ELECTION_LEASE_DURATION
+                      value: 30s
+                    - name: CATTLE_ELECTION_RETRY_PERIOD
+                      value: 10s
+                    - name: CATTLE_ELECTION_RENEW_DEADLINE
+                      value: 25s
+                    - name: EXPERIMENTAL_COPY_RESOURCES_DOWNSTREAM
+                      value: "false"
+                  image: rancher/fleet-agent:v0.15.1
+                  imagePullPolicy: IfNotPresent
+                  name: fleet-agent
+                  resources: {}
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    capabilities:
+                      drop:
+                        - ALL
+                    privileged: false
+                    readOnlyRootFilesystem: true
+                  volumeMounts:
+                    - mountPath: /.kube
+                      name: kube
+                    - mountPath: /tmp
+                      name: tmp
+              nodeSelector:
+                kubernetes.io/os: linux
+              securityContext:
+                runAsGroup: 1000
+                runAsNonRoot: true
+                runAsUser: 1000
+              serviceAccountName: fleet-agent
+              tolerations:
+                - effect: NoSchedule
+                  key: node.cloudprovider.kubernetes.io/uninitialized
+                  operator: Equal
+                  value: "true"
+                - effect: NoSchedule
+                  key: cattle.io/os
+                  operator: Equal
+                  value: linux
+                - effect: NoSchedule
+                  key: node-role.kubernetes.io/control-plane
+                  operator: Exists
+              volumes:
+                - emptyDir: {}
+                  name: kube
+                - emptyDir: {}
+                  name: tmp
+
+        ---
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        metadata:
+          name: default-allow-all
+          namespace: cattle-fleet-local-system
+        spec:
+          egress:
+            - {}
+          ingress:
+            - {}
+          podSelector: {}
+          policyTypes:
+            - Ingress
+            - Egress

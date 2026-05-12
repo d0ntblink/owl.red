@@ -1,0 +1,23 @@
+settings:
+  bwSecretsManagerRefreshInterval: 300
+  cloudRegion: US
+  bwApiUrlOverride: ""
+  bwIdentityUrlOverride: ""
+  kubernetesClusterDomain: cluster.local
+  replicas: 2
+
+containers:
+  manager:
+    enableLeaderElection: true
+    resources:
+      limits:
+        cpu: 300m
+        memory: 256Mi
+      requests:
+        cpu: 20m
+        memory: 96Mi
+  enableSeccompProfileRuntimeDefault: true
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule

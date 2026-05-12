@@ -11,7 +11,7 @@ data:
     #!/bin/sh
     set -eu
 
-    API_URL="${TECHNITIUM_API_URL:-http://technitium-dns.technitium-namespace.svc.cluster.local:5380}"
+    API_URL="${TECHNITIUM_API_URL:-http://technitium-web.technitium-namespace.svc.cluster.local}"
     ZONE_NAME="${DNS_ZONE_NAME:-owl.red}"
     ZONE_FILE="${ZONE_FILE_PATH:-/etc/technitium-zones/owl.red.zone}"
     TOKEN_FILE="${TECHNITIUM_TOKEN_FILE:-/var/run/secrets/technitium/token}"

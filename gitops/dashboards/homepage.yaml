@@ -20,17 +20,9 @@ data:
             description: Kubernetes operations and lifecycle
             icon: rancher
         - Technitium DNS:
-            href: http://dns.owl.red:5380
+            href: https://dns.owl.red
             description: Authoritative DNS management UI
             icon: dns
-        - Flame:
-            href: https://flame.owl.red
-            description: Application-first launcher experience
-            icon: flame
-        - Homer:
-            href: https://homer.owl.red
-            description: Fast static dashboard view
-            icon: homer
 
     - Infrastructure:
         - OPNsense:
@@ -42,7 +34,7 @@ data:
             description: CSS326 switching fabric management
             icon: mikrotik
         - PDM:
-            href: http://pdm.owl.red
+            href: https://pdm.owl.red
             description: Proxmox Datacenter Manager
             icon: proxmox
         - PBS:
@@ -109,20 +101,14 @@ data:
         - Rancher:
             - abbr: RA
               href: https://rancher.owl.red
-        - Flame:
-            - abbr: FL
-              href: https://flame.owl.red
-        - Homepage:
-            - abbr: HP
-              href: https://homepage.owl.red
-        - Homer:
+        - Home:
             - abbr: HM
-              href: https://homer.owl.red
+              href: https://home.owl.red
 
     - Infrastructure:
         - DNS UI:
             - abbr: DNS
-              href: http://dns.owl.red:5380
+              href: https://dns.owl.red
         - OPNsense:
             - abbr: FW
               href: https://edge.owl.red
@@ -191,13 +177,33 @@ spec:
         app.kubernetes.io/name: homepage
         app.kubernetes.io/part-of: dashboards
     spec:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: homepage
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: homepage
       containers:
         - name: homepage
           image: ghcr.io/gethomepage/homepage:v1.13.0
           imagePullPolicy: IfNotPresent
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
-              value: homepage.owl.red
+              value: home.owl.red
           ports:
             - name: http
               containerPort: 3000
@@ -216,6 +222,13 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 20
             timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
           volumeMounts:
             - name: config
               mountPath: /app/config/settings.yaml
@@ -267,13 +280,13 @@ metadata:
   namespace: dashboards
   annotations:
     flame.pawelmalak/type: application
-    flame.pawelmalak/name: Homepage Dashboard
-    flame.pawelmalak/url: https://homepage.owl.red
+    flame.pawelmalak/name: Home Dashboard
+    flame.pawelmalak/url: https://home.owl.red
     flame.pawelmalak/icon: dashboard
 spec:
   ingressClassName: traefik
   rules:
-    - host: homepage.owl.red
+    - host: home.owl.red
       http:
         paths:
           - path: /

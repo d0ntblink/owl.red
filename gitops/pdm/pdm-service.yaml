@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pdm-external
+  namespace: infra-services
+  labels:
+    app.kubernetes.io/name: pdm
+    app.kubernetes.io/part-of: infra-services
+spec:
+  ports:
+    - name: https
+      port: 8443
+      protocol: TCP
+      targetPort: 8443
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: pdm-external
+  namespace: infra-services
+subsets:
+  - addresses:
+      - ip: 10.0.10.31
+    ports:
+      - name: https
+        port: 8443
+        protocol: TCP

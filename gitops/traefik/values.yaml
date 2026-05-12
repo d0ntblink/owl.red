@@ -4,7 +4,11 @@ service:
     metallb.io/loadBalancerIPs: "10.0.10.201"
 
 deployment:
-  replicas: 2
+  replicas: 3
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
 
 ingressClass:
   enabled: true
@@ -22,6 +26,47 @@ logs:
 
 additionalArguments:
   - "--serversTransport.insecureSkipVerify=true"
+
+ingressRoute:
+  dashboard:
+    enabled: true
+    matchRule: Host(`traefik.owl.red`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+    entryPoints:
+      - websecure
+    tls: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+              app.kubernetes.io/instance: traefik-traefik
+          topologyKey: kubernetes.io/hostname
+
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: traefik
+        app.kubernetes.io/instance: traefik-traefik
 
 ports:
   web:

@@ -36,7 +36,7 @@ spec:
                 - /opt/technitium/sync-zone.sh
               env:
                 - name: TECHNITIUM_API_URL
-                  value: http://technitium-dns.technitium-namespace.svc.cluster.local:5380
+                  value: http://technitium-web.technitium-namespace.svc.cluster.local
                 - name: DNS_ZONE_NAME
                   value: owl.red
                 - name: ZONE_FILE_PATH

@@ -16,8 +16,26 @@ spec:
       labels:
         app.kubernetes.io/name: technitium
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: worker1-talos
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: technitium
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: technitium
       containers:
         - name: technitium
           image: technitium/dns-server:latest
@@ -71,4 +89,4 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: technitium-data
+            claimName: technitium-data-ha

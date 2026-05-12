@@ -64,12 +64,12 @@ Each VLAN uses its own OPNsense interface-local gateway.
 | `10.0.10.23` | `cp3.k8s.owl.red` | k8s VM on cp3.pve | k8s control plane + worker VM |
 | `10.0.10.24` | `worker1.k8s.owl.red` | k8s VM on worker1.pve | k8s worker VM |
 | `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | WAP management |
-| `10.0.10.30` | `dns.owl.red` | Technitium (on k8s cluster) | DNS service endpoint (HA via k8s) |
+| `10.0.10.30` | `ns1.owl.red` | Technitium (on k8s cluster) | DNS service endpoint (HA via k8s) |
 | `10.0.10.31` | `pdm.owl.red` | PDM VM | Proxmox Datacenter Manager |
 | `10.0.10.201` | `rancher.owl.red` | Rancher service endpoint | Rancher UI/API ingress endpoint (via Traefik/MetalLB VIP) |
-| `10.0.10.201` | `flame.owl.red` | Flame service endpoint | Dashboard candidate #1 (GitOps-managed via Fleet) |
-| `10.0.10.201` | `homepage.owl.red` | Homepage service endpoint | Dashboard candidate #2 (GitOps-managed via Fleet) |
-| `10.0.10.201` | `homer.owl.red` | Homer service endpoint | Dashboard candidate #3 (GitOps-managed via Fleet) |
+| `10.0.10.201` | `dns.owl.red` | Technitium web endpoint | DNS management UI via Traefik ingress |
+| `10.0.10.201` | `home.owl.red` | Homepage service endpoint | Primary dashboard (GitOps-managed via Fleet) |
+| `10.0.10.201` | `traefik.owl.red` | Traefik dashboard endpoint | Traefik dashboard/API ingress endpoint |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM | Proxmox Backup Server |
 | `10.0.10.200–250` | MetalLB VIP pool (active) | Kubernetes LoadBalancer address pool | Active for Traefik and future services |
 
@@ -341,9 +341,17 @@ Break-glass requirement:
 | Node Role | vCPU | Memory | Disk | Notes |
 |-----------|------|--------|------|-------|
 | Control plane (`cp1-3.k8s`) | 2 | 6 GiB | 60 GiB | Prioritize etcd stability and consistent headroom |
-| Worker (`worker1.k8s`) | 4 | 8 GiB | 100 GiB | Primary app scheduling target |
+| Worker (`worker1.k8s`) | 4 | 8 GiB | 100 GiB | Higher-capacity node for general workloads (not a hard pin) |
 
 Memory tuning rule: start with reserved memory (no overcommit), then adjust after workload telemetry is collected.
+
+**Scheduling policy (availability-first):**
+- Critical platform workloads (Traefik, DNS, Rancher/Fleet, cert-manager) are eligible to run on all four nodes.
+- Control-plane fallback is explicitly enabled for critical services via tolerations and bounded resource requests/limits.
+- Replica policy: Traefik and Rancher run with 3 replicas; non-critical platform apps run with 1 replica.
+- Technitium is currently single-replica until shared storage/replication is available (local hostPath does not safely support active multi-replica state).
+- Replica placement is spread across hosts using topology spread constraints and anti-affinity.
+- Only workloads with true hardware affinity (for example, `hostpci` passthrough VMs like OPNsense) are intentionally pinned.
 
 **Why 3 control plane nodes?**
 - the split-brain scenario is the worst-case failure mode for a HA cluster. With 3 control plane nodes, the cluster can tolerate the failure of one node without losing quorum. With only 2 control plane nodes, the failure of one node would cause the cluster to lose quorum and become unavailable until the failed node is restored.
@@ -355,11 +363,9 @@ Memory tuning rule: start with reserved memory (no overcommit), then adjust afte
 | Service exposure strategy | Selected: MetalLB with explicit VIP assignment for ingress and selected services |
 | cert-manager | Manages TLS certificates from Let's Encrypt via DNS-01 challenge |
 | Rancher | Kubernetes management plane, deployed on k8s for high availability and manages the cluster itself |
-| Flame | Lightweight app launcher dashboard candidate, deployed on k8s and managed via Fleet |
-| Homepage | Feature-rich dashboard candidate with flexible widgets/layout, deployed on k8s and managed via Fleet |
-| Homer | Static YAML-driven dashboard candidate with low operational overhead, deployed on k8s and managed via Fleet |
+| Homepage | Primary operations dashboard, deployed on k8s and managed via Fleet |
 | Technitium DNS | Deployed on k8s cluster for high availability. Authoritative DNS server for `owl.red` domain. Records are Git-managed and reconciled via Fleet-managed sync job. DHCP remains on OPNsense in the initial build; Option 114 is delivered by OPNsense DHCP on guest VLAN. |
-| Proxmox Datacenter Manager | Centralized management for multiple Proxmox hosts/clusters, deployed on k8s for high availability |
+| Proxmox Datacenter Manager | Centralized management for multiple Proxmox hosts/clusters, deployed as a Proxmox HA-managed LXC (active-passive), exposed via `pdm.owl.red` |
 | Proxmox Backup Server | Backup target for k8s cluster state and VM backups |
 | Plex Media Server | Placement pending final decision (`docs/decisions/002-plex-k8s-quicksync.md`): target is k8s on QuickSync-capable nodes; fallback is Unraid VM |
 | qBittorrent | Used only to download linux ISOs of course; Pinned to unraid for best performance, fallback to k8s if needed |

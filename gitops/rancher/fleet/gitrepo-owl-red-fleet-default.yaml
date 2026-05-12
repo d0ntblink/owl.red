@@ -13,3 +13,7 @@ spec:
     - gitops/cert-manager
     - gitops/traefik
     - gitops/dashboards
+    - gitops/bitwarden-operator
+    - gitops/bitwarden-secrets
+    - gitops/pdm
+    - gitops/platform-resilience
