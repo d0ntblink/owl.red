@@ -96,7 +96,8 @@ dig @10.0.10.30 rancher.owl.red +short
 
 ## Notes
 
-- This is DNS-first. DHCP remains on OPNsense during stabilization.
+- This deployment is DNS-first and also serves the VLAN 10 management DHCP scope and reservations.
+- OPNsense remains authoritative DHCP for VLANs 20/30/40/50.
 - Technitium web UI is reachable at `https://dns.owl.red`.
 - Do not expose admin UI publicly; keep it LAN-only.
 - Update the SOA serial in `dns-zone-configmap.yaml` whenever records are changed.

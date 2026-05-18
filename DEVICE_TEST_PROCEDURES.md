@@ -6,19 +6,22 @@ Test procedures for owl.red infrastructure. These are operational validation ste
 
 ### DHCP & DNS Verification
 
-**Objective:** Confirm DHCP relay and DNS forwarding work across all VLANs.
+**Objective:** Confirm OPNsense serves DHCP for VLANs 20/30/40/50 and advertises Technitium as client DNS.
 
 **Procedure:**
-1. SSH to OPNsense or access web console
-2. Check DHCP relay configuration: Interfaces → DHCP Relay → Verify relay agents point to `10.0.10.30` (Technitium)
-3. Check DNS forwarders: System → Settings → General → DNS Servers = `10.0.10.30`
-4. From each VLAN, ping OPNsense gateway: `ping 10.0.10.1`
-5. From each VLAN, test DNS: `nslookup owl.red 10.0.10.30`
+1. SSH to OPNsense or access web console.
+2. Check DHCPv4 configuration for VLANs 20/30/40/50 and verify the expected ranges are enabled.
+3. Verify each DHCP-enabled scope advertises `10.0.10.30` as DNS.
+4. Verify the VLAN 30 scope includes Option 114 set to `https://captive.owl.red:8000/api/captiveportal/access/api`.
+5. From a client on each DHCP-enabled VLAN, renew the lease and confirm the gateway and DNS values are correct.
+6. From each VLAN, test DNS: `nslookup owl.red 10.0.10.30`
 
 **Success Criteria:**
-- DHCP relay points to Technitium
-- DNS resolves `owl.red` to correct IP
-- All VLANs can reach gateway
+- OPNsense hands out leases on VLANs 20/30/40/50
+- Option 3 gateways match the interface-local VLAN gateway
+- Option 6 points clients to `10.0.10.30`
+- VLAN 30 delivers Option 114
+- DNS resolves `owl.red` correctly
 
 ### Captive Portal Configuration
 
@@ -60,49 +63,43 @@ Test procedures for owl.red infrastructure. These are operational validation ste
 
 ---
 
-## Technitium DNS/DHCP (`dns.owl.red`, 10.0.10.30, on Kubernetes)
+## Technitium DNS + VLAN 10 DHCP (`dns.owl.red`, 10.0.10.30, on Kubernetes)
 
 ### DHCP Scope Verification
 
-**Objective:** Confirm all VLAN scopes are configured and responding.
+**Objective:** Confirm the Technitium VLAN 10 scope and reservations are configured correctly.
 
 **Procedure:**
 1. Access Technitium web console (URL depends on Kubernetes ingress setup)
-2. Navigate to DHCP → Settings
-3. Verify scopes exist for:
-   - VLAN 10: Range `10.0.10.100–199` (Technitium on k8s; all known devices have MAC reservations)
-   - VLAN 20: Range `10.0.20.100–254`
-   - VLAN 30: Range `10.0.30.100–254` with Option 114 set to `https://captive.owl.red:8000/api/captiveportal/access/api`
-   - VLAN 40: Range `10.0.40.100–254`
-   - VLAN 50: Range `10.0.50.100–254`
-4. Check DHCP Options for VLAN 30:
-   - Option 3 (gateway) = `10.0.10.1`
-   - Option 6 (DNS) = `10.0.10.30`
-   - Option 114 = `https://captive.owl.red:8000/api/captiveportal/access/api`
+2. Navigate to DHCP → Scopes.
+3. Verify scope `vlan10-network-devices` exists with range `10.0.10.100–199`.
+4. Verify scope options include router `10.0.10.1` and DNS `10.0.10.30`.
+5. Verify reservations match `gitops/technitium/dhcp-reservations.json` for current known infrastructure devices.
+6. Confirm VLANs 20/30/40/50 remain served by OPNsense rather than Technitium.
 
 **Success Criteria:**
-- All scopes present
-- Option 114 configured for VLAN 30
-- Gateway and DNS options correct for all scopes
+- VLAN 10 scope is present
+- Reservation set matches source of truth
+- Router and DNS options are correct
+- No unexpected DHCP scope drift exists
 
 ### DHCP Lease Acquisition
 
-**Objective:** Test actual DHCP lease issuance from each VLAN.
+**Objective:** Test actual VLAN 10 lease issuance from Technitium.
 
 **Procedure:**
-1. Connect a test client to each VLAN network
-2. Request DHCP lease: `dhclient` (Linux) or `ipconfig /renew` (Windows)
-3. Verify lease IP is in correct scope range:
-   - VLAN 20 client should get IP in `10.0.20.100–254`
-   - VLAN 30 client should get IP in `10.0.30.100–254`, etc.
-4. Verify DHCP Option 114 is received (VLAN 30 clients only):
-   - Linux: `dhclient -d` (debug mode) and check DHCP offers
-   - Windows: `ipconfig /all` and look for Option 114 in verbose output
+1. Connect a test client to a VLAN 10 port or otherwise place a client on VLAN 10.
+2. Request DHCP lease: `dhclient` (Linux) or `ipconfig /renew` (Windows).
+3. If the client MAC has a reservation, verify the reserved IP is issued. If the client is unknown, verify the lease lands in `10.0.10.100–199`.
+4. Verify DHCP options:
+   - Option 3 (gateway) = `10.0.10.1`
+   - Option 6 (DNS) = `10.0.10.30`
 5. Check Technitium logs for DHCP requests/offers
 
 **Success Criteria:**
-- Lease IPs are in correct scopes
-- DHCP Option 114 is delivered to VLAN 30 clients
+- VLAN 10 lease is issued from the correct scope
+- Reserved clients receive the expected IP
+- Gateway and DNS options are correct
 - No DHCP errors in logs
 
 ### DNS Resolution
@@ -137,18 +134,18 @@ Test procedures for owl.red infrastructure. These are operational validation ste
    ```bash
    kubectl get pvc -n technitium-namespace
    ```
-   Should show bound PVC backed by Unraid NFS.
+   Should show a bound PVC for the active Technitium data volume. Current deployment uses node-local `hostPath` storage.
 4. Restart Technitium pod and verify it reschedules:
    ```bash
    kubectl delete pod -n technitium-namespace technitium-0
    ```
-   Pod should re-start on another CP node within 30 seconds.
-5. Verify DHCP leases survive pod restart (client should keep same IP or get new lease from same scope)
+   Pod should return to Running and reattach its data volume. Because storage is currently node-local `hostPath`, failover flexibility is limited.
+5. Verify DNS data and VLAN 10 DHCP reservations survive pod restart.
 
 **Success Criteria:**
-- Pod runs on one of the 3 CP nodes
-- PVC is bound to Unraid NFS mount
-- Pod restarts without losing DHCP scope data
+- Pod runs in Running state
+- PVC is bound to the active data volume
+- Pod restarts without losing zone or VLAN 10 DHCP data
 - Clients maintain connectivity during pod transition
 
 ---
@@ -401,24 +398,26 @@ Test procedures for owl.red infrastructure. These are operational validation ste
 
 ### End-to-End DHCP + DNS + Captive Portal Test
 
-**Objective:** Verify complete flow from guest client to DHCP to DNS to captive portal.
+**Objective:** Verify complete flow from guest client to OPNsense DHCP, Technitium DNS, and captive portal.
 
 **Procedure:**
 1. Connect a test device to `silence of the lans` SSID (guest VLAN 30)
 2. Device should automatically:
-   - Get DHCP lease from `10.0.10.30` (Technitium via VLAN 30 scope)
+   - Get DHCP lease from OPNsense on the VLAN 30 scope
+   - Receive DNS server `10.0.10.30`
    - Receive DHCP Option 114 with portal URL
    - Attempt to access any HTTP/HTTPS site
    - Be redirected to captive portal at `https://captive.owl.red:8000/`
 3. Verify portal page loads (check certificate is valid)
 4. After "accepting" portal (splash screen), try to access internet
 5. Verify access works (ping 8.8.8.8 should succeed)
-6. Check Technitium DHCP logs for lease records
-7. Check OPNsense firewall logs for redirect and allow rules
-8. Check Traefik/Rancher logs if portal is exposed via ingress
+6. Check OPNsense DHCP logs for lease records
+7. Check Technitium query logs for DNS lookups
+8. Check OPNsense firewall logs for redirect and allow rules
 
 **Success Criteria:**
-- Device gets DHCP lease in `10.0.30.x` range
+- Device gets DHCP lease in `10.0.30.x` range from OPNsense
+- DNS server assigned to the client is `10.0.10.30`
 - Portal detected and opens automatically (or accessible via fallback IP)
 - After authentication, internet access granted
 - All components logged transaction flow
@@ -473,7 +472,8 @@ Test procedures for owl.red infrastructure. These are operational validation ste
    - Kubernetes cluster re-establishes (monitor `kubectl get nodes`)
    - Technitium pod resumes on first available CP node
 3. Verify DHCP/DNS work after recovery:
-   - New client gets DHCP lease from `10.0.10.30`
+   - VLAN 10 client gets DHCP lease from Technitium
+   - Guest client gets DHCP lease from OPNsense and receives Option 114
    - DNS resolves correctly
    - Captive portal accessible
 4. Check for any stale sessions or pod failures:
@@ -494,15 +494,15 @@ Test procedures for owl.red infrastructure. These are operational validation ste
 
 Use this as a quick validation checklist before considering the network production-ready:
 
-- [ ] OPNsense DHCP relay, DNS forwarding, firewall rules working
+- [ ] OPNsense DHCP scopes, DNS advertisement, and firewall rules working
 - [ ] OPNsense captive portal responsive on port 8000 (hostname + IP-based)
-- [ ] Technitium DHCP scopes configured for all 5 VLANs
-- [ ] Technitium Option 114 set for VLAN 30 (guest captive portal)
-- [ ] Technitium running on Kubernetes and backed by Unraid NFS
+- [ ] Technitium VLAN 10 DHCP scope and reservations configured
+- [ ] OPNsense Option 114 set for VLAN 30 (guest captive portal)
+- [ ] Technitium running on Kubernetes with active persistent volume (current deployment: node-local `hostPath`)
 - [ ] Kubernetes cluster has 3 CP nodes (quorum) and 1 worker node
 - [ ] MikroTik switch VLAN trunking configured
 - [ ] OpenWrt WAP SSIDs on correct VLANs with correct security
-- [ ] Guest clients get portal redirect and option 114 delivery
+- [ ] Guest clients get DHCP from OPNsense, DNS from Technitium, portal redirect, and option 114 delivery
 - [ ] Inter-VLAN blocking rules preventing lateral access
 - [ ] Multicast blocked for guest VLAN (no mDNS enumeration)
 - [ ] Unraid NFS accessible and fast (> 20MB/s write)

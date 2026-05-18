@@ -68,10 +68,10 @@ These decisions are approved and must be treated as baseline constraints for imp
        - Control plane VMs: 10 GiB each
        - Worker VM: 12 GiB
 
-3. DHCP strategy is conservative for initial rollout.
-   - OPNsense stays authoritative DHCP initially.
-   - Technitium is DNS authority on Kubernetes.
-   - DHCP relay to Technitium is deferred until post-stability review.
+3. DHCP strategy uses split authority for the current rollout.
+   - Technitium serves VLAN 10 DHCP (`10.0.10.100-199`) with reservations for known infrastructure devices.
+   - OPNsense remains authoritative DHCP for VLANs 20/30/40/50.
+   - Any DHCP expansion beyond VLAN 10 onto Technitium is deferred until post-stability review.
 
 4. Break-glass management path is mandatory.
    - Keep one dedicated untagged VLAN 10 access port for recovery laptop use.
@@ -556,12 +556,13 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
 
 ### Steps
 
-1. [MANUAL] Keep OPNsense authoritative DHCP for initial rollout.
-   - Ensure VLAN 20/30/40/50 scopes use interface-local gateways (`10.0.20.1`, `10.0.30.1`, `10.0.40.1`, `10.0.50.1`).
-   - Ensure all DHCP scopes advertise Technitium (`10.0.10.30`) as DNS.
+1. [MANUAL] Keep the split DHCP authority model as the current baseline.
+   - Ensure Technitium scope `vlan10-network-devices` uses router `10.0.10.1`, DNS `10.0.10.30`, range `10.0.10.100-199`, and current reservations.
+   - Ensure OPNsense VLAN 20/30/40/50 scopes use interface-local gateways (`10.0.20.1`, `10.0.30.1`, `10.0.40.1`, `10.0.50.1`).
+   - Ensure OPNsense DHCP scopes advertise Technitium (`10.0.10.30`) as DNS.
 
-2. [MANUAL] Confirm Technitium DNS authority on Kubernetes.
-   - Validate zone data, upstream recursion, and internal record resolution.
+2. [MANUAL] Confirm Technitium DNS authority and VLAN 10 DHCP scope on Kubernetes.
+   - Validate zone data, upstream recursion, internal record resolution, and VLAN 10 reservation state.
 
 3. [MANUAL] Configure guest DHCP Option 114 on OPNsense VLAN 30 scope.
    - Use captive portal API URL per RFC 8910 behavior.
@@ -570,13 +571,14 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
    - Valid public certificate and consistent hostname.
    - Confirm OPNsense automatic captive portal rules behavior.
 
-5. [MANUAL] Optional future pilot (deferred): test OPNsense DHCP relay to Technitium in isolated maintenance window.
+5. [MANUAL] Optional future pilot (deferred): evaluate moving additional DHCP scopes beyond VLAN 10 to Technitium in an isolated maintenance window.
 
 6. [ANSIBLE] Run lease and DNS validation tests from each VLAN.
 
 ### Exit Gates
 
-- OPNsense hands out leases correctly on every DHCP-enabled VLAN.
+- Technitium hands out VLAN 10 leases and reservations correctly.
+- OPNsense hands out leases correctly on VLANs 20/30/40/50.
 - DHCP options are correct per VLAN:
    - Option 3 gateway matches interface-local VLAN gateway.
    - Option 6 DNS points to `10.0.10.30`.
@@ -585,7 +587,7 @@ Rancher FQDN: `rancher.owl.red` → MetalLB VIP (e.g. `10.0.10.200`)
 
 ### Rollback
 
-- Restore known-good OPNsense DHCP scope config and disable any pilot relay changes.
+- Restore known-good OPNsense DHCP scope config and Technitium VLAN 10 scope / reservation data.
 
 ---
 
@@ -886,7 +888,7 @@ These are intentionally [MANUAL] until a tested API path exists:
 - SwOS full VLAN/port policy application (SwOS web-only management, high lockout risk)
 - AP SSID/VLAN mapping changes
 - First-pass OPNsense captive portal policy wiring
-- First-pass Technitium DHCP scope authoring (unless API workflow is validated in staging)
+- Broad DHCP authority changes beyond the current split model (for example moving VLAN 20/30/40/50 onto Technitium)
 
 ## Validation Cadence (After Go-Live)
 
