@@ -1,0 +1,59 @@
+---
+# swos-apply-port-names.yml
+# Apply switch port names from ansible/switch_configs/css326.yml to the CSS326.
+#
+# Port names are sourced from the "Front Rack Port Configuration and Patching Plan"
+# section of README.md.
+#
+# Usage:
+#   ansible-playbook playbooks/swos-apply-port-names.yml
+#   ansible-playbook playbooks/swos-apply-port-names.yml --check  (dry-run)
+#
+# This makes exactly ONE GET + ONE POST to the switch regardless of how many
+# ports are renamed.  Idempotent: safe to run repeatedly.
+
+- name: Apply port names to CSS326 switch
+  hosts: switches
+  gather_facts: false
+
+  vars:
+    switch_config_file: "{{ playbook_dir }}/../switch_configs/css326.yml"
+
+  tasks:
+    - name: Load switch config from css326.yml
+      ansible.builtin.include_vars:
+        file: "{{ switch_config_file }}"
+        name: css326
+
+    - name: Build port_names dict from config
+      ansible.builtin.set_fact:
+        port_names_map: >-
+          {{
+            dict(
+              css326.ports
+              | map(attribute='port')
+              | zip(css326.ports | map(attribute='name'))
+            )
+          }}
+
+    - name: Apply port names to switch (single API round-trip)
+      swos_set_port_names:
+        host: "{{ ansible_host }}"
+        username: "{{ swos_username }}"
+        password: "{{ swos_password }}"
+        port_names: "{{ port_names_map }}"
+      register: rename_result
+
+    - name: Show changed ports
+      ansible.builtin.debug:
+        msg: "Renamed: port {{ item.port_number }} '{{ item.old_name }}' -> '{{ item.new_name }}'"
+      loop: "{{ rename_result.changed_ports }}"
+      loop_control:
+        label: "port{{ item.port_number }}"
+      when: rename_result.changed_ports | length > 0
+
+    - name: Show summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ rename_result.changed_ports | length }} port(s) renamed,
+          {{ rename_result.already_correct | length }} already correct.

@@ -1,0 +1,12 @@
+---
+# SwOS switches are managed via HTTP API from the controller (localhost).
+# No SSH connection is made to the switch itself.
+ansible_connection: local
+ansible_python_interpreter: /usr/bin/python3
+
+# SwOS API credentials — loaded from Bitwarden at runtime via ansible-run.sh.
+# Do NOT hardcode the password here. Pass via extra-vars or environment:
+#   ansible-playbook ... -e "swos_password={{ lookup('bitwarden', 'switch.owl.red') }}"
+# Or set SWOS_PASSWORD env and reference with: swos_password: "{{ lookup('env', 'SWOS_PASSWORD') }}"
+swos_username: "admin"
+swos_password: "{{ lookup('env', 'SWOS_PASSWORD') | default('', true) }}"

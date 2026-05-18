@@ -1,0 +1,100 @@
+---
+# Deploy monitor-all watchdog on cp1 (cluster-primary only)
+# Restarts QEMU VMs that stop responding (via QEMU guest agent ping).
+# LXC containers are intentionally EXCLUDED.
+#
+# Opt-in via tag: add 'mon-restart' tag to any QEMU VM.
+#   CLI:    qm set <vmid> -tags mon-restart
+#   Web UI: VM -> Options -> Tags -> mon-restart
+#
+# WARNING: Only deploy on ONE cluster node to avoid duplicate restart storms.
+# NOTE: Do NOT tag Talos VMs — they have no QEMU guest agent.
+#
+# Source: https://github.com/community-scripts/ProxmoxVE (monitor-all.sh)
+# Run: ansible/scripts/deploy-monitor-all.sh
+
+- name: Deploy monitor-all watchdog on cluster primary
+  hosts: "{{ target_host | default('cp1_pve') }}"
+  gather_facts: false
+
+  tasks:
+    - name: Deploy ping-instances watchdog script
+      ansible.builtin.copy:
+        src: ../files/ping-instances.sh
+        dest: /usr/local/bin/ping-instances.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create log file
+      ansible.builtin.file:
+        path: /var/log/ping-instances.log
+        state: touch
+        owner: root
+        group: root
+        mode: "0640"
+
+    - name: Write ping-instances systemd timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ping-instances.timer
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Delay ping-instances watchdog 5 minutes after boot
+
+          [Timer]
+          OnBootSec=300
+          OnUnitActiveSec=300
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Write ping-instances systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ping-instances.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Monitor-All QEMU VM watchdog (opt-in via mon-restart tag)
+          After=ping-instances.timer pve-cluster.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/ping-instances.sh
+          Restart=always
+          StandardOutput=append:/var/log/ping-instances.log
+          StandardError=append:/var/log/ping-instances.log
+
+          [Install]
+          WantedBy=multi-user.target
+      register: svc_unit
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: svc_unit.changed
+
+    - name: Enable and start timer and service
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - ping-instances.timer
+        - ping-instances.service
+
+    - name: Show status
+      ansible.builtin.command: systemctl is-active ping-instances.service
+      register: svc_state
+      changed_when: false
+
+    - name: Print result
+      ansible.builtin.debug:
+        msg: |
+          {{ inventory_hostname }}: monitor-all deployed, service={{ svc_state.stdout }}
+          Tag VMs to opt in:  qm set <vmid> -tags mon-restart
+          View logs:          tail -f /var/log/ping-instances.log

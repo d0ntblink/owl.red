@@ -1,0 +1,191 @@
+---
+# css326.yml — Desired state config for MikroTik CSS326-24G-2S+RM
+#
+# Switch identity:  switch.owl.red
+# MAC:             48:8f:5a:0c:d1:82
+# Serial:          CAC90C5B5282
+# Location:        rack, owl.red homelab
+#
+# This file is the source of truth consumed directly by the swos Ansible module.
+# Schema: https://github.com/lanrat/python-mikrotik-swos/blob/main/ANSIBLE.md
+#
+# Field notes:
+#   assigned_to — metadata only, ignored by swos module
+#   allow_from  — intentionally omitted to keep management unrestricted
+
+
+system:
+  identity: switch.owl.red
+  static_ip: "10.0.10.2"
+  # address_acquisition intentionally omitted — keep existing "DHCP with fallback"
+  # allow_from intentionally omitted — no management access restriction
+
+snmp:
+  enabled: false               # enable when monitoring stack is ready
+  community: public            # change before enabling
+  contact: ""
+  location: "rack, owl.red"
+
+ports:
+  # SW01-09: VLAN 10 infrastructure management drops (PURPLE)
+  # SW10-16: VLAN 20 private-net drops (PURPLE, unpatched)
+  # SW17-19: VLAN 40/50 IoT drops (PURPLE, unpatched)
+  # SW20-22: VLAN 30 guest-net drops (PURPLE, unpatched)
+  # SW21:    AP uplink trunk (BLUE-C, all VLANs tagged) — PP23 <-> SW21 <-> WAP
+  # SW23:    Router R1 LAN trunk (BLUE-A, all VLANs tagged)
+  # SW24:    Router R2 fallback trunk (BLUE-B, disabled)
+  # SFP+1:   Future OPNsense 10G trunk (AQUA DAC, not connected)
+  # SFP+2:   Future storage 10G path (AQUA DAC, not connected)
+
+  - port: 1
+    name: "cp1.pve"
+    enabled: true
+    assigned_to: cp1.pve.owl.red   # 10.0.10.11 — PP25 <-> SW01
+
+  - port: 2
+    name: "cp2.pve"
+    enabled: true
+    assigned_to: cp2.pve.owl.red   # 10.0.10.12 — PP26 <-> SW02
+
+  - port: 3
+    name: "cp3.pve"
+    enabled: true
+    assigned_to: cp3.pve.owl.red   # 10.0.10.13 — PP27 <-> SW03
+
+  - port: 4
+    name: "worker1.pve"
+    enabled: true
+    assigned_to: worker1.pve.owl.red  # 10.0.10.14 — PP28 <-> SW04
+
+  - port: 5
+    name: "edge.pve"
+    enabled: true
+    assigned_to: edge.pve.owl.red  # 10.0.10.3 — direct, no PP — SW05
+
+  - port: 6
+    name: "storage.pve"
+    enabled: true
+    assigned_to: storage.pve.owl.red  # 10.0.10.4 — PP30 <-> SW06
+
+  - port: 7
+    name: "ipmi.storage"
+    enabled: true
+    assigned_to: ipmi.storage.owl.red  # 10.0.10.6 — PP31 <-> SW07
+
+  - port: 8
+    name: "kvm-reserved"
+    enabled: true
+    assigned_to: kvm-laptop           # break-glass, no active patch — SW08
+
+  - port: 9
+    name: "pdu.owl.red"
+    enabled: true
+    assigned_to: pdu.owl.red          # 10.0.10.7 — PP32 <-> SW09 (10M — investigate)
+
+  - port: 10
+    name: "pvt-drop-10"
+    enabled: true
+    assigned_to: unpatched            # VLAN 20 private-net drop
+
+  - port: 11
+    name: "pvt-drop-11"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 12
+    name: "pvt-drop-12"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 13
+    name: "pvt-drop-13"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 14
+    name: "pvt-drop-14"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 15
+    name: "pvt-drop-15"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 16
+    name: "pvt-drop-16"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 17
+    name: "iot-drop-17"
+    enabled: true
+    assigned_to: unpatched            # VLAN 40/50 IoT drop
+
+  - port: 18
+    name: "iot-drop-18"
+    enabled: true
+    assigned_to: unpatched            # VLAN 40/50 IoT drop
+
+  - port: 19
+    name: "iot-drop-19"
+    enabled: true
+    assigned_to: unpatched            # VLAN 40/50 IoT drop
+
+  - port: 20
+    name: "gst-drop-20"
+    enabled: true
+    assigned_to: unpatched            # VLAN 30 guest-net drop
+
+  - port: 21
+    name: "ap.owl.red"
+    enabled: true
+    assigned_to: ap.owl.red           # 10.0.10.40 — BLUE-C: PP23 <-> SW21 WAP trunk
+
+  - port: 22
+    name: "gst-drop-22"
+    enabled: true
+    assigned_to: unpatched
+
+  - port: 23
+    name: "rtr-trunk"
+    enabled: true
+    assigned_to: edge.pve R1          # BLUE-A: router LAN trunk, all VLANs tagged
+
+  - port: 24
+    name: "rtr-fallback"
+    enabled: true
+    assigned_to: edge.pve R2          # BLUE-B: router fallback, currently disabled
+
+  - port: 25
+    name: "sfp1-opn-fut"
+    enabled: true
+    assigned_to: unconnected          # AQUA DAC-01: future OPNsense 10G SFP+ trunk
+
+  - port: 26
+    name: "sfp2-sto-fut"
+    enabled: true
+    assigned_to: unconnected          # AQUA DAC-02: future storage 10G path
+
+# VLAN table — created without port assignments.
+# Port-VLAN assignments (access/trunk mode per port) come in Phase 2.
+vlans:
+  - vlan_id: 10
+    member_ports: []
+    name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium
+
+  - vlan_id: 20
+    member_ports: []
+    name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
+
+  - vlan_id: 30
+    member_ports: []
+    name: "guest-net"         # 10.0.30.0/24 — guest WiFi, internet only
+
+  - vlan_id: 40
+    member_ports: []
+    name: "iot-no-inter"      # 10.0.40.0/24 — IoT local only
+
+  - vlan_id: 50
+    member_ports: []
+    name: "iot-with-inter"    # 10.0.50.0/24 — IoT internet permitted

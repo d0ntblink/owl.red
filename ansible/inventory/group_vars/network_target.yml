@@ -12,7 +12,9 @@ target_network_model:
       name: network-devices
       subnet: 10.0.10.0/24
       gateway: 10.0.10.1
-      dhcp_enabled: false
+      dhcp_enabled: true
+      dhcp_range: "10.0.10.100-199"
+      dhcp_authority: technitium_on_kubernetes
     - id: 20
       name: private-net
       subnet: 10.0.20.0/24

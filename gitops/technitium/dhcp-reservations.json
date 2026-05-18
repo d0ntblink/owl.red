@@ -1,0 +1,219 @@
+{
+  "_meta": {
+    "generated": "2026-05-18",
+    "dns_suffix": "owl.red",
+    "note": "MAC directory for owl.red. Consumed by Technitium DHCP to build static lease reservations. MAC format: uppercase hex, dash-separated (AA-BB-CC-DD-EE-FF). TBD entries require device to be powered on / provisioned before filling in."
+  },
+
+  "scopes": {
+
+    "vlan10_network_devices": {
+      "network": "10.0.10.0/24",
+      "gateway": "10.0.10.1",
+      "description": "Infrastructure management — DHCP range 10.0.10.100-199 served by Technitium on k8s. All known devices have MAC reservations; pool handles unknown devices.",
+      "reservations": [
+
+        {
+          "hardwareAddress": "48-8F-5A-0C-D1-82",
+          "ipAddress": "10.0.10.2",
+          "hostName": "switch.owl.red",
+          "comments": "MikroTik CSS326-24G-2S+RM — L2 managed switch",
+          "macSource": "css326.yml header",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "90-E2-BA-0C-44-95",
+          "ipAddress": "10.0.10.1",
+          "hostName": "edge.owl.red",
+          "comments": "OPNsense VM (VMID 100) on edge.pve — VLAN 10 gateway, firewall. Intel I340-T4 PCIe passthrough NIC.",
+          "macSource": "ARP at 10.0.10.1 via edge.pve (Intel I340-T4 port 0, fully passed through to OPNsense VM); switch port SW19",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "3C-7C-3F-25-50-6A",
+          "ipAddress": "10.0.10.3",
+          "hostName": "edge.pve.owl.red",
+          "comments": "Supermicro CSE-523L-505B — PVE host, router node (OPNsense PCIe passthrough host)",
+          "macSource": "switch port SW05",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "AC-1F-6B-47-87-F1",
+          "ipAddress": "10.0.10.4",
+          "hostName": "storage.pve.owl.red",
+          "comments": "Rosewill RSV-L4500U / Supermicro X10SRi-F — PVE host, storage node. NIC2 (LAN2) will be PVE management NIC.",
+          "macSource": "IPMI page: System LAN2 MAC address ac:1f:6b:47:87:f1 — NIC2 not yet connected to switch (future PVE mgmt)",
+          "status": "pending"
+        },
+
+        {
+          "hardwareAddress": "AC-1F-6B-47-87-F0",
+          "ipAddress": "10.0.10.5",
+          "hostName": "nas.owl.red",
+          "comments": "Unraid (currently bare metal on NIC1; will be VM on storage.pve when PVE migration complete) — NFS/SMB storage, Plex media",
+          "macSource": "IPMI page: System LAN1 MAC address ac:1f:6b:47:87:f0; confirmed by ARP at 10.0.10.5 via edge.pve; switch port SW07",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "AC-1F-6B-4B-B5-E7",
+          "ipAddress": "10.0.10.6",
+          "hostName": "ipmi.storage.owl.red",
+          "comments": "Supermicro X10SRi-F IPMI/BMC — remote management for storage.pve.owl.red",
+          "macSource": "IPMI page: BMC MAC Address ac:1f:6b:4b:b5:e7 at IP 10.0.10.6; switch port SW06",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "00-C0-B7-DF-67-08",
+          "ipAddress": "10.0.10.7",
+          "hostName": "pdu.owl.red",
+          "comments": "APC AP7900B PDU — rack PDU management (2 units, front IP only)",
+          "macSource": "switch port SW09 (APC OUI 00:C0:B7 confirmed)",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "00-23-24-7A-87-96",
+          "ipAddress": "10.0.10.11",
+          "hostName": "cp1.pve.owl.red",
+          "comments": "Lenovo ThinkCentre M73 #1 — PVE host, k8s control plane node",
+          "macSource": "SSH nic0 + switch port SW01",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "00-23-24-70-EF-B0",
+          "ipAddress": "10.0.10.12",
+          "hostName": "cp2.pve.owl.red",
+          "comments": "Lenovo ThinkCentre M73 #2 — PVE host, k8s control plane node",
+          "macSource": "SSH nic0 + switch port SW02",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "00-23-24-6F-C2-4B",
+          "ipAddress": "10.0.10.13",
+          "hostName": "cp3.pve.owl.red",
+          "comments": "Lenovo ThinkCentre M73 #3 — PVE host, k8s control plane node",
+          "macSource": "SSH nic0 + switch port SW03",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "00-23-24-6B-DC-F9",
+          "ipAddress": "10.0.10.14",
+          "hostName": "worker1.pve.owl.red",
+          "comments": "Lenovo ThinkCentre M73 #4 — PVE host, k8s worker node",
+          "macSource": "SSH nic0 + switch port SW04",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-00-00-00-00-21",
+          "ipAddress": "10.0.10.21",
+          "hostName": "cp1.k8s.owl.red",
+          "comments": "Talos VM (VMID 601) on cp1.pve — k8s control plane node",
+          "macSource": "qm config 601 on cp1.pve",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-00-00-00-00-22",
+          "ipAddress": "10.0.10.22",
+          "hostName": "cp2.k8s.owl.red",
+          "comments": "Talos VM (VMID 602) on cp2.pve — k8s control plane node",
+          "macSource": "qm config 602 on cp2.pve",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-00-00-00-00-23",
+          "ipAddress": "10.0.10.23",
+          "hostName": "cp3.k8s.owl.red",
+          "comments": "Talos VM (VMID 603) on cp3.pve — k8s control plane node",
+          "macSource": "qm config 603 on cp3.pve",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-00-00-00-00-24",
+          "ipAddress": "10.0.10.24",
+          "hostName": "worker1.k8s.owl.red",
+          "comments": "Talos VM (VMID 604) on worker1.pve — k8s worker node",
+          "macSource": "qm config 604 on worker1.pve",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "10-BE-F5-D9-1E-37",
+          "ipAddress": "10.0.10.40",
+          "hostName": "ap.owl.red",
+          "comments": "D-Link DIR-885L running OpenWrt — WAP management",
+          "macSource": "switch port SW17",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "TBD",
+          "ipAddress": "10.0.10.30",
+          "hostName": "ns1.owl.red",
+          "comments": "Technitium DNS — DNS service endpoint (k8s cluster, HA via MetalLB)",
+          "macSource": "TBD — VM not yet provisioned",
+          "status": "pending"
+        },
+
+        {
+          "hardwareAddress": "BC-24-11-7D-37-72",
+          "ipAddress": "10.0.10.31",
+          "hostName": "pdm.owl.red",
+          "comments": "Proxmox Datacenter Manager — LXC container (VMID 231) on cp1.pve",
+          "macSource": "pct config 231 on cp1.pve",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "TBD",
+          "ipAddress": "10.0.10.33",
+          "hostName": "pbs.owl.red",
+          "comments": "Proxmox Backup Server VM on storage.pve",
+          "macSource": "TBD — VM not yet provisioned",
+          "status": "pending"
+        }
+
+      ]
+    },
+
+    "vlan20_private_net": {
+      "network": "10.0.20.0/24",
+      "gateway": "10.0.20.1",
+      "description": "Trusted devices — wired and WiFi. DHCP pool active; reservations added per device as needed.",
+      "reservations": []
+    },
+
+    "vlan30_guest_net": {
+      "network": "10.0.30.0/24",
+      "gateway": "10.0.30.1",
+      "description": "Guest WiFi — captive portal, internet only. No permanent reservations expected.",
+      "reservations": []
+    },
+
+    "vlan40_iot_no_inter": {
+      "network": "10.0.40.0/24",
+      "gateway": "10.0.40.1",
+      "description": "IoT — local only, no internet. Reservations added per device.",
+      "reservations": []
+    },
+
+    "vlan50_iot_with_inter": {
+      "network": "10.0.50.0/24",
+      "gateway": "10.0.50.1",
+      "description": "IoT — internet permitted, no lateral movement. Reservations added per device.",
+      "reservations": []
+    }
+
+  }
+}

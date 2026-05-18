@@ -70,7 +70,7 @@ Test procedures for owl.red infrastructure. These are operational validation ste
 1. Access Technitium web console (URL depends on Kubernetes ingress setup)
 2. Navigate to DHCP → Settings
 3. Verify scopes exist for:
-   - VLAN 10: Static IPs only (no DHCP range)
+   - VLAN 10: Range `10.0.10.100–199` (Technitium on k8s; all known devices have MAC reservations)
    - VLAN 20: Range `10.0.20.100–254`
    - VLAN 30: Range `10.0.30.100–254` with Option 114 set to `https://captive.owl.red:8000/api/captiveportal/access/api`
    - VLAN 40: Range `10.0.40.100–254`

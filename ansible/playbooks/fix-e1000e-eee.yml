@@ -1,0 +1,60 @@
+---
+# Fix Intel I217-V e1000e EEE hardware unit hang
+# Deploys a oneshot systemd service that:
+#   1. Sets ethtool EEE advertise bitmap to 0 (PHY-level, not just driver-level)
+#   2. Disables hardware offloads (GSO/GRO/TSO/TX/RX checksums, VLAN offload, scatter-gather)
+#
+# Ref: notes/issues/001-e1000e-eee-hang.md
+# Run: ansible/scripts/fix-e1000e-eee.sh
+
+- name: Fix Intel I217-V e1000e EEE hardware unit hang
+  hosts: "{{ target_hosts | default('cp1_pve:cp2_pve:cp3_pve:worker1_pve') }}"
+  gather_facts: false
+
+  tasks:
+    - name: Deploy EEE+offload disable systemd service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/disable-nic-eee-offload-nic0.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Disable NIC EEE and hardware offloading on nic0 (Intel I217-V EEE hang workaround)
+          After=network.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=true
+          ExecStart=/sbin/ethtool --set-eee nic0 eee off advertise 0
+          ExecStart=/sbin/ethtool -K nic0 gso off gro off tso off tx off rx off rxvlan off txvlan off sg off
+
+          [Install]
+          WantedBy=multi-user.target
+      register: service_file
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: service_file.changed
+
+    - name: Enable and start EEE disable service
+      ansible.builtin.systemd:
+        name: disable-nic-eee-offload-nic0.service
+        enabled: true
+        state: started
+
+    - name: Verify EEE advertisement is cleared
+      ansible.builtin.command: ethtool --show-eee nic0
+      register: eee_status
+      changed_when: false
+      failed_when: "'Advertised EEE link modes' not in eee_status.stdout"
+
+    - name: Assert EEE is not advertised
+      ansible.builtin.assert:
+        that:
+          - "'Not reported' in eee_status.stdout or 'Advertised EEE link modes:' not in eee_status.stdout"
+        fail_msg: |
+          EEE is still being advertised on {{ inventory_hostname }}.
+          ethtool output: {{ eee_status.stdout }}
+        success_msg: "{{ inventory_hostname }}: EEE advertisement cleared"

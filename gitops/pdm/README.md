@@ -19,3 +19,5 @@ This bundle exposes the Proxmox Datacenter Manager LXC endpoint through Traefik 
 - No VPN sidecars are required for LAN-only management access.
 - Proxmox HA for containers requires shared storage for true automatic failover.
 - Bootstrap automation lives at `scripts/pdm-lxc-ha-bootstrap.sh` and should be run from a Proxmox cluster node.
+- Temporary deployment (2026-05-12): `ct:231` is running on `cp1` with non-shared `local-lvm` storage and node-affinity rule `pdm-temp-node-affinity`.
+- TODO: After NAS/shared storage is ready, rebuild PDM on shared storage and replace temporary cp1-pinned rule with true multi-node HA policy.

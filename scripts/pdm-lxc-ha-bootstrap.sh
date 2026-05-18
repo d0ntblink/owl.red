@@ -44,7 +44,7 @@ require_cmd ha-manager
 require_cmd jq
 
 log "Checking Proxmox quorum..."
-pvecm status | grep -q "Quorate: Yes" || die "Cluster is not quorate."
+pvecm status | grep -Eq "Quorate:[[:space:]]+Yes" || die "Cluster is not quorate."
 
 if [[ "$PDM_REQUIRE_SHARED_STORAGE" == "true" ]]; then
   log "Validating shared storage for ${PDM_CT_ROOTFS_STORAGE}..."

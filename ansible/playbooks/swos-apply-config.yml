@@ -1,0 +1,43 @@
+---
+# swos-apply-config.yml
+# Apply full desired state from switch_configs/css326.yml to the CSS326.
+#
+# Covers: system settings, port names, SNMP, and VLAN table.
+# Does NOT configure per-port VLAN assignments (port_vlans) — Phase 2.
+#
+# Usage:
+#   ansible-playbook playbooks/swos-apply-config.yml
+#   ansible-playbook playbooks/swos-apply-config.yml --check  (dry-run)
+#
+# Requires: mikrotik-swos Python package (pip install mikrotik-swos)
+# Module:   ansible/library/swos.py (from https://github.com/lanrat/python-mikrotik-swos)
+
+- name: Apply full config to CSS326 switch
+  hosts: switches
+  gather_facts: false
+
+  vars:
+    switch_config_file: "{{ playbook_dir }}/../switch_configs/css326.yml"
+
+  tasks:
+    - name: Load switch config from css326.yml
+      ansible.builtin.include_vars:
+        file: "{{ switch_config_file }}"
+        name: css326
+
+    - name: Apply switch configuration
+      swos:
+        host: "{{ ansible_host }}"
+        username: "{{ swos_username }}"
+        password: "{{ swos_password }}"
+        force_platform: swos
+        config:
+          system: "{{ css326.system }}"
+          snmp: "{{ css326.snmp }}"
+          ports: "{{ css326.ports }}"
+          vlans: "{{ css326.vlans }}"
+      register: result
+
+    - name: Show result
+      ansible.builtin.debug:
+        msg: "{{ result.msg }}"

@@ -1,0 +1,141 @@
+---
+# rolling-reboot-pve.yml
+# Rolling reboot of Proxmox nodes one at a time to activate GRUB kernel params.
+#
+# Reboot order preserves etcd quorum (never majority down simultaneously):
+#   worker1_pve → cp3_pve → cp2_pve → cp1_pve
+#
+# Active kernel params after reboot:
+#   pcie_aspm=off intel_idle.max_cstate=3 intel_iommu=on iommu=pt
+#
+# Usage:
+#   scripts/ansible-run.sh ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/rolling-reboot-pve.yml
+#
+# Single node:
+#   scripts/ansible-run.sh ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/rolling-reboot-pve.yml --limit worker1_pve
+
+- name: Rolling reboot — worker1 first (not control plane)
+  hosts: worker1_pve
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Reboot node
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        msg: "Rebooting for GRUB kernel param activation"
+
+    - name: Verify kernel cmdline contains expected params
+      ansible.builtin.command: cat /proc/cmdline
+      register: cmdline
+      changed_when: false
+
+    - name: Show active cmdline
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} cmdline: {{ cmdline.stdout }}"
+
+    - name: Assert iommu and cstate params are active
+      ansible.builtin.assert:
+        that:
+          - "'intel_iommu=on' in cmdline.stdout"
+          - "'iommu=pt' in cmdline.stdout"
+          - "'intel_idle.max_cstate=3' in cmdline.stdout"
+        fail_msg: "GRUB params not active — check /etc/default/grub and run update-grub"
+        success_msg: "GRUB params confirmed active"
+
+- name: Rolling reboot — cp3 (etcd minority)
+  hosts: cp3_pve
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Reboot node
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        msg: "Rebooting for GRUB kernel param activation"
+
+    - name: Verify kernel cmdline contains expected params
+      ansible.builtin.command: cat /proc/cmdline
+      register: cmdline
+      changed_when: false
+
+    - name: Show active cmdline
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} cmdline: {{ cmdline.stdout }}"
+
+    - name: Assert iommu and cstate params are active
+      ansible.builtin.assert:
+        that:
+          - "'intel_iommu=on' in cmdline.stdout"
+          - "'iommu=pt' in cmdline.stdout"
+          - "'intel_idle.max_cstate=3' in cmdline.stdout"
+        fail_msg: "GRUB params not active — check /etc/default/grub and run update-grub"
+        success_msg: "GRUB params confirmed active"
+
+- name: Rolling reboot — cp2 (etcd minority)
+  hosts: cp2_pve
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Reboot node
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        msg: "Rebooting for GRUB kernel param activation"
+
+    - name: Verify kernel cmdline contains expected params
+      ansible.builtin.command: cat /proc/cmdline
+      register: cmdline
+      changed_when: false
+
+    - name: Show active cmdline
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} cmdline: {{ cmdline.stdout }}"
+
+    - name: Assert iommu and cstate params are active
+      ansible.builtin.assert:
+        that:
+          - "'intel_iommu=on' in cmdline.stdout"
+          - "'iommu=pt' in cmdline.stdout"
+          - "'intel_idle.max_cstate=3' in cmdline.stdout"
+        fail_msg: "GRUB params not active — check /etc/default/grub and run update-grub"
+        success_msg: "GRUB params confirmed active"
+
+- name: Rolling reboot — cp1 (etcd minority, last)
+  hosts: cp1_pve
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Reboot node
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 10
+        pre_reboot_delay: 5
+        post_reboot_delay: 30
+        msg: "Rebooting for GRUB kernel param activation"
+
+    - name: Verify kernel cmdline contains expected params
+      ansible.builtin.command: cat /proc/cmdline
+      register: cmdline
+      changed_when: false
+
+    - name: Show active cmdline
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} cmdline: {{ cmdline.stdout }}"
+
+    - name: Assert iommu and cstate params are active
+      ansible.builtin.assert:
+        that:
+          - "'intel_iommu=on' in cmdline.stdout"
+          - "'iommu=pt' in cmdline.stdout"
+          - "'intel_idle.max_cstate=3' in cmdline.stdout"
+        fail_msg: "GRUB params not active — check /etc/default/grub and run update-grub"
+        success_msg: "GRUB params confirmed active"

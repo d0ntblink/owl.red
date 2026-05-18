@@ -23,25 +23,13 @@ The control node (e.g., your laptop or automation runner) must have the `owl.red
 
 ### VLANs
 
-| VLAN | Name | Subnet | Description |
-|------|------|--------|-------------|
-| 10 | `network-devices` | `10.0.10.0/24` | Infrastructure management : static IPs only |
-| 20 | `private-net` | `10.0.20.0/24` | Trusted devices : wired + WiFi |
-| 30 | `guest-net` | `10.0.30.0/24` | Guest WiFi : captive portal, internet only |
-| 40 | `iot-no-inter` | `10.0.40.0/24` | IoT : local only, no internet |
-| 50 | `iot-with-inter` | `10.0.50.0/24` | IoT : internet permitted, no lateral movement |
-
-### VLAN Gateway Plan (Confirmed)
-
-Each VLAN uses its own OPNsense interface-local gateway.
-
-| VLAN | Gateway |
-|------|---------|
-| 10 | `10.0.10.1` |
-| 20 | `10.0.20.1` |
-| 30 | `10.0.30.1` |
-| 40 | `10.0.40.1` |
-| 50 | `10.0.50.1` |
+| VLAN | Name | Subnet | Gateway | Description |
+|------|------|--------|---------|-------------|
+| 10 | `network-devices` | `10.0.10.0/24` | `10.0.10.1` | Infrastructure management : DHCP `10.0.10.100–199` (all known devices have MAC reservations) |
+| 20 | `private-net` | `10.0.20.0/24` | `10.0.20.1` | Trusted devices : wired + WiFi |
+| 30 | `guest-net` | `10.0.30.0/24` | `10.0.30.1` | Guest WiFi : captive portal, internet only |
+| 40 | `iot-no-inter` | `10.0.40.0/24` | `10.0.40.1` | IoT : local only, no internet |
+| 50 | `iot-with-inter` | `10.0.50.0/24` | `10.0.50.1` | IoT : internet permitted, no lateral movement |
 
 
 ## Static IP Assignments : `network-devices` VLAN
@@ -136,25 +124,24 @@ This section defines a clean front-of-rack patching standard for the patch panel
 
 #### Router Chassis (`CSE-523L-505B`)
 
-| Router Port | Role | Cable Color | Connected To |
-|-------------|------|-------------|--------------|
-| `R0` | WAN uplink (ISP handoff) | `BLUE` | ISP modem/ONT (direct) |
-| `R1` | Primary LAN trunk (VLAN 10/20/30/40/50 tagged) | `BLUE` | Switch `SW17` |
-| `R2` | Management/fallback link (disabled by default) | `BLUE` | Switch `SW18` (reserved) |
-| `R3` | Future DMZ/WAN2 | `BLUE` | Reserved |
+| Router Port | Role | Cable Color |
+|-------------|------|-------------|
+| `R0` | WAN uplink (ISP handoff) | `BLUE` |
+| `R1` | Primary LAN trunk (VLAN 10/20/30/40/50 tagged) | `BLUE` |
+| `R2` | Management/fallback link (disabled by default) | `BLUE` |
+| `R3` | Future DMZ/WAN2 | `BLUE` |
 
 #### Switch (`MikroTik CSS326-24G-2S+RM`)
 
 | Switch Port | Mode | VLANs | Cable Color | Front-Patch Target |
 |-------------|------|-------|-------------|--------------------|
-| `SW17` | Trunk | `10,20,30,40,50` (tagged) | `BLUE` | Router `R1` (active LAN trunk) |
-| `SW18` | Access/Reserved | `10` | `BLUE` | Router `R2` (fallback, disabled) |
-| `SW19` | Trunk | `10,20,30,40,50` (tagged) | `BLUE` | AP uplink (`ap.owl.red`) via patch panel |
-| `SW1-SW9` | Access | `10` | `PURPLE` | Infrastructure/management drops |
-| `SW10-SW16` | Access | `20` | `PURPLE` | Private LAN drops |
+| `SW1-SW12` | Access | `10` | `PURPLE` | Infrastructure/management drops |
+| `SW13-SW16` | Access | `20` | `PURPLE` | Private LAN drops |
+| `SW17-SW19` | Access | 40/50 (tagged) | `PURPLE` | IoT LAN drops |
 | `SW20-SW22` | Access | `30` | `PURPLE` | Guest LAN drops |
-| `SW23` | Access | `40` | `PURPLE` | IoT no-internet drop |
-| `SW24` | Access | `50` | `PURPLE` | IoT with-internet drop |
+| `SW21` | Trunk | `10,20,30,40,50` (tagged) | `BLUE` | AP uplink (`ap.owl.red`) via patch panel |
+| `SW23` | Trunk | `10,20,30,40,50` (tagged) | `BLUE` | Router `R1` (active LAN trunk) |
+| `SW24` | Trunk | `10,20,30,40,50` (tagged) | `BLUE` | Router `R2` (fallback LAN trunk, disabled) |
 | `SFP+1` | Reserved trunk (future 10G) | `10,20,30,40,50` | `AQUA` | OPNsense future SFP+ via direct DAC through keystone pass-through |
 | `SFP+2` | Reserved storage/uplink (future 10G) | As needed | `AQUA` | Storage path via direct DAC through keystone pass-through |
 
@@ -181,66 +168,44 @@ PP25 <-> SW01 = CP1
 PP26 <-> SW02 = CP2
 PP27 <-> SW03 = CP3
 PP28 <-> SW04 = WR1
-SW05 = EDG
+SW05 = EDG.P
+PP29 <-> SW08 = STO.P
 PP30 <-> SW06 = STO
 PP31 <-> SW07 = IPM
-SW08 = KVM
 PP32 <-> SW09 = PDU
-PP19 <-> SW19 = WAP (BLUE trunk)
+SW10 = KVM
+PP32 <-> SW09 = PDU
+PP23 <-> SW21 = WAP (BLUE trunk)
+SW23 <-> EDGR1 = LAN trunk (BLUE, active)
+PP24 <-> EDGR0 = WAN (to R0 on edge.pve)
 
 TAG LEGEND
-CP1=cp1.pve  CP2=cp2.pve  CP3=cp3.pve  WR1=worker1.pve
-EDG=edge.pve STO=storage.pve IPM=ipmi.storage KVM=service laptop/KVM WAP=ap.owl.red
+CP1=cp1.pve.owl.red  CP2=cp2.pve.owl.red  CP3=cp3.pve.owl.red  WR1=worker1.pve.owl.red  
+EDGPVE=edge.pve.owl.red STOPVE=storage.pve.owl.red STO=storage.owl.red IPM=ipmi.storage.owl.red KVM=service laptop/KVM WAP=ap.owl.red
+EDGR0=edge.owl.red (WAN) EDGR1=edge.owl.red (LAN trunk)
 ```
 
 CRITICAL BLUE LINKS
-BLUE-A: SW17 <-----------------------------------------------> Router R1 (LAN trunk, active)
-BLUE-B: SW18 <-----------------------------------------------> Router R2 (fallback, disabled)
-BLUE-C: SW19 <----> PP19 ----(rear run)----> AP uplink (VLAN trunk)
+BLUE-A: SW23 <-----------------------------------------------> EDGR1 (LAN trunk, active)
+BLUE-B: SW24 <-----------------------------------------------> EDGR0 (fallback, disabled)
+BLUE-C: SW21 <----> PP23 ----(rear run)----> AP uplink (VLAN trunk)
 DAC-01 (AQUA): SFP+1 <== direct DAC via keystone pass-through ==> OPNsense future SFP+ trunk
 DAC-02 (AQUA): SFP+2 <== direct DAC via keystone pass-through ==> Storage future 10G path
 
-WAP physical note:
-- `ap.owl.red` is on the right side of the rack and is fed by `BLUE-C` (`SW19 -> PP19 -> AP`).
-
-
-### Active Purple Cable Plan (Current Systems)
-
-These are the current purple front patches for systems already in your rack/device list.
-
-| Purple Link | Patch Panel | Switch Port | Device | VLAN / Purpose |
-|-------------|-------------|-------------|--------|----------------|
-| `PURPLE-01` | `PP25` | `SW01` | `cp1.pve.owl.red` (`10.0.10.11`) | VLAN 10 management |
-| `PURPLE-02` | `PP26` | `SW02` | `cp2.pve.owl.red` (`10.0.10.12`) | VLAN 10 management |
-| `PURPLE-03` | `PP27` | `SW03` | `cp3.pve.owl.red` (`10.0.10.13`) | VLAN 10 management |
-| `PURPLE-04` | `PP28` | `SW04` | `worker1.pve.owl.red` (`10.0.10.14`) | VLAN 10 management |
-| `PURPLE-05` | `N/A` | `SW05` | `edge.pve.owl.red` (`10.0.10.3`) | VLAN 10 Proxmox management |
-| `PURPLE-06` | `PP30` | `SW06` | `storage.pve.owl.red` (`10.0.10.4`) | VLAN 10 Proxmox management |
-| `PURPLE-07` | `PP31` | `SW07` | `ipmi.storage.owl.red` (`10.0.10.6`) | VLAN 10 BMC/IPMI |
-| `PURPLE-08` | `N/A` | `SW08` | `KVM/laptop` (reserved) | VLAN 10 management (break-glass, no active patch) |
-| `PURPLE-08` | `PP32` | `SW09` | `pdu.owl.red` (`10.0.10.7`) | VLAN 10 management (2 PDUs, front IP only) |
-
-Active non-purple front link to current systems:
-- `BLUE-C`: `SW19 <-> PP19 <-> ap.owl.red` (`10.0.10.40`) VLAN trunk (10/20/30/40/50)
-
-Break-glass requirement:
-- `PURPLE-08` (`SW08`) stays reserved as untagged VLAN 10 recovery access during all VLAN cutover work.
-
-
----
 
 ## Device Inventory
 
 ### Firewall / Router : Supermicro CSE-523L-505B
 
-| Field | Value |
-|-------|-------|
-| Chassis | Supermicro CSE-523L-505B (2U) |
-| CPU | Intel i3 8300 |
-| RAM | 16 GB (4× 8 GB) |
-| NIC (passthrough) | 4-port PCIe GbE : fully passed to OPNsense VM |
-| NIC (passthrough) | 2-port PCIe SFP+ : fully passed to OPNsense VM, goes to switch and uplink |
-| NIC (management) | Onboard NIC : Proxmox host management, VLAN 10 untagged |
+| Field | Value | INFO |
+|-------|-------| ------|
+| Chassis | Supermicro CSE-523L-505B (2U) | |
+| CPU | Intel i3 8300 | |
+| MOBO | Asus PRIME B365M | |
+| RAM | 32 GB (4× 8 GB) | |
+| NIC (passthrough) | 4-port PCIe GbE : fully passed to OPNsense VM | R0(igb0) 90:e2:ba:0c:44:94 , R1(igb1) 90:e2:ba:0c:44:95 , R2(igb2) 90:e2:ba:0c:44:96 , R3(igb3) 90:e2:ba:0c:44:97 |
+| NIC (passthrough) | 2-port PCIe SFP+ : fully passed to OPNsense VM, goes to switch and uplink | Future |
+| NIC (management) | Onboard NIC : Proxmox host management, VLAN 10 untagged | 3c:7c:3f:25:50:6a (eth0) |
 | Hypervisor | Proxmox VE |
 | VM | OPNsense |
 | Proxmox host IP | `10.0.10.3` |
@@ -438,15 +403,15 @@ HTTP-01 challenge will not work for internal services (they are not reachable fr
 
 ### DHCP Authority (Initial) : OPNsense
 
-**Authority:** OPNsense is the authoritative DHCP server in the initial deployment for VLANs 20/30/40/50. VLAN 10 remains static-only.
+**Authority:** OPNsense is the authoritative DHCP server for VLANs 20/30/40/50. VLAN 10 DHCP is served by Technitium on k8s (`vlan10-network-devices` scope, range `10.0.10.100–199`). All known VLAN 10 devices have MAC reservations, so dynamic leases from the pool are only issued to unknown devices.
 
-**Resilience rationale:** This avoids coupling DHCP availability to the full k8s dependency chain during first rollout.
+**Resilience rationale:** This avoids coupling DHCP availability for non-infrastructure VLANs to the full k8s dependency chain during first rollout. VLAN 10 devices that hold valid leases survive short Technitium outages; on full cluster restart they will renew when Technitium recovers.
 
 **DHCP scope configuration (on OPNsense initially):**
 
 | VLAN | Subnet | DHCP Range | Gateway | DNS Servers | Notes |
 |------|--------|------------|---------|-------------|-------|
-| 10 | `10.0.10.0/24` | Static IPs only | `10.0.10.1` | `10.0.10.30` (Technitium cluster VIP) | No DHCP server; static assignments only |
+| 10 | `10.0.10.0/24` | `10.0.10.100–199` | `10.0.10.1` | `10.0.10.30` (Technitium cluster VIP) | DHCP served by Technitium on k8s; all known devices have MAC reservations |
 | 20 | `10.0.20.0/24` | `10.0.20.100–254` | `10.0.20.1` | `10.0.10.30` | Trusted devices; full internet access |
 | 30 | `10.0.30.0/24` | `10.0.30.100–254` | `10.0.30.1` | `10.0.10.30` | **Guest captive portal VLAN; see RFC 8910/8908 requirements below** |
 | 40 | `10.0.40.0/24` | `10.0.40.100–254` | `10.0.40.1` | `10.0.10.30` | IoT with local-only network access (internet blocked) |

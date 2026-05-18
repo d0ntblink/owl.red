@@ -1,0 +1,104 @@
+---
+# Deploy IP-Tag service on all Proxmox nodes
+# Tags each QEMU VM and LXC container in the PVE web UI with its IP address.
+# Runs as a systemd service, updates tags every LOOP_INTERVAL seconds.
+#
+# TAG_FORMAT: full  (e.g. 10.0.10.31)
+# CIDR_LIST:  10.0.0.0/8
+# LOOP_INTERVAL: 300 (5 min)
+#
+# Source: https://github.com/community-scripts/ProxmoxVE (add-iptag.sh)
+# Run: ansible/scripts/deploy-iptag.sh
+
+- name: Deploy IP-Tag service on Proxmox nodes
+  hosts: "{{ target_hosts | default('cp1_pve:cp2_pve:cp3_pve:worker1_pve') }}"
+  gather_facts: false
+
+  tasks:
+    - name: Create /opt/iptag directory
+      ansible.builtin.file:
+        path: /opt/iptag
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write iptag config
+      ansible.builtin.copy:
+        dest: /opt/iptag/iptag.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # IP-Tag configuration — managed by Ansible
+          # Do not edit manually; re-run deploy-iptag.sh to update
+
+          CIDR_LIST=(
+            10.0.0.0/8
+          )
+
+          # full = show complete IP (e.g. 10.0.10.31)
+          TAG_FORMAT="full"
+
+          # Update interval in seconds
+          LOOP_INTERVAL=300
+
+          DEBUG=false
+
+    - name: Deploy iptag main script
+      ansible.builtin.copy:
+        src: ../files/iptag-main.sh
+        dest: /opt/iptag/iptag
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Write iptag-run convenience command
+      ansible.builtin.copy:
+        dest: /usr/local/bin/iptag-run
+        owner: root
+        group: root
+        mode: "0755"
+        content: "#!/usr/bin/env bash\nexport FORCE_SINGLE_RUN=true\nexec /opt/iptag/iptag\n"
+
+    - name: Write iptag systemd service
+      ansible.builtin.copy:
+        dest: /lib/systemd/system/iptag.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=IP-Tag — tag Proxmox VMs and CTs with their IP addresses
+          After=network.target pve-cluster.service
+
+          [Service]
+          Type=simple
+          ExecStart=/opt/iptag/iptag
+          Restart=on-failure
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+      register: service_unit
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: service_unit.changed
+
+    - name: Enable and start iptag service
+      ansible.builtin.systemd:
+        name: iptag.service
+        enabled: true
+        state: started
+
+    - name: Confirm service is running
+      ansible.builtin.command: systemctl is-active iptag.service
+      register: svc_state
+      changed_when: false
+      failed_when: svc_state.stdout != "active"
+
+    - name: Show status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: iptag.service is {{ svc_state.stdout }}"

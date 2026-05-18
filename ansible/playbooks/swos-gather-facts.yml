@@ -1,0 +1,60 @@
+---
+# swos-gather-facts.yml
+# Gather and display current state of the CSS326 SwOS switch.
+#
+# Usage:
+#   ansible-playbook playbooks/swos-gather-facts.yml
+#   ansible-playbook playbooks/swos-gather-facts.yml -l switch_swos
+#
+# Note: runs on localhost (controller), not on the switch itself.
+# All API calls are made via HTTP Digest from the Ansible controller.
+#
+# Requires: pip install mikrotik-swos
+
+- name: Gather SwOS switch facts
+  hosts: switches
+  gather_facts: false
+
+  tasks:
+    - name: Query switch via SwOS HTTP API
+      swos_info:
+        host: "{{ ansible_host }}"
+        username: "{{ swos_username }}"
+        password: "{{ swos_password }}"
+      register: switch_info
+
+    - name: Display system info
+      ansible.builtin.debug:
+        msg: |
+          === SwOS System Info: {{ inventory_hostname }} ===
+          Model:       {{ switch_info.system.model }}
+          Identity:    {{ switch_info.system.identity }}
+          Version:     {{ switch_info.system.version }}
+          MAC:         {{ switch_info.system.mac_address }}
+          Serial:      {{ switch_info.system.serial_number }}
+          IP (current):{{ switch_info.system.current_ip }}
+          IP (static): {{ switch_info.system.static_ip }}
+          Addr mode:   {{ switch_info.system.address_acquisition }}
+          Uptime:      {{ (switch_info.system.uptime / 86400) | int }}d
+                       {{ ((switch_info.system.uptime % 86400) / 3600) | int }}h
+                       {{ ((switch_info.system.uptime % 3600) / 60) | int }}m
+
+    - name: Display active ports
+      ansible.builtin.debug:
+        msg: "Port {{ '%02d' | format(item.port_number) }} ({{ item.port_name }}): {{ 'UP  ' if item.link_up else 'DOWN' }} | {{ item.speed | default('--') }} | {{ 'full' if item.full_duplex else 'half' }}-duplex | enabled={{ item.enabled }}"
+      loop: "{{ switch_info.ports }}"
+      loop_control:
+        label: "port{{ item.port_number }}"
+
+    - name: Display SNMP config
+      ansible.builtin.debug:
+        msg: |
+          === SNMP ===
+          Enabled:   {{ switch_info.snmp.enabled }}
+          Community: {{ switch_info.snmp.community }}
+          Contact:   {{ switch_info.snmp.contact | default('(not set)') }}
+          Location:  {{ switch_info.snmp.location | default('(not set)') }}
+
+    - name: Count active ports
+      ansible.builtin.debug:
+        msg: "Active ports: {{ switch_info.ports | selectattr('link_up') | list | length }} / {{ switch_info.ports | length }}"

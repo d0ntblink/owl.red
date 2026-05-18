@@ -1,0 +1,83 @@
+---
+# Harden Proxmox node GRUB kernel parameters for Haswell/M73 stability
+# Idempotent: safe to re-run; will not duplicate parameters.
+#
+# Parameters applied:
+#   pcie_aspm=off          — Prevents PCIe ASPM link power-down hangs (Haswell known issue)
+#   intel_idle.max_cstate=3 — Caps C-states at C3; eliminates C6/C7s wakeup jitter for etcd
+#   intel_iommu=on          — Explicit IOMMU enable; survives BIOS VT-d default reset
+#   iommu=pt                — Passthrough mode; reduces DMA overhead for non-passthrough devices
+#
+# NOTE: Changes take effect after reboot. Reboot one node at a time to preserve etcd quorum.
+# Ref: notes/issues/001-e1000e-eee-hang.md
+# Run: ansible/scripts/fix-grub-kernel-params.sh
+
+- name: Harden Proxmox node GRUB kernel parameters
+  hosts: "{{ target_hosts | default('cp1_pve:cp2_pve:cp3_pve:worker1_pve') }}"
+  gather_facts: false
+
+  vars:
+    grub_file: /etc/default/grub
+    required_params:
+      - pcie_aspm=off
+      - intel_iommu=on
+      - iommu=pt
+    # intel_idle.max_cstate handled separately due to value replacement
+    max_cstate_param: "intel_idle.max_cstate=3"
+
+  tasks:
+    - name: Read current GRUB cmdline
+      ansible.builtin.shell:
+        cmd: grep '^GRUB_CMDLINE_LINUX_DEFAULT=' {{ grub_file }} | sed 's/GRUB_CMDLINE_LINUX_DEFAULT="//;s/"$//'
+      register: current_cmdline
+      changed_when: false
+
+    - name: Build new cmdline
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          new="{{ current_cmdline.stdout }}"
+
+          # Strip any existing intel_idle.max_cstate=* value before re-adding
+          new=$(echo "$new" | sed 's/intel_idle\.max_cstate=[^ ]*//g' | tr -s ' ' | xargs)
+
+          # Add max_cstate
+          new="$new {{ max_cstate_param }}"
+
+          # Add each required param if absent
+          {% for param in required_params %}
+          echo "$new" | grep -q '{{ param }}' || new="$new {{ param }}"
+          {% endfor %}
+
+          echo "$new" | xargs
+      register: new_cmdline
+      changed_when: false
+
+    - name: Update GRUB_CMDLINE_LINUX_DEFAULT
+      ansible.builtin.lineinfile:
+        path: "{{ grub_file }}"
+        regexp: '^GRUB_CMDLINE_LINUX_DEFAULT='
+        line: 'GRUB_CMDLINE_LINUX_DEFAULT="{{ new_cmdline.stdout }}"'
+        backup: true
+      register: grub_updated
+
+    - name: Run update-grub
+      ansible.builtin.command: update-grub
+      when: grub_updated.changed
+      register: update_grub_out
+      changed_when: true
+
+    - name: Confirm final cmdline
+      ansible.builtin.command:
+        cmd: grep GRUB_CMDLINE_LINUX_DEFAULT {{ grub_file }}
+      register: final_cmdline
+      changed_when: false
+
+    - name: Show final cmdline
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ final_cmdline.stdout }}"
+
+    - name: Warn if reboot required
+      ansible.builtin.debug:
+        msg: "REBOOT REQUIRED on {{ inventory_hostname }} for GRUB changes to take effect"
+      when: grub_updated.changed
