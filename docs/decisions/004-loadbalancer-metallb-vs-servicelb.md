@@ -2,7 +2,16 @@
 
 ## Status
 
-Selected: Option 2 (MetalLB L2/BGP) - Pivoted during Phase 3 rollout.
+Selected and implemented during Phase 3.
+
+## Quick Summary
+
+| Area | Decision |
+|------|----------|
+| Load balancer model | MetalLB |
+| Addressing model | Static VIP pool in VLAN 10 |
+| Primary ingress VIP | `10.0.10.201` for Traefik |
+| Reason | Deterministic LAN service IP ownership from day one |
 
 ## Context
 
@@ -21,7 +30,7 @@ Current requirement:
 | MetalLB (L2/BGP) | Medium | High (advanced LB behavior) | Optional | Better for static VIP pools and clear service IP ownership |
 | kube-vip for services | Medium | Medium | Optional | Good for control-plane VIP and can do service VIPs, but more moving parts |
 
-## Proposed Decision
+## Decision
 
 Adopt **MetalLB** immediately during the Phase 3 baseline installation on Talos + vanilla Kubernetes.
 
@@ -40,20 +49,20 @@ We will define a static VIP pool in VLAN 10 (e.g., `10.0.10.200-250`) to ensure 
 - Risk: VIP pool overlap with static/DHCP allocations causes intermittent address conflicts.
   Mitigation: reserve and document `10.0.10.200-250` in DHCP/IPAM as a dedicated MetalLB-only range.
 
-## Review Gates Before Approval
+## Validation Gates
 
 - Validate Traefik is reachable on LAN via chosen DNS name.
 - Validate at least two sample apps work through ingress with TLS.
 - Validate node restart behavior for exposed services.
 
-## Implementation Path (Selected)
+## Implementation Path
 
 1. Define VIP pool in VLAN 10 (`10.0.10.200-250`).
 2. Install MetalLB and announce pool.
 3. Expose Traefik as a `LoadBalancer` service with explicit VIP assignment (`10.0.10.201`).
 4. Point DNS records (for example `rancher.owl.red`) at the Traefik VIP.
 
-## Consequences If Approved
+## Consequences
 
 - Initial setup includes one additional controller compared to node-IP exposure, but gives deterministic VIP ownership.
 - MetalLB VIP pool `10.0.10.200-250` is active from baseline.

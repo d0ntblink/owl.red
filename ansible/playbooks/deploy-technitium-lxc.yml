@@ -1,0 +1,6 @@
+---
+- name: Configure Technitium DNS+DHCP LXC
+  hosts: technitium_lxc
+  become: true
+  roles:
+    - technitium_lxc

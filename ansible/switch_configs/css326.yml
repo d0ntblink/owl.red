@@ -61,6 +61,7 @@ ports:
     name: "edge.pve"
     enabled: true
     assigned_to: edge.pve.owl.red  # 10.0.10.3 — direct, no PP — SW05
+    # Trunked for Technitium LXC multi-interface: VLAN 10 untagged, VLANs 20-50 tagged
 
   - port: 6
     name: "storage.pve"
@@ -171,21 +172,21 @@ ports:
 # Port-VLAN assignments (access/trunk mode per port) come in Phase 2.
 vlans:
   - vlan_id: 10
-    member_ports: []
-    name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium
+    member_ports: [5]          # port 5 = edge.pve trunk (VLAN 10 untagged/native)
+    name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium LXC
 
   - vlan_id: 20
-    member_ports: []
+    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
     name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
 
   - vlan_id: 30
-    member_ports: []
+    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
     name: "guest-net"         # 10.0.30.0/24 — guest WiFi, internet only
 
   - vlan_id: 40
-    member_ports: []
+    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
     name: "iot-no-inter"      # 10.0.40.0/24 — IoT local only
 
   - vlan_id: 50
-    member_ports: []
+    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
     name: "iot-with-inter"    # 10.0.50.0/24 — IoT internet permitted

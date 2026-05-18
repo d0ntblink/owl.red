@@ -1,53 +1,59 @@
-# Proposal: Plex on Kubernetes with QuickSync
+# Decision 002: Plex on Kubernetes with QuickSync
 
 ## Status
 
-Proposed (pre-implementation review)
+Proposed for post-platform implementation review.
+
+## Quick Summary
+
+| Area | Direction |
+|------|-----------|
+| Preferred placement | Kubernetes on QuickSync-capable ThinkCentre nodes |
+| GPU requirement | Intel iGPU exposed through the Intel GPU plugin |
+| Scheduling control | Explicit node label such as `owl.red/plex-capable=true` |
+| Media storage | NFS from `nas.owl.red` |
+| Metadata storage | Persistent storage separate from media path |
 
 ## Context
 
-Plex requires hardware transcoding for 4K streams. Current hardware options:
+Plex needs real hardware transcoding for 4K workloads. The ThinkCentre nodes provide Intel QuickSync; the storage server does not unless a discrete GPU is added and passed through.
 
-| Node | GPU | QuickSync |
-|------|-----|-----------|
-| ThinkCentre M73 (x4) | Intel HD Graphics 4600 | Yes |
-| RSV-L4500U (X10SRi-F, E5 Xeon) | Future discrete GPU (planned) | No (without Intel iGPU) |
-
-Placement options:
+## Placement Options
 
 | Option | Pros | Cons |
 |--------|------|------|
-| Kubernetes on ThinkCentres | QuickSync available, Fleet-managed | Requires Intel GPU plugin and scheduling controls |
-| VM on storage.pve | Close to media files | No QuickSync unless discrete GPU passthrough |
-| VM on ThinkCentre | QuickSync available | Outside GitOps/Kubernetes workflow |
+| Kubernetes on ThinkCentres | QuickSync available, GitOps-managed, consistent with cluster direction | Requires Intel GPU plugin and careful scheduling |
+| VM on `storage.pve` | Close to media files | No QuickSync without discrete GPU passthrough |
+| VM on ThinkCentre | QuickSync available | Falls outside the GitOps and Kubernetes operating model |
 
-## Proposed Decision
+## Preferred Direction
 
-Run Plex as a Kubernetes Deployment on designated ThinkCentre nodes with Intel GPU plugin.
+Run Plex as a Kubernetes Deployment on designated ThinkCentre nodes with the Intel GPU plugin.
 
-Scheduling policy:
-- Do not use AVX as a proxy for GPU capability.
-- Request Intel GPU extended resource (`gpu.intel.com/i915: 1`).
-- Constrain placement using an explicit homelab label such as `owl.red/plex-capable=true` on tested nodes.
+## Scheduling And Storage Policy
 
-Storage policy:
-- Mount media over NFS from `nas.owl.red`.
-- Keep Plex config and metadata on persistent storage to survive pod rescheduling.
+| Area | Policy |
+|------|--------|
+| GPU scheduling | Request `gpu.intel.com/i915: 1` |
+| Node selection | Use an explicit tested-node label such as `owl.red/plex-capable=true` |
+| Placement rule | Do not use AVX as a proxy for GPU capability |
+| Media path | Mount media over NFS from `nas.owl.red` |
+| Metadata path | Keep config and metadata on persistent storage so rescheduling is survivable |
 
 ## Risks And Mitigations
 
-- Risk: pod can land on a node without usable `/dev/dri` if labels are wrong.
-	Mitigation: label only validated nodes and verify transcoding with a known 4K sample.
-- Risk: NFS latency can affect library scans and metadata ops.
-	Mitigation: keep metadata on fast PVC and use NFS primarily for media reads.
+| Risk | Mitigation |
+|------|------------|
+| Pod lands on a node without usable `/dev/dri` | Label only validated nodes and verify with a known 4K hardware transcode |
+| NFS latency affects scans or metadata work | Keep metadata on faster persistent storage and use NFS primarily for media reads |
 
-## Review Gates Before Approval
+## Validation Gates
 
-- Validate Intel plugin advertises `gpu.intel.com/i915` on intended nodes.
-- Validate one real hardware transcode from Plex dashboard.
-- Validate reschedule behavior (drain node, confirm recovery and playback).
+- Intel plugin advertises `gpu.intel.com/i915` on intended nodes.
+- One real hardware transcode succeeds from the Plex dashboard.
+- Plex survives a node drain with acceptable recovery and playback behavior.
 
-## Consequences If Approved
+## Consequences
 
-- Intel GPU plugin DaemonSet is required in cluster base services.
-- Plex becomes GitOps-managed and easier to relocate between eligible nodes.
+- The Intel GPU plugin becomes a cluster dependency.
+- Plex can remain GitOps-managed and portable across validated nodes.

@@ -4,6 +4,15 @@
 
 Selected: Implemented during Phase 3
 
+## Quick Summary
+
+| Area | Decision |
+|------|----------|
+| VM lifecycle owner | Terraform / OpenTofu |
+| Provider | `bpg/proxmox` |
+| Role of Ansible | Post-provision host and appliance configuration only |
+| Main reason | Declarative lifecycle state, drift tracking, and clean destruction |
+
 ## Context
 
 The initial strategy used Ansible (`community.general.proxmox_kvm` or `qm` shell commands) to provision Kubernetes node Virtual Machines on the Proxmox cluster. While Ansible excels at OS-level configuration, it is an imperative configuration management tool. It struggles with infrastructure lifecycle state (e.g., if a VM is removed from the code, Ansible does not destroy the VM).
@@ -17,7 +26,7 @@ A core principle of this project is GitOps and reducing technical debt. A declar
 | **Ansible (Status Quo)** | Single toolchain. Good for post-provisioning config. | Imperative. Poor drift detection. Difficult to manage clean destruction. |
 | **Terraform (OpenTofu) + bpg/proxmox** | Purely declarative. Tracks state. Deletions in code equal destruction in infrastructure. Industry standard. | Introduces a second tool to the pipeline. Requires API tokens and state file management. |
 
-## Proposed Decision
+## Decision
 
 Adopt **Terraform (OpenTofu)** using the `bpg/proxmox` provider for all Proxmox Virtual Machine and infrastructure lifecycle management.
 

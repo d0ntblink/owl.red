@@ -1,35 +1,41 @@
 # Fleet Bootstrap Manifests
 
-This directory contains bootstrap manifests for Rancher Fleet `GitRepo` resources.
+This directory contains the bootstrap `GitRepo` manifests for Rancher Fleet.
 
-## Which File To Apply
+## Quick Reference
 
-Use the manifest that matches the Fleet namespace present in your cluster:
+| Item | Value |
+|------|-------|
+| Repo URL | `https://github.com/d0ntblink/owl.red.git` |
+| Branch | `main` |
+| Secret name | `owl-red-github-auth` |
+| Namespace detection | `kubectl get ns | rg '^fleet-(local|default)$'` |
+| Apply one of | `gitrepo-owl-red-fleet-local.yaml` or `gitrepo-owl-red-fleet-default.yaml` |
+
+## Bootstrap Steps
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | Detect whether `fleet-local` or `fleet-default` exists | One Fleet namespace is confirmed |
+| 2 | Create `owl-red-github-auth` in that same namespace | Fleet can authenticate to the private repo |
+| 3 | Apply the matching `GitRepo` manifest | Fleet starts reconciling repo paths |
+| 4 | Verify `GitRepo`, `Bundle`, and `BundleDeployment` health | Bundles move to ready state |
+
+## Create The Git Credential Secret
 
 ```bash
-kubectl get ns | rg '^fleet-(local|default)$'
-```
-
-- If `fleet-local` exists, apply `gitrepo-owl-red-fleet-local.yaml`.
-- If `fleet-default` exists (and `fleet-local` does not), apply `gitrepo-owl-red-fleet-default.yaml`.
-
-## Required Git Credential Secret
-
-The GitHub repo is private. Create a Fleet credential secret in the same namespace where the `GitRepo` object will live:
-
-```bash
-# For fleet-local namespace
 kubectl -n fleet-local create secret generic owl-red-github-auth \
-	--type=kubernetes.io/basic-auth \
-	--from-literal=username='<github-username>' \
-	--from-literal=password='<github-personal-access-token>'
+  --type=kubernetes.io/basic-auth \
+  --from-literal=username='<github-username>' \
+  --from-literal=password='<github-personal-access-token>'
 
-# For fleet-default namespace
 kubectl -n fleet-default create secret generic owl-red-github-auth \
-	--type=kubernetes.io/basic-auth \
-	--from-literal=username='<github-username>' \
-	--from-literal=password='<github-personal-access-token>'
+  --type=kubernetes.io/basic-auth \
+  --from-literal=username='<github-username>' \
+  --from-literal=password='<github-personal-access-token>'
 ```
+
+Use only the command for the namespace that actually exists in the cluster.
 
 ## Apply
 
@@ -47,7 +53,8 @@ kubectl get bundle -A | rg owl-red
 kubectl get bundledeployment -A | rg owl-red
 ```
 
-Expected outcome: Fleet starts reconciling these paths from `https://github.com/d0ntblink/owl.red.git` on branch `main`:
+Fleet should begin reconciling:
+
 - `gitops/technitium`
 - `gitops/metallb`
 - `gitops/cert-manager`
@@ -58,25 +65,8 @@ Expected outcome: Fleet starts reconciling these paths from `https://github.com/
 - `gitops/pdm`
 - `gitops/platform-resilience`
 
-## Adoption Strategy
+## Adoption Notes
 
-This bootstrap now targets:
-- `gitops/technitium`
-- `gitops/metallb`
-- `gitops/cert-manager`
-- `gitops/traefik`
-- `gitops/dashboards`
-- `gitops/bitwarden-operator`
-- `gitops/bitwarden-secrets`
-- `gitops/pdm`
-- `gitops/platform-resilience`
-
-Reason: Fleet uses Helm under the hood for bundle deployment. Existing resources that were installed outside Fleet (for example MetalLB objects) can fail ownership checks if included immediately.
-
-Traefik is onboarded as a dedicated Fleet Helm bundle:
-- chart repo: `https://traefik.github.io/charts`
-- chart: `traefik`
-- release name: `traefik`
-- values source: `gitops/traefik/values.yaml`
-
-This preserves continuity with the existing Helm release and makes future Traefik changes fully Git-driven.
+- Some resources were originally installed outside Fleet and may need ownership adoption before Fleet can manage them cleanly.
+- This is most relevant for Helm-managed or pre-existing objects such as MetalLB resources.
+- Traefik is onboarded as a dedicated Fleet Helm bundle using the upstream chart and `gitops/traefik/values.yaml`, preserving continuity with the existing release name.

@@ -44,8 +44,10 @@
 | IP / Range | Name | Backing Service | Notes |
 |------------|------|-----------------|-------|
 | `10.0.10.30` | `ns1.owl.red` | Technitium DNS on k8s | DNS service endpoint |
-| `10.0.10.201` | `rancher.owl.red`, `dns.owl.red`, `home.owl.red`, `traefik.owl.red` | Traefik + MetalLB | Shared ingress VIP for Rancher, Technitium web, Homepage, and Traefik |
+| `10.0.10.201` | `rancher.owl.red`, `dns.owl.red`, `home.owl.red`, `traefik.owl.red` | Traefik + MetalLB | Shared internal ingress VIP for Rancher, Technitium web, Homepage, and Traefik |
 | `10.0.10.200-250` | MetalLB VIP pool | Kubernetes LoadBalancer pool | Active for ingress and future services |
+
+Access rule: these service VIPs are intended for LAN clients. They only work when the client can route to VLAN 10 and resolves `owl.red` names from internal Technitium instead of falling through to public DNS.
 
 Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it uses physical PCIe NIC passthrough (`hostpci`). Do not plan routine live or offline migration of this VM.
 
@@ -205,7 +207,7 @@ Trunk migration plan: keep the active 1G trunk on `R1` until the SFP+ path is va
 | VLAN 10 DHCP | Technitium | `ns1.owl.red` / `10.0.10.30` | Scope `vlan10-network-devices`, pool `10.0.10.100-199` |
 | VLAN 20/30/40/50 DHCP | OPNsense | Per-VLAN gateway | Guest VLAN also carries Option 114 |
 | Authoritative DNS | Technitium | `10.0.10.30` | Hosted on k8s, Fleet-managed zone sync |
-| Ingress and TLS | Traefik + cert-manager | `10.0.10.201` | Wildcard `*.owl.red` TLS |
+| Ingress and TLS | Traefik + cert-manager | `10.0.10.201` | Internal ingress VIP for cluster web services; not a public origin endpoint |
 | Guest captive portal | OPNsense | `https://captive.owl.red` | RFC 8910 / 8908 path |
 
 ### DHCP and DNS Plan
@@ -218,13 +220,22 @@ Trunk migration plan: keep the active 1G trunk on `R1` until the SFP+ path is va
 | `40` | OPNsense | `10.0.40.100-254` | `10.0.40.1` | `10.0.10.30` | IoT local-only policy |
 | `50` | OPNsense | `10.0.50.100-254` | `10.0.50.1` | `10.0.10.30` | IoT with internet, no lateral movement |
 
-Technitium is authoritative for `owl.red` and runs as a StatefulSet on k8s with persistent storage. DNS records are Git-managed and reconciled by a Fleet-managed sync job.
+Technitium is authoritative for `owl.red` and runs as a StatefulSet on k8s with persistent storage. DNS records are Git-managed and reconciled by a Fleet-managed sync job. If Technitium is not serving the zone authoritatively, clients can fall through to public DNS and internal service names such as `dns.owl.red` or `rancher.owl.red` will resolve incorrectly.
 
 ### Traefik and TLS
 
-- Traefik is exposed as a MetalLB `LoadBalancer` service on `10.0.10.201`.
+- Traefik is exposed as a MetalLB `LoadBalancer` service on `10.0.10.201` for LAN clients.
+- `dns.owl.red`, `rancher.owl.red`, `home.owl.red`, and `traefik.owl.red` are expected to resolve internally to `10.0.10.201`.
 - cert-manager issues wildcard certificates using DNS-01 because internal services are not reachable for HTTP-01.
 - Traefik dashboard access is intended to remain limited to VLAN 10, with middleware as the primary control and OPNsense rules as defense in depth.
+
+### Cluster Hostname Troubleshooting
+
+- If `curl https://dns.owl.red` or `curl https://rancher.owl.red` fails, check name resolution first. These hostnames should resolve to `10.0.10.201` for LAN clients.
+- If `nslookup` or `Resolve-DnsName` returns a public IP instead of `10.0.10.201`, the client is not using healthy internal Technitium answers for `owl.red`.
+- `10.0.10.30` is the DNS service VIP, not the Traefik web VIP. `ping` and HTTP checks against `10.0.10.30` are not valid tests for `dns.owl.red`.
+- Direct DNS checks should be done against Technitium, for example: `Resolve-DnsName dns.owl.red -Server 10.0.10.30` and `Resolve-DnsName rancher.owl.red -Server 10.0.10.30`.
+- If Technitium answers with a public IP for internal names, fix the authoritative zone path first; ingress hostnames behind Traefik will not work until internal DNS returns the correct VIP.
 
 ### Guest VLAN Captive Portal
 

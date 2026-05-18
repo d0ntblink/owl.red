@@ -1,43 +1,37 @@
-# Proposal: K3s + Rancher Fleet for GitOps
+# Decision 001: K3s + Fleet Proposal (Archived)
 
 ## Status
 
-**Superseded by [ADR 008](008-talos-vanilla-k8s.md)** — K3s was replaced by Talos Linux + vanilla Kubernetes during Phase 3 implementation. Fleet (GitOps) remains the chosen reconciler.
+Superseded by [ADR 008](008-talos-vanilla-k8s.md). K3s was replaced by Talos Linux plus vanilla Kubernetes during Phase 3 implementation. Fleet remained the chosen GitOps reconciler.
 
-## Context
+## Quick Summary
 
-This homelab needs a Kubernetes distribution and a GitOps reconciler that can run reliably on existing hardware (ThinkCentre M73 nodes and RSV-L4500U host) without adding enterprise-level operational overhead.
+| Area | Original proposal | Current outcome |
+|------|-------------------|-----------------|
+| Kubernetes distro | K3s | Talos Linux + vanilla Kubernetes |
+| GitOps reconciler | Rancher Fleet | Rancher Fleet |
+| Ownership model | Ansible for host bootstrap, GitOps for cluster objects | Same ownership model retained |
 
-## Proposed Decision
+## Why It Existed
 
-Use K3s as the Kubernetes distribution and Rancher Fleet for GitOps reconciliation.
+At the time, the project needed a lightweight Kubernetes distribution and a GitOps reconciler that could run on the available homelab hardware without adding excessive operational overhead.
 
-Rationale:
-- K3s is operationally lighter than a full upstream stack while remaining Kubernetes-compatible.
-- Fleet gives repo-driven reconciliation with simple grouping via GitRepo/Bundle primitives.
-- Ansible can continue to own host bootstrap while Fleet owns cluster object reconciliation.
+## What Was Proposed
 
-## Scope And Assumptions
+- Use K3s as the Kubernetes distribution.
+- Use Rancher Fleet for GitOps reconciliation.
+- Keep Ansible responsible for host bootstrap while Fleet owns in-cluster objects.
 
-- Scope: cluster lifecycle and Kubernetes manifest delivery.
-- Out of scope: application-specific rollout policy and backup strategy.
-- Assumes one source git repo is used for desired state.
+## Why It Was Superseded
 
-## Risks And Mitigations
+| Reason | Effect |
+|------|--------|
+| Talos became the chosen operating model | K3s and Talos are not the same platform shape |
+| The project wanted explicit control over bundled components | Vanilla Kubernetes fit better than K3s defaults |
+| Fleet remained valid independently of K3s | GitOps choice stayed, distro choice changed |
 
-- Risk: GitOps drift debugging can be harder than imperative deploys.
-	Mitigation: keep bundle boundaries small and map each bundle to one responsibility.
-- Risk: Fleet adds a control-plane component to learn and maintain.
-	Mitigation: start with one cluster and a minimal bundle layout.
+## Historical Consequences
 
-## Review Gates Before Approval
-
-- Confirm K3s install/upgrade path in Ansible (fresh install and rollback).
-- Confirm Fleet repo structure (core services vs workloads) is documented.
-- Confirm break-glass path exists for urgent manual rollback.
-
-## Consequences If Approved
-
-- Git becomes the single desired-state source for Kubernetes objects.
-- Initial setup effort increases, but change tracking and rollback improve.
-- Future node expansion remains straightforward with K3s.
+- The repository kept the GitOps-first direction.
+- The Kubernetes distribution decision moved to ADR 008.
+- This file remains only as an archive of the earlier direction.

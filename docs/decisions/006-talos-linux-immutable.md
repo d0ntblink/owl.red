@@ -4,6 +4,15 @@
 
 Selected: Implemented during Phase 3
 
+## Quick Summary
+
+| Area | Decision |
+|------|----------|
+| Kubernetes node OS | Talos Linux |
+| Management model | API-driven, immutable, no SSH or shell |
+| Reason | Stronger GitOps alignment and reduced node drift |
+| Operational impact | Troubleshooting shifts to `talosctl` and Kubernetes APIs |
+
 ## Context
 
 The initial strategy utilized Debian 12 Minimal for Kubernetes node VMs. While standard, Debian is a mutable OS. Over time, manual interventions (like using `apt install` or editing `/etc`) introduce configuration drift, breaking the pure GitOps "cattle-not-pets" philosophy.
@@ -18,7 +27,7 @@ The user explicitly requested an immutable OS, citing NixOS as an example, to en
 | **openSUSE MicroOS** | Transactional Updates | Familiar Linux base. Atomic rollbacks via Btrfs. | Still relies on standard systemd/SSH. Doesn't fundamentally change the OS management paradigm. |
 | **Talos Linux** | API-Driven Immutability | Purpose-built for Kubernetes. Zero SSH. Zero shell. 100% API managed. Node is entirely disposable. | Steep conceptual shift. No ability to "log in and fix it." |
 
-## Proposed Decision
+## Decision
 
 Adopt **Talos Linux** as the underlying operating system for all Kubernetes nodes.
 

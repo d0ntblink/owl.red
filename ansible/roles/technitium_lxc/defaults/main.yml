@@ -1,0 +1,9 @@
+---
+# Git repo URL for owl.red — SSH (preferred) or HTTPS
+# Override in inventory or via -e flag
+technitium_git_repo: "git@github.com:YOUR_ORG/owl.red.git"
+
+# Path to the SSH deploy key on the Ansible controller (optional).
+# Set in inventory host_vars or pass via -e technitium_git_deploy_key=/path/to/key
+# Leave undefined to skip deploy key setup (use HTTPS or pre-existing key instead).
+# technitium_git_deploy_key: ""
