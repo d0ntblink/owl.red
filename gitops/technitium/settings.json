@@ -1,0 +1,11 @@
+{
+  "_comment": "Technitium DNS server settings — applied on every sync. Keys map 1:1 to /api/settings/set params.",
+  "dnsServerDomain": "ns1.owl.red",
+  "defaultRecordTtl": 300,
+  "dnssecValidation": true,
+  "recursion": "AllowOnlyForPrivateNetworks",
+  "forwarders": "1.1.1.1:53,1.0.0.1:53",
+  "forwardingProtocol": "Udp",
+  "logQueries": false,
+  "dnsAppsEnableAutomaticUpdate": false
+}

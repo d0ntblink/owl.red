@@ -158,12 +158,12 @@
         },
 
         {
-          "hardwareAddress": "TBD",
+          "hardwareAddress": "BC-24-11-D4-5B-7B",
           "ipAddress": "10.0.10.30",
           "hostName": "ns1.owl.red",
-          "comments": "Technitium DNS — DNS service endpoint (k8s cluster, HA via MetalLB)",
-          "macSource": "TBD — VM not yet provisioned",
-          "status": "pending"
+          "comments": "Technitium DNS+DHCP LXC (VMID 200) on edge.pve — single DNS/DHCP authority for all VLANs",
+          "macSource": "pct config 200 on edge.pve: net0 hwaddr=BC:24:11:D4:5B:7B",
+          "status": "confirmed"
         },
 
         {

@@ -1,0 +1,72 @@
+[
+  {
+    "_comment": "VLAN 10 — infrastructure management, static-only devices",
+    "name": "vlan10-network-devices",
+    "startingAddress": "10.0.10.100",
+    "endingAddress": "10.0.10.199",
+    "subnetMask": "255.255.255.0",
+    "routerAddress": "10.0.10.1",
+    "useThisDnsServer": true,
+    "leaseTimeDays": 1,
+    "leaseTimeHours": 0,
+    "leaseTimeMinutes": 0,
+    "domainName": "owl.red",
+    "enabled": true
+  },
+  {
+    "_comment": "VLAN 20 — trusted private devices (wired + WiFi)",
+    "name": "vlan20-private-net",
+    "startingAddress": "10.0.20.100",
+    "endingAddress": "10.0.20.199",
+    "subnetMask": "255.255.255.0",
+    "routerAddress": "10.0.20.1",
+    "useThisDnsServer": true,
+    "leaseTimeDays": 1,
+    "leaseTimeHours": 0,
+    "leaseTimeMinutes": 0,
+    "domainName": "owl.red",
+    "enabled": true
+  },
+  {
+    "_comment": "VLAN 30 — guest WiFi, short leases. TODO: add DHCP option 114 (captive portal URL) manually in Technitium UI after scope creation.",
+    "name": "vlan30-guest-net",
+    "startingAddress": "10.0.30.100",
+    "endingAddress": "10.0.30.199",
+    "subnetMask": "255.255.255.0",
+    "routerAddress": "10.0.30.1",
+    "useThisDnsServer": true,
+    "leaseTimeDays": 0,
+    "leaseTimeHours": 4,
+    "leaseTimeMinutes": 0,
+    "domainName": "owl.red",
+    "enabled": true
+  },
+  {
+    "_comment": "VLAN 40 — IoT, no internet, local only",
+    "name": "vlan40-iot-no-inter",
+    "startingAddress": "10.0.40.100",
+    "endingAddress": "10.0.40.199",
+    "subnetMask": "255.255.255.0",
+    "routerAddress": "10.0.40.1",
+    "useThisDnsServer": true,
+    "leaseTimeDays": 1,
+    "leaseTimeHours": 0,
+    "leaseTimeMinutes": 0,
+    "domainName": "owl.red",
+    "enabled": true
+  },
+  {
+    "_comment": "VLAN 50 — IoT, internet permitted, no lateral movement",
+    "name": "vlan50-iot-with-inter",
+    "startingAddress": "10.0.50.100",
+    "endingAddress": "10.0.50.199",
+    "subnetMask": "255.255.255.0",
+    "routerAddress": "10.0.50.1",
+    "useThisDnsServer": true,
+    "leaseTimeDays": 1,
+    "leaseTimeHours": 0,
+    "leaseTimeMinutes": 0,
+    "domainName": "owl.red",
+    "enabled": true
+  }
+]

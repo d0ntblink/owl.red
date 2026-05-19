@@ -1,0 +1,47 @@
+---
+# NixOS path: deploy configuration.nix + sync.sh, then nixos-rebuild switch.
+# Technitium is declared as a NixOS service — no install script, no manual .NET.
+#
+# Source files live in nix/hosts/technitium/ (canonical) and are referenced
+# here via inventory_dir which resolves to ansible/inventory/.
+
+- name: Ensure /etc/nixos exists
+  ansible.builtin.file:
+    path: /etc/nixos
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy NixOS configuration.nix
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/../../nix/hosts/technitium/configuration.nix"
+    dest: /etc/nixos/configuration.nix
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy GitOps sync script (read by configuration.nix at build time)
+  ansible.builtin.copy:
+    src: "{{ inventory_dir }}/../../nix/hosts/technitium/sync.sh"
+    dest: /etc/nixos/sync.sh
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Update nix channels
+  ansible.builtin.command: nix-channel --update
+  changed_when: true
+
+- name: Build and activate NixOS configuration (may take several minutes)
+  ansible.builtin.command: nixos-rebuild switch
+  changed_when: true
+  async: 600
+  poll: 15
+
+- name: Wait for Technitium API to be ready
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 5380
+    delay: 5
+    timeout: 120

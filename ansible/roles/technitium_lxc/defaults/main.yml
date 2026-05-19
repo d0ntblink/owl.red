@@ -1,9 +1,20 @@
 ---
 # Git repo URL for owl.red — SSH (preferred) or HTTPS
-# Override in inventory or via -e flag
-technitium_git_repo: "git@github.com:YOUR_ORG/owl.red.git"
+technitium_git_repo: "https://github.com/d0ntblink/owl.red.git"
 
 # Path to the SSH deploy key on the Ansible controller (optional).
-# Set in inventory host_vars or pass via -e technitium_git_deploy_key=/path/to/key
-# Leave undefined to skip deploy key setup (use HTTPS or pre-existing key instead).
-# technitium_git_deploy_key: ""
+# If unset, git clone uses whatever credential is already configured.
+# technitium_git_deploy_key: "/path/to/deploy-key"
+
+# Technitium admin account
+technitium_admin_username: admin
+technitium_api_url: "http://localhost:5380"
+technitium_api_token_name: ansible-sync
+
+# Bitwarden SM secret IDs (values never in plaintext in this repo)
+technitium_admin_bws_secret_id: "29f2afc9-11f3-4091-ae83-b448008b8d94"
+technitium_api_token_bws_secret_id: "e4771a82-23f7-4435-b75a-b448008b8ddd"
+
+# DHCP scopes, reservations, zones, and server settings are all declared in
+# gitops/technitium/ and applied by the sync script (technitium-sync.service).
+# Do not add DHCP scope configuration here — it belongs in git.

@@ -1,0 +1,13 @@
+---
+# NixOS: the systemd service + timer are declared in configuration.nix.
+# The sync script is embedded in the Nix store via pkgs.writeShellApplication.
+# This task only triggers the first sync after bootstrap has written the token.
+
+- name: Trigger initial GitOps sync (applies settings, zones, DHCP scopes, reservations)
+  ansible.builtin.systemd:
+    name: technitium-sync.service
+    state: started
+  register: _first_sync
+  # Non-fatal: token may not have propagated yet; timer will retry at boot+3min
+  failed_when: false
+
