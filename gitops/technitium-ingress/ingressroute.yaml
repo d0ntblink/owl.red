@@ -1,0 +1,21 @@
+# Traefik IngressRoute — terminates TLS, proxies to Technitium LXC on port 5380.
+# HTTP→HTTPS redirect handled globally by Traefik's web entryPoint config.
+# Traefik has insecureSkipVerify=true in serversTransport, so the plain HTTP
+# backend on port 5380 is fine.
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: technitium
+  namespace: technitium
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`technitium.owl.red`) || Host(`dns.owl.red`)
+      kind: Rule
+      services:
+        - name: technitium
+          port: 5380
+  tls:
+    secretName: technitium-tls

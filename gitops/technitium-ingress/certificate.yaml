@@ -1,0 +1,18 @@
+# Let's Encrypt cert for technitium.owl.red via Cloudflare DNS-01.
+# Prerequisite: cloudflare-api-token Secret must exist in the cert-manager
+# namespace (referenced by the letsencrypt-prod ClusterIssuer).
+# See: gitops/bitwarden-secrets/generated/cert-manager/
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: technitium-tls
+  namespace: technitium
+spec:
+  secretName: technitium-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - technitium.owl.red
+    - dns.owl.red

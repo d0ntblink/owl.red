@@ -1,0 +1,28 @@
+# Kubernetes Service + Endpoints for the Technitium LXC (VMID 200).
+# The LXC is not a k8s workload — ExternalName can't use bare IPs, so we use
+# a manual Endpoints object pointing directly at the LXC's listen address.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium
+  namespace: technitium
+spec:
+  ports:
+    - name: http
+      port: 5380
+      targetPort: 5380
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: technitium
+  namespace: technitium
+subsets:
+  - addresses:
+      - ip: 10.0.10.30
+    ports:
+      - name: http
+        port: 5380
+        protocol: TCP
