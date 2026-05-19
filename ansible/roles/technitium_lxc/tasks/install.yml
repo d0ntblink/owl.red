@@ -36,6 +36,11 @@
 - name: Build and activate NixOS configuration (may take several minutes)
   ansible.builtin.command: nixos-rebuild switch
   changed_when: true
+  # Exit code 4 = switch succeeded but a unit failed to start (transient, non-fatal).
+  # The sync service may fail here if triggered before the timer's OnBootSec elapses;
+  # the zone-sync task below will start it explicitly after bootstrap is complete.
+  failed_when: _nixos_rebuild.rc not in [0, 4]
+  register: _nixos_rebuild
   async: 600
   poll: 15
 

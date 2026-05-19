@@ -100,7 +100,7 @@ if [[ "${CURRENT_SHA}" == "${LAST_SHA}" ]]; then
   exit 0
 fi
 
-log "Syncing ${LAST_SHA:0:8:-} → ${CURRENT_SHA:0:8}"
+log "Syncing ${LAST_SHA:0:8} → ${CURRENT_SHA:0:8}"
 
 # ── Server settings ───────────────────────────────────────────────────────────
 # gitops/technitium/settings.json — keys map 1:1 to /api/settings/set params.
