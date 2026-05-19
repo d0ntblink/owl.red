@@ -12,7 +12,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`technitium.owl.red`) || Host(`dns.owl.red`)
+    - match: Host(`dns.owl.red`)
       kind: Rule
       services:
         - name: technitium
