@@ -214,6 +214,15 @@
           "comments": "Canon printer (Canon1c2258) — AzureWave WiFi module; local printing only, no internet needed",
           "macSource": "OPNsense DHCP lease 2026-06-09 (AzureWave Technology Inc.)",
           "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "80-65-99-A1-5F-9C",
+          "ipAddress": "10.0.40.11",
+          "hostName": "bambu.owl.red",
+          "comments": "Bambu Lab A1 3D printer — local only, no internet needed",
+          "macSource": "user provided 2026-06-09",
+          "status": "confirmed"
         }
 
       ]

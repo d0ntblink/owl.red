@@ -83,6 +83,7 @@ Personal reference. Not machine-consumed. Last updated: 2026-06-09.
 | MAC | Device | Target VLAN | Notes | Current IP |
 |-----|--------|-------------|-------|------------|
 | `20:0b:74:a5:15:05` | Canon printer (Canon1c2258) | VLAN 40 | AzureWave WiFi module; local only | 10.0.10.184 (wrong VLAN, reservation at 10.0.40.10) |
+| `80:65:99:a1:5f:9c` | Bambu Lab A1 3D printer | VLAN 40 | local only | reservation at 10.0.40.11 |
 | `44:61:32:08:d6:2c` | ecobee thermostat | VLAN 50 | ecobee Inc. OUI; needs cloud API | 10.0.10.185 (wrong VLAN, reservation at 10.0.50.10) |
 | `3c:6d:66:0e:1f:67` | NVIDIA Shield TV | VLAN 50 | Needs internet | 10.0.10.161 (wrong VLAN) |
 

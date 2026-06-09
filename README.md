@@ -43,6 +43,7 @@
 | IP | Hostname | Device | Purpose |
 |----|----------|--------|---------|
 | `10.0.40.10` | `printer.owl.red` | Canon printer (Canon1c2258) | Local network printing |
+| `10.0.40.11` | `bambu.owl.red` | Bambu Lab A1 3D printer | Local 3D printing |
 
 ### VLAN 50 IoT Hosts (internet permitted)
 
