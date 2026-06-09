@@ -27,146 +27,152 @@ snmp:
   location: "rack, owl.red"
 
 ports:
-  # SW01-09: VLAN 10 infrastructure management drops (PURPLE)
-  # SW10-16: VLAN 20 private-net drops (PURPLE, unpatched)
-  # SW17-19: VLAN 40/50 IoT drops (PURPLE, unpatched)
-  # SW20-22: VLAN 30 guest-net drops (PURPLE, unpatched)
-  # SW21:    AP uplink trunk (BLUE-C, all VLANs tagged) — PP23 <-> SW21 <-> WAP
-  # SW23:    Router R1 LAN trunk (BLUE-A, all VLANs tagged)
-  # SW24:    Router R2 fallback trunk (BLUE-B, disabled)
-  # SFP+1:   Future OPNsense 10G trunk (AQUA DAC, not connected)
-  # SFP+2:   Future storage 10G path (AQUA DAC, not connected)
+  # CSS326 port layout (top row = even, bottom row = odd):
+  # SW02:  PP25 → cp1.pve        VLAN 10 access
+  # SW04:  PP26 → cp2.pve        VLAN 10 access
+  # SW06:  PP27 → cp3.pve        VLAN 10 access
+  # SW08:  PP28 → worker1.pve    VLAN 10 access
+  # SW10:  PP29 → storage.pve    VLAN 10 access (bond0 active / obnic0)
+  # SW12:  PP30 → storage.pve    VLAN 10 access (bond0 standby / obnic1)
+  # SW14:  PP31 → ipmi.storage   VLAN 10 access
+  # SW16:  PP32 → pdu.owl.red    VLAN 10 access
+  # SW18:  PP33 → ap.owl.red     802.1Q trunk all VLANs, 1G
+  # SW22:  PP36 → network cabinet 802.1Q trunk all VLANs
+  # SW23:  direct → edge.owl.red igb0 (OPNsense WAN) — not a LAN port
+  # SW24:  direct → edge.pve eth0 VLAN 10 mgmt
+  # SFP+1: DAC → edge.owl.red X710 iX11  (10G LAN trunk, active)
+  # SFP+2: DAC → nas.owl.red 82599ES iX10 (10G storage uplink, active)
+  # Odd ports 01/03/05/07/09/11/13/15/17/19/21: unpatched
 
   - port: 1
-    name: "cp1.pve"
-    enabled: true
-    assigned_to: cp1.pve.owl.red   # 10.0.10.11 — PP25 <-> SW01
+    name: "unpatched-01"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 2
-    name: "cp2.pve"
+    name: "cp1.pve"
     enabled: true
-    assigned_to: cp2.pve.owl.red   # 10.0.10.12 — PP26 <-> SW02
+    assigned_to: cp1.pve.owl.red      # 10.0.10.11 — PP25 <-> SW02
 
   - port: 3
-    name: "cp3.pve"
-    enabled: true
-    assigned_to: cp3.pve.owl.red   # 10.0.10.13 — PP27 <-> SW03
+    name: "unpatched-03"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 4
-    name: "worker1.pve"
+    name: "cp2.pve"
     enabled: true
-    assigned_to: worker1.pve.owl.red  # 10.0.10.14 — PP28 <-> SW04
+    assigned_to: cp2.pve.owl.red      # 10.0.10.12 — PP26 <-> SW04
 
   - port: 5
-    name: "edge.pve"
-    enabled: true
-    assigned_to: edge.pve.owl.red  # 10.0.10.3 — direct, no PP — SW05
-    # Trunked for Technitium LXC multi-interface: VLAN 10 untagged, VLANs 20-50 tagged
+    name: "unpatched-05"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 6
-    name: "storage.pve"
+    name: "cp3.pve"
     enabled: true
-    assigned_to: storage.pve.owl.red  # 10.0.10.4 — PP30 <-> SW06
+    assigned_to: cp3.pve.owl.red      # 10.0.10.13 — PP27 <-> SW06
 
   - port: 7
-    name: "ipmi.storage"
-    enabled: true
-    assigned_to: ipmi.storage.owl.red  # 10.0.10.6 — PP31 <-> SW07
+    name: "unpatched-07"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 8
-    name: "kvm-reserved"
+    name: "worker1.pve"
     enabled: true
-    assigned_to: kvm-laptop           # break-glass, no active patch — SW08
+    assigned_to: worker1.pve.owl.red  # 10.0.10.14 — PP28 <-> SW08
 
   - port: 9
-    name: "pdu.owl.red"
-    enabled: true
-    assigned_to: pdu.owl.red          # 10.0.10.7 — PP32 <-> SW09 (10M — investigate)
+    name: "unpatched-09"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 10
-    name: "pvt-drop-10"
+    name: "storage.pve-a"
     enabled: true
-    assigned_to: unpatched            # VLAN 20 private-net drop
+    assigned_to: storage.pve.owl.red  # 10.0.10.4 — PP29 <-> SW10 (obnic0, bond0 active)
 
   - port: 11
-    name: "pvt-drop-11"
-    enabled: true
+    name: "unpatched-11"
+    enabled: false
     assigned_to: unpatched
 
   - port: 12
-    name: "pvt-drop-12"
+    name: "storage.pve-b"
     enabled: true
-    assigned_to: unpatched
+    assigned_to: storage.pve.owl.red  # 10.0.10.4 — PP30 <-> SW12 (obnic1, bond0 standby)
 
   - port: 13
-    name: "pvt-drop-13"
-    enabled: true
+    name: "unpatched-13"
+    enabled: false
     assigned_to: unpatched
 
   - port: 14
-    name: "pvt-drop-14"
+    name: "ipmi.storage"
     enabled: true
-    assigned_to: unpatched
+    assigned_to: ipmi.storage.owl.red # 10.0.10.6 — PP31 <-> SW14
 
   - port: 15
-    name: "pvt-drop-15"
-    enabled: true
+    name: "unpatched-15"
+    enabled: false
     assigned_to: unpatched
 
   - port: 16
-    name: "pvt-drop-16"
+    name: "pdu.owl.red"
     enabled: true
-    assigned_to: unpatched
+    assigned_to: pdu.owl.red          # 10.0.10.9 — PP32 <-> SW16
 
   - port: 17
-    name: "iot-drop-17"
-    enabled: true
-    assigned_to: unpatched            # VLAN 40/50 IoT drop
-
-  - port: 18
-    name: "iot-drop-18"
-    enabled: true
-    assigned_to: unpatched            # VLAN 40/50 IoT drop
-
-  - port: 19
-    name: "iot-drop-19"
-    enabled: true
-    assigned_to: unpatched            # VLAN 40/50 IoT drop
-
-  - port: 20
-    name: "gst-drop-20"
-    enabled: true
-    assigned_to: unpatched            # VLAN 30 guest-net drop
-
-  - port: 21
-    name: "ap.owl.red"
-    enabled: true
-    assigned_to: ap.owl.red           # 10.0.10.40 — BLUE-C: PP23 <-> SW21 WAP trunk
-
-  - port: 22
-    name: "gst-drop-22"
-    enabled: true
+    name: "unpatched-17"
+    enabled: false
     assigned_to: unpatched
 
-  - port: 23
-    name: "rtr-trunk"
+  - port: 18
+    name: "ap.owl.red"
     enabled: true
-    assigned_to: edge.pve R1          # BLUE-A: router LAN trunk, all VLANs tagged
+    assigned_to: ap.owl.red           # 10.0.10.40 — PP33 <-> SW18 — 802.1Q trunk all VLANs
+
+  - port: 19
+    name: "unpatched-19"
+    enabled: false
+    assigned_to: unpatched
+
+  - port: 20
+    name: "pvt-drop-20"
+    enabled: true
+    assigned_to: unpatched            # VLAN 20 private-net drop (active clients seen in FDB)
+
+  - port: 21
+    name: "unpatched-21"
+    enabled: false
+    assigned_to: unpatched
+
+  - port: 22
+    name: "cab-trunk"
+    enabled: true
+    assigned_to: network-cabinet      # PP36 <-> SW22 — 802.1Q trunk all VLANs
+
+  - port: 23
+    name: "rtr-wan"
+    enabled: true
+    assigned_to: edge.owl.red         # direct → OPNsense igb0 WAN uplink
 
   - port: 24
-    name: "rtr-fallback"
+    name: "edge.pve-mgmt"
     enabled: true
-    assigned_to: edge.pve R2          # BLUE-B: router fallback, currently disabled
+    assigned_to: edge.pve.owl.red     # direct → edge.pve eth0 VLAN 10 mgmt
 
   - port: 25
-    name: "sfp1-opn-fut"
+    name: "sfp1-opn"
     enabled: true
-    assigned_to: unconnected          # AQUA DAC-01: future OPNsense 10G SFP+ trunk
+    assigned_to: edge.owl.red         # AQUA DAC → X710 iX11 — 10G LAN trunk (active)
 
   - port: 26
-    name: "sfp2-sto-fut"
+    name: "sfp2-nas"
     enabled: true
-    assigned_to: unconnected          # AQUA DAC-02: future storage 10G path
+    assigned_to: nas.owl.red          # AQUA DAC → 82599ES iX10 — 10G storage uplink (active)
 
 # VLAN table — created without port assignments.
 # Port-VLAN assignments (access/trunk mode per port) come in Phase 2.

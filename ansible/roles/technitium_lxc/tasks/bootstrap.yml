@@ -1,0 +1,177 @@
+---
+# Retrieves the admin password from Bitwarden SM on the controller,
+# sets it on the Technitium admin account, mints an API sync token,
+# writes it to /etc/technitium/sync.token on the LXC,
+# and updates the BWS secret so future runs stay in sync.
+#
+# Technitium 14 auto-creates an admin/admin account on first boot.
+# This task handles both first-run (admin/admin default) and idempotent re-runs.
+#
+# BWS secret IDs are defined in defaults/main.yml.
+# BWS_ACCESS_TOKEN must be set in the calling environment.
+
+- name: Fetch Technitium admin password from BWS (runs on controller)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command:
+    argv:
+      - bws
+      - secret
+      - get
+      - "{{ technitium_admin_bws_secret_id }}"
+      - "--output"
+      - "json"
+  environment:
+    BWS_ACCESS_TOKEN: "{{ lookup('env', 'BWS_ACCESS_TOKEN') }}"
+  register: _bws_admin_raw
+  no_log: true
+  changed_when: false
+
+- name: Set admin password fact
+  ansible.builtin.set_fact:
+    _technitium_admin_password: "{{ (_bws_admin_raw.stdout | from_json).value }}"
+  no_log: true
+
+# Try to login with the BWS password first (idempotent re-run)
+- name: Try login with BWS password
+  ansible.builtin.uri:
+    url: "{{ technitium_api_url }}/api/user/login"
+    method: GET
+    body_format: form-urlencoded
+    body:
+      user: "{{ technitium_admin_username }}"
+      pass: "{{ _technitium_admin_password }}"
+      includeInfo: "false"
+    return_content: true
+    status_code: 200
+  register: _login_bws
+  no_log: true
+  failed_when: false
+
+# If BWS password fails, login with the factory default admin/admin
+- name: Login with default credentials (first-boot only)
+  ansible.builtin.uri:
+    url: "{{ technitium_api_url }}/api/user/login"
+    method: GET
+    body_format: form-urlencoded
+    body:
+      user: "{{ technitium_admin_username }}"
+      pass: "admin"
+      includeInfo: "false"
+    return_content: true
+    status_code: 200
+  register: _login_default
+  no_log: true
+  when: (_login_bws.json.status | default('error')) != 'ok'
+  failed_when: >
+    (_login_default.json.status | default('error')) != 'ok'
+
+# Pick whichever login worked
+- name: Set session token fact
+  ansible.builtin.set_fact:
+    _technitium_session_token: >-
+      {{
+        (_login_bws.json.token)
+        if (_login_bws.json.status | default('error')) == 'ok'
+        else (_login_default.json.token)
+      }}
+  no_log: true
+
+# Change password when we logged in with the default (only on first run)
+- name: Change admin password to BWS value (first-boot only)
+  ansible.builtin.uri:
+    url: "{{ technitium_api_url }}/api/user/changePassword"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      token: "{{ _technitium_session_token }}"
+      pass: "admin"
+      newPass: "{{ _technitium_admin_password }}"
+    return_content: true
+    status_code: 200
+  register: _change_pw
+  no_log: true
+  when: (_login_bws.json.status | default('error')) != 'ok'
+  failed_when: >
+    (_change_pw.json.status | default('error')) != 'ok'
+
+# After password change the old token is invalidated — re-login with BWS password
+- name: Re-login after password change
+  ansible.builtin.uri:
+    url: "{{ technitium_api_url }}/api/user/login"
+    method: GET
+    body_format: form-urlencoded
+    body:
+      user: "{{ technitium_admin_username }}"
+      pass: "{{ _technitium_admin_password }}"
+      includeInfo: "false"
+    return_content: true
+    status_code: 200
+  register: _login_reauth
+  no_log: true
+  when: (_login_bws.json.status | default('error')) != 'ok'
+  failed_when: >
+    (_login_reauth.json.status | default('error')) != 'ok'
+
+- name: Update session token after re-auth
+  ansible.builtin.set_fact:
+    _technitium_session_token: "{{ _login_reauth.json.token }}"
+  no_log: true
+  when: (_login_bws.json.status | default('error')) != 'ok'
+
+# createToken always mints a new named token; re-running produces a new token
+# but old tokens continue to work until manually revoked.
+- name: Create API sync token
+  ansible.builtin.uri:
+    url: "{{ technitium_api_url }}/api/user/createToken"
+    method: GET
+    body_format: form-urlencoded
+    body:
+      token: "{{ _technitium_session_token }}"
+      user: "{{ technitium_admin_username }}"
+      pass: "{{ _technitium_admin_password }}"
+      tokenName: "{{ technitium_api_token_name }}"
+    return_content: true
+    status_code: 200
+  register: _create_token_result
+  no_log: true
+  failed_when: >
+    (_create_token_result.json.status | default('error')) != 'ok'
+
+- name: Set API token fact
+  ansible.builtin.set_fact:
+    _technitium_api_token: "{{ _create_token_result.json.token }}"
+  no_log: true
+
+- name: Create /etc/technitium config directory
+  ansible.builtin.file:
+    path: /etc/technitium
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write API token to /etc/technitium/sync.token
+  ansible.builtin.copy:
+    content: "{{ _technitium_api_token }}"
+    dest: /etc/technitium/sync.token
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Update BWS secret with new API token (runs on controller)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command:
+    argv:
+      - bws
+      - secret
+      - edit
+      - "{{ technitium_api_token_bws_secret_id }}"
+      - "--value"
+      - "{{ _technitium_api_token }}"
+  environment:
+    BWS_ACCESS_TOKEN: "{{ lookup('env', 'BWS_ACCESS_TOKEN') }}"
+  no_log: true
+  changed_when: true

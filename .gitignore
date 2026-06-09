@@ -1,4 +1,7 @@
 # Security-sensitive generated artifacts (never commit)
+env.secret
+*.secret
+.env.secret
 terraform/**/*.tfstate
 terraform/**/*.tfstate.*
 terraform/**/.terraform/

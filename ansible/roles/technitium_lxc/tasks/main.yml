@@ -1,118 +1,21 @@
 ---
 # technitium_lxc role — configures Technitium DNS+DHCP inside the LXC
-# Run after Terraform creates the container.
+# Run after Terraform creates the container:
+#   scripts/ansible-run.sh ansible-playbook \
+#     -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/deploy-technitium-lxc.yml
 #
-# Prerequisites (manual):
-#   - LXC exists at 10.0.10.30 (created by terraform/proxmox/technitium-lxc.tf)
-#   - SSH access to root@10.0.10.30
+# Required environment variables (sourced by scripts/ansible-run.sh):
+#   BWS_ACCESS_TOKEN   — Bitwarden SM machine account token
 
-- name: Install required packages
-  ansible.builtin.apt:
-    name:
-      - curl
-      - ca-certificates
-      - git
-      - jq
-    state: present
-    update_cache: true
+- name: Install packages and Technitium
+  ansible.builtin.import_tasks: install.yml
 
-- name: Install Technitium DNS server
-  ansible.builtin.shell: |
-    curl -sSL https://download.technitium.com/dns/install.sh | bash
-  args:
-    creates: /usr/share/dns/DnsServerApp.dll
-  register: technitium_install
+- name: Bootstrap admin account and API token via BWS
+  ansible.builtin.import_tasks: bootstrap.yml
 
-- name: Ensure Technitium service is started and enabled
-  ansible.builtin.systemd:
-    name: dns
-    state: started
-    enabled: true
+- name: Configure DHCP scopes for all VLANs
+  ansible.builtin.import_tasks: dhcp.yml
 
-- name: Create /etc/technitium config directory
-  ansible.builtin.file:
-    path: /etc/technitium
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
-
-- name: Create token placeholder (populate manually after Technitium first-boot)
-  ansible.builtin.file:
-    path: /etc/technitium/sync.token
-    state: touch
-    owner: root
-    group: root
-    mode: "0600"
-    modification_time: preserve
-    access_time: preserve
-
-- name: Create SSH directory for git deploy key
-  ansible.builtin.file:
-    path: /root/.ssh
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
-
-- name: Deploy git read-only deploy key
-  ansible.builtin.copy:
-    src: "{{ technitium_git_deploy_key }}"
-    dest: /root/.ssh/owl-red-deploy
-    owner: root
-    group: root
-    mode: "0600"
-  when: technitium_git_deploy_key is defined
-
-- name: Configure SSH to use deploy key for git host
-  ansible.builtin.blockinfile:
-    path: /root/.ssh/config
-    create: true
-    owner: root
-    group: root
-    mode: "0600"
-    marker: "# {mark} ANSIBLE MANAGED — owl.red deploy key"
-    block: |
-      Host github.com
-        IdentityFile /root/.ssh/owl-red-deploy
-        StrictHostKeyChecking accept-new
-
-- name: Clone owl.red repo (read-only)
-  ansible.builtin.git:
-    repo: "{{ technitium_git_repo }}"
-    dest: /opt/owl.red
-    version: main
-    update: false   # first clone only; daily pulls handled by zone sync script
-
-- name: Deploy zone sync script
-  ansible.builtin.copy:
-    src: sync-zone.sh
-    dest: /usr/local/bin/sync-zone.sh
-    owner: root
-    group: root
-    mode: "0750"
-
-- name: Deploy zone sync systemd service
-  ansible.builtin.copy:
-    src: technitium-zone-sync.service
-    dest: /etc/systemd/system/technitium-zone-sync.service
-    owner: root
-    group: root
-    mode: "0644"
-  notify: reload systemd
-
-- name: Deploy zone sync systemd timer
-  ansible.builtin.copy:
-    src: technitium-zone-sync.timer
-    dest: /etc/systemd/system/technitium-zone-sync.timer
-    owner: root
-    group: root
-    mode: "0644"
-  notify: reload systemd
-
-- name: Enable and start zone sync timer
-  ansible.builtin.systemd:
-    name: technitium-zone-sync.timer
-    state: started
-    enabled: true
-    daemon_reload: true
+- name: Configure Git zone sync service
+  ansible.builtin.import_tasks: zone-sync.yml

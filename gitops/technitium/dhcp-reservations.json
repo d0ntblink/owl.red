@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "generated": "2026-05-18",
+    "generated": "2026-06-09",
     "dns_suffix": "owl.red",
     "note": "MAC directory for owl.red. Consumed by Technitium DHCP to build static lease reservations. MAC format: uppercase hex, dash-separated (AA-BB-CC-DD-EE-FF). TBD entries require device to be powered on / provisioned before filling in."
   },
@@ -50,11 +50,11 @@
         },
 
         {
-          "hardwareAddress": "AC-1F-6B-47-87-F0",
+          "hardwareAddress": "F8-F2-1E-48-91-40",
           "ipAddress": "10.0.10.5",
           "hostName": "nas.owl.red",
-          "comments": "Unraid (currently bare metal on NIC1; will be VM on storage.pve when PVE migration complete) — NFS/SMB storage, Plex media",
-          "macSource": "IPMI page: System LAN1 MAC address ac:1f:6b:47:87:f0; confirmed by ARP at 10.0.10.5 via edge.pve; switch port SW07",
+          "comments": "Unraid (currently bare metal, SFP+ NIC passthrough; will be VM on storage.pve when PVE migration complete) — NFS/SMB storage, Plex media. Using Intel 82599ES iX10 (SFP+2 → SW SFP+2), not onboard NIC.",
+          "macSource": "DHCP lease 2026-06-09; Intel 82599ES SFP+ port 0 (iX10); switch port SW SFP+2",
           "status": "confirmed"
         },
 
@@ -69,10 +69,10 @@
 
         {
           "hardwareAddress": "00-C0-B7-DF-67-08",
-          "ipAddress": "10.0.10.7",
+          "ipAddress": "10.0.10.9",
           "hostName": "pdu.owl.red",
-          "comments": "APC AP7900B PDU — rack PDU management (2 units, front IP only)",
-          "macSource": "switch port SW09 (APC OUI 00:C0:B7 confirmed)",
+          "comments": "APC AP7900B PDU — NMC2 (0G-1238 HW Rev 05). Static IP set on-device via tcpip command. AOS v7.2.2, APP rpdu2g v7.2.6, bootmon v1.0.9. DHCP reservation ensures .9 survives a factory reset.",
+          "macSource": "DHCP lease 2026-06-09; APC OUI 00:C0:B7 confirmed; switch port SW16 via PP32",
           "status": "confirmed"
         },
 
