@@ -38,6 +38,12 @@
 | `10.0.10.31` | `pdm.owl.red` | PDM VM on storage.pve | Proxmox Datacenter Manager |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM on storage.pve | Proxmox Backup Server |
 | `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | WAP management |
+### VLAN 40 IoT Hosts (local only)
+
+| IP | Hostname | Device | Purpose |
+|----|----------|--------|---------|
+| `10.0.40.10` | `printer.owl.red` | Canon printer (Canon1c2258) | Local network printing |
+
 ### VLAN 50 IoT Hosts (internet permitted)
 
 | IP | Hostname | Device | Purpose |

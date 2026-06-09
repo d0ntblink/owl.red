@@ -205,7 +205,18 @@
       "network": "10.0.40.0/24",
       "gateway": "10.0.40.1",
       "description": "IoT — local only, no internet. Reservations added per device.",
-      "reservations": []
+      "reservations": [
+
+        {
+          "hardwareAddress": "20-0B-74-A5-15-05",
+          "ipAddress": "10.0.40.10",
+          "hostName": "printer.owl.red",
+          "comments": "Canon printer (Canon1c2258) — AzureWave WiFi module; local printing only, no internet needed",
+          "macSource": "OPNsense DHCP lease 2026-06-09 (AzureWave Technology Inc.)",
+          "status": "confirmed"
+        }
+
+      ]
     },
 
     "vlan50_iot_with_inter": {
