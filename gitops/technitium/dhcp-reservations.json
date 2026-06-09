@@ -46,7 +46,7 @@
           "hostName": "storage.pve.owl.red",
           "comments": "Rosewill RSV-L4500U / Supermicro X10SRi-F — PVE host, storage node. NIC2 (LAN2) will be PVE management NIC.",
           "macSource": "IPMI page: System LAN2 MAC address ac:1f:6b:47:87:f1 — NIC2 not yet connected to switch (future PVE mgmt)",
-          "status": "pending"
+          "status": "confirmed"
         },
 
         {

@@ -161,6 +161,11 @@ if [[ -f "${GITOPS_DIR}/dhcp-reservations.json" ]]; then
     hostname=$(printf '%s' "${res}" | jq -r '.hostName')
     comments=$(printf '%s' "${res}" | jq -r '.comments')
 
+    # Upsert: remove any existing reservation for this MAC first (no-op if absent),
+    # then add with the desired IP. This handles both new entries and IP/hostname changes.
+    curl -sf -X POST "${API_BASE}/dhcp/scopes/removeReservedLease" \
+      -d "token=${TOKEN}" -d "name=${scope}" \
+      --data-urlencode "hardwareAddress=${hw}" > /dev/null 2>&1 || true
     api_soft "${hostname}" "dhcp/scopes/addReservedLease" \
       -d "name=${scope}" \
       --data-urlencode "hardwareAddress=${hw}" \
