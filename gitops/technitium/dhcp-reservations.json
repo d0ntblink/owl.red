@@ -212,7 +212,18 @@
       "network": "10.0.50.0/24",
       "gateway": "10.0.50.1",
       "description": "IoT — internet permitted, no lateral movement. Reservations added per device.",
-      "reservations": []
+      "reservations": [
+
+        {
+          "hardwareAddress": "44-61-32-08-D6-2C",
+          "ipAddress": "10.0.50.10",
+          "hostName": "ecobee.owl.red",
+          "comments": "Ecobee smart thermostat — needs internet for cloud API",
+          "macSource": "OPNsense DHCP lease 2026-06-09 (ecobee inc)",
+          "status": "confirmed"
+        }
+
+      ]
     }
 
   }

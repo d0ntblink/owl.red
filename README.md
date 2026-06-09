@@ -37,8 +37,12 @@
 | `10.0.10.24` | `worker1.k8s.owl.red` | Talos VM on worker1.pve | k8s worker node |
 | `10.0.10.31` | `pdm.owl.red` | PDM VM on storage.pve | Proxmox Datacenter Manager |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM on storage.pve | Proxmox Backup Server |
-| `10.0.10.40` | `wap.owl.red` | DIR-885L OpenWrt | WAP management |
+| `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | WAP management |
+### VLAN 50 IoT Hosts (internet permitted)
 
+| IP | Hostname | Device | Purpose |
+|----|----------|--------|---------|
+| `10.0.50.10` | `ecobee.owl.red` | Ecobee thermostat | Smart thermostat — needs cloud API access |
 ### Service VIPs and Pools
 
 | IP / Range | Name | Backing Service | Notes |
