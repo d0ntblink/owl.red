@@ -34,7 +34,30 @@ These must be complete before anything that depends on VLAN isolation or correct
 - `[ ]` Confirm VLAN 50 → internet only, no lateral movement
 - `[ ]` Guest VLAN 30 isolation rules (see `README.md` captive portal section)
 
-### 1.4 Captive Portal (`captive.owl.red`)
+### 1.5 Subnet Migration: `/16` → `/24` per VLAN
+
+Currently some hosts and DHCP scopes reference `255.255.0.0` (`/16`) instead of `255.255.255.0` (`/24`). The target is one clean `/24` per VLAN with no overlap.
+
+- `[ ]` **Audit**: identify every place a `/16` mask appears
+  - OPNsense interface/subnet config
+  - Technitium DHCP scope `subnetMask` fields (`gitops/technitium/dhcp/scopes.json`)
+  - Static IPs on any host (Talos configs in `talos/`, Terraform, etc.)
+  - Ansible inventory `ansible_host` entries
+- `[ ]` **Plan cutover order** — VLAN 10 is highest risk (all infra); do IoT VLANs first to practice
+- `[ ]` IoT VLANs (40, 50): change OPNsense subinterface mask → `/24`; update Technitium scopes; verify DHCP still hands out correct range
+- `[ ]` Guest VLAN 30: same as IoT
+- `[ ]` Private VLAN 20: same; warn personal devices may drop briefly
+- `[ ]` Infra VLAN 10: schedule maintenance window
+  - Change OPNsense VLAN 10 interface mask to `/24`
+  - Confirm all static IPs in `10.0.10.0/24` range (they are — no change needed to addresses)
+  - Update Technitium scope `subnetMask` to `255.255.255.0`
+  - Rerun `deploy-technitium-lxc.yml` or trigger sync
+  - Verify all hosts still reachable
+- `[ ]` Update `gitops/technitium/dhcp/scopes.json` with correct `/24` masks for all scopes
+- `[ ]` Remove any remaining `/16` references across repo
+
+### 1.6 Captive Portal (`captive.owl.red`)
+
 - **Requires:** 1.1, 1.3
 - `[ ]` Verify OPNsense captive portal zone is bound to VLAN 30
 - `[ ]` Confirm `captive.owl.red` resolves from VLAN 30 clients
@@ -147,9 +170,90 @@ Move remaining self-hosted apps from wherever they are now onto the Talos cluste
 
 ---
 
+## 9. External Access — Cloudflare Tunnel
+
+For services that should be reachable from the internet without opening inbound ports. Complements Tailscale (which handles personal/admin access) — tunnel handles public-facing services like a self-hosted wiki, status page, or anything else intentionally public.
+
+- `[ ]` Decide which services get public exposure (start with zero — add deliberately)
+- `[ ]` Create Cloudflare Tunnel in Cloudflare dashboard; save tunnel token to Bitwarden
+- `[ ]` Deploy `cloudflared` connector:
+  - Option A: k8s Deployment in its own namespace (`cloudflared`)
+  - Option B: LXC on `edge.pve` — simpler, no k8s dependency
+  - **Likely: k8s Deployment so it benefits from cluster HA**
+- `[ ]` Configure tunnel routes in `cloudflared` config (ingress rules by hostname)
+- `[ ]` Verify public hostname resolves via Cloudflare and traffic reaches internal service through Traefik
+- `[ ]` Firewall rule: confirm OPNsense allows `cloudflared` egress to Cloudflare IPs only
+- See: `docs/decisions/012-cloudflare-tunnel-no-inbound-port-forwarding.md`
+
+---
+
+## 10. Cloudflare DNS — GitOps Managed
+
+Currently Cloudflare DNS records are managed manually in the dashboard. Make them code.
+
+- `[ ]` Choose tooling:
+  - Option A: Terraform Cloudflare provider — fits existing `terraform/` structure
+  - Option B: `external-dns` on k8s with Cloudflare webhook — automatic from Ingress/IngressRoute annotations
+  - **Likely: Terraform for static records + external-dns for dynamic cluster services**
+- `[ ]` Terraform: create `terraform/cloudflare/` module
+  - Import existing records into Terraform state (`terraform import`)
+  - Commit `main.tf` / `records.tf` to repo
+  - Add to `scripts/terraform-run.sh`
+- `[ ]` `external-dns`: deploy to k8s, point at Cloudflare zone, annotate IngressRoutes
+- `[ ]` Remove manual records from Cloudflare dashboard once Terraform manages them
+- `[ ]` Verify `owl.red` public records (MX, TXT/SPF, tunnel CNAME) survive import
+
+---
+
+## 11. File Storage Migration: OneDrive → Google Drive
+
+Personal/family file storage migration. Infrastructure-adjacent — needs to be done before decommissioning any Microsoft 365 dependency.
+
+- `[ ]` Inventory what is on OneDrive and who uses it
+- `[ ]` Decide Google Workspace tier or free Drive (shared drives need Workspace Business)
+- `[ ]` Use `rclone` to migrate: `rclone copy onedrive: gdrive: --progress --checksum`
+- `[ ]` Verify file count and sizes match post-migration
+- `[ ]` Update any app integrations pointing at OneDrive (e.g. document editors, backups)
+- `[ ]` Keep OneDrive read-only for 30 days then decommission
+
+---
+
+## 12. Mail — Self-Hosted `@owl.red` Mail Server
+
+Hosted mail for `owl.red` users. Also a dependency for any service that needs to send email (HA alerts, cluster notifications, etc.).
+
+### 12.1 Evaluate Proton Mail Replacement
+- `[ ]` Options:
+  - **Self-hosted**: Stalwart Mail (modern, all-in-one SMTP/IMAP/JMAP) — fits k8s well
+  - **Self-hosted**: Maddy — minimal, single binary
+  - **Managed**: Fastmail, Migadu — no infra overhead
+  - **Recommendation**: Stalwart on k8s for full control; Migadu if ops burden is a concern
+- `[ ]` Decide and document in `docs/decisions/`
+
+### 12.2 Deploy Mail Server (if self-hosted)
+- `[ ]` Requires: Cloudflare tunnel or open port 25 inbound (or smart relay via Mailgun/SES for outbound)
+- `[ ]` Provision persistent volume for mail store (NFS StorageClass — see milestone 4)
+- `[ ]` TLS cert for `mail.owl.red` via cert-manager
+- `[ ]` Cloudflare DNS: MX record → `mail.owl.red`, SPF TXT, DKIM TXT, DMARC TXT
+- `[ ]` Create user accounts for all `owl.red` users
+- `[ ]` Test send + receive, DKIM signing, spam score (mail-tester.com)
+- `[ ]` Configure services to relay through mail server:
+  - Home Assistant notifications
+  - Cluster alerting (Alertmanager)
+  - Any app needing SMTP
+
+### 12.3 Migrate from Proton Mail
+- `[ ]` Export Proton Mail messages (use Proton Mail Bridge + `imapsync` or `mbsync`)
+- `[ ]` Import into new mail server
+- `[ ]` Update MX records to point at new server
+- `[ ]` Monitor for 30 days, keep Proton active during transition
+
+---
+
 ## Notes
 
 - **VLAN 40 vs. VLAN 50 for IoT**: devices that only need LAN access (printers, 3D printers, local sensors) go to 40. Devices that need cloud APIs (Ecobee, Bambu cloud, voice assistants) go to 50.
 - **Unraid → VM migration**: deferred until storage strategy is decided. Plex with GPU passthrough is the main blocker.
 - **Tailscale before captive portal**: Tailscale gives a reliable admin path if the captive portal breaks VLAN 30 routing during testing.
 - **Home Assistant mDNS**: this is the hardest part. IoT device auto-discovery requires multicast to reach HA across VLANs. Plan this before deploying HA.
+- **Mail inbound delivery**: port 25 inbound is blocked by most residential ISPs. Use Cloudflare Email Routing to receive and relay to self-hosted SMTP, or use a VPS SMTP relay with `cloudflared` for the web UI.
