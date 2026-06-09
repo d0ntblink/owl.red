@@ -142,11 +142,7 @@ main() {
   cmd_basename="$(basename -- "$1")"
 
   if [[ "$cmd_basename" == "ansible" || "$cmd_basename" == "ansible-playbook" ]]; then
-    local json_password extra_vars
-    json_password="${password//\\/\\\\}"
-    json_password="${json_password//\"/\\\"}"
-    extra_vars="{\"ansible_password\":\"${json_password}\",\"ansible_become_password\":\"${json_password}\"}"
-    exec "$1" "${@:2}" -e "$extra_vars"
+    exec "$@"
   fi
 
   exec "$@"
