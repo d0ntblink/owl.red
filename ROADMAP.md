@@ -6,6 +6,45 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ---
 
+## 0. OPNsense — Terraform IaC
+
+OPNsense config is currently all manual. Everything in OPNsense must be reproducible from code before VLAN work begins — otherwise VLAN firewall rules, aliases, and DNS overrides will drift and be unrecoverable after a reinstall.
+
+Scaffold exists at `terraform/opnsense/`. Provider: `browningluke/opnsense` (~> 0.11).
+
+### 0.1 Bootstrap API Access
+- `[ ]` Create dedicated API user in OPNsense: System → Access → Users → Add
+- `[ ]` Assign privileges: Firewall, DHCP, Interfaces, Unbound DNS, VPN (as needed)
+- `[ ]` Generate API key+secret; store in Bitwarden SM
+- `[ ]` Add `OPNSENSE_API_KEY` / `OPNSENSE_API_SECRET` / `OPNSENSE_ENDPOINT` handling to `scripts/terraform-run.sh`
+- `[ ]` `terraform -chdir=terraform/opnsense init` — verify provider downloads
+
+### 0.2 Import Existing Config
+- `[ ]` Run `terraform plan` and identify all resources that already exist in OPNsense
+- `[ ]` Import existing aliases, firewall rules, and Unbound overrides into state
+- `[ ]` Verify `terraform plan` shows no diff after import (no unintended changes)
+
+### 0.3 Codify All Current Devices / DHCP Static Mappings
+- `[ ]` Add all known devices from `gitops/technitium/dhcp-reservations.json` as OPNsense firewall alias entries and/or DHCP static leases if OPNsense serves DHCP for any scope
+- `[ ]` VLAN 10 reserved hosts → aliases in `terraform/opnsense/aliases.tf`
+- `[ ]` IoT device aliases (VLAN 40/50) in `terraform/opnsense/aliases.tf`
+
+### 0.4 Codify Firewall Rules
+- `[ ]` Add all inter-VLAN policy rules to `terraform/opnsense/firewall_rules.tf`:
+  - VLAN 10 admin → all VLANs allowed
+  - VLAN 20 private → internet + VLAN 10 services, no lateral
+  - VLAN 30 guest → internet only via captive portal, blocked from all VLANs
+  - VLAN 40 IoT → LAN only, no internet, no lateral
+  - VLAN 50 IoT → internet, no lateral movement
+- `[ ]` `terraform apply` — verify rules appear in OPNsense firewall UI
+- `[ ]` Test each VLAN segment for correct connectivity
+
+### 0.5 Ongoing
+- `[ ]` All future OPNsense changes go through `terraform/opnsense/` — no manual edits
+- `[ ]` Add OPNsense to `scripts/terraform-run.sh` workflow documentation
+
+---
+
 ## 1. Network Foundation
 
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
