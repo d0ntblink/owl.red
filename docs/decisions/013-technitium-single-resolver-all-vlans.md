@@ -15,7 +15,7 @@ Selected. Technitium moves from a Kubernetes StatefulSet to a Proxmox LXC on `ed
 | OPNsense DHCP role | Eliminated for all VLANs |
 | OPNsense DNS role | Forwards to Technitium for its own resolver; no client-facing DHCP DNS assignment |
 | HA / redundancy | Phase 1: single node. Phase 2: Proxmox HA + second LXC when shared storage is available. |
-| Zone desired state | Git (`gitops/technitium/owl.red.zone`) — synced by systemd timer in the LXC |
+| Desired state | Git (`gitops/technitium/`: `settings.json`, `zones/owl.red.zone`, `dhcp/scopes.json`, `dhcp-reservations.json`) — applied by a systemd timer in the LXC |
 
 ## Context
 
@@ -35,7 +35,7 @@ Moving Technitium to a Proxmox LXC eliminates this dependency. The LXC starts di
 
 Technitium runs as a single LXC (VMID 200) on `edge.pve`. The LXC has five network interfaces, one per VLAN, connected to a VLAN-aware bridge on edge.pve's onboard NIC (SW05, now trunked). It serves both DNS and DHCP for all five VLANs directly — no relay, no OPNsense DHCP.
 
-The zone file (`gitops/technitium/owl.red.zone`) remains Git-managed. A systemd timer in the LXC runs a zone sync script every 15 minutes, equivalent to the former k8s CronJob.
+Desired state (`gitops/technitium/`: server settings, the `zones/owl.red.zone` zone file, DHCP scopes, and DHCP reservations) remains Git-managed. A systemd timer in the LXC runs a full GitOps sync (`technitium-sync.service`) every 15 minutes, equivalent to the former k8s CronJob.
 
 The Technitium k8s StatefulSet, associated services, ConfigMaps, and the MetalLB `technitium-vip-pool` are removed as part of the cutover.
 
@@ -44,10 +44,10 @@ The Technitium k8s StatefulSet, associated services, ConfigMaps, and the MetalLB
 | Interface | VLAN | IP | Role |
 |-----------|------|----|------|
 | eth0 | 10 | 10.0.10.30/24 | Management, DNS VIP, DHCP for VLAN 10 |
-| eth1 | 20 | 10.0.20.2/24 | DHCP + DNS for private-net |
-| eth2 | 30 | 10.0.30.2/24 | DHCP + DNS for guest-net (option 114) |
-| eth3 | 40 | 10.0.40.2/24 | DHCP + DNS for iot-no-inter |
-| eth4 | 50 | 10.0.50.2/24 | DHCP + DNS for iot-with-inter |
+| eth1 | 20 | 10.0.20.30/24 | DHCP + DNS for private-net |
+| eth2 | 30 | 10.0.30.30/24 | DHCP + DNS for guest-net (option 114) |
+| eth3 | 40 | 10.0.40.30/24 | DHCP + DNS for iot-no-inter |
+| eth4 | 50 | 10.0.50.30/24 | DHCP + DNS for iot-with-inter |
 
 DHCP pushes the **VLAN-local** Technitium IP as DNS server to clients on each VLAN. This avoids inter-VLAN DNS traffic — required for VLANs 40/50 where OPNsense firewall blocks outbound cross-VLAN.
 
@@ -57,8 +57,8 @@ DHCP pushes the **VLAN-local** Technitium IP as DNS server to clients on each VL
 |-------|-------|-------|
 | DNS for all VLANs | Technitium LXC | Authoritative + recursive; VLAN-local IP per VLAN |
 | DHCP for all VLANs | Technitium LXC | OPNsense DHCP disabled on all VLANs post-cutover |
-| Zone desired state | Git (`gitops/technitium/owl.red.zone`) | Standalone zone file; synced by systemd timer |
-| LXC lifecycle | Terraform (`terraform/proxmox/technitium-lxc.tf`) | bpg/proxmox provider |
+| Desired state | Git (`gitops/technitium/`) | Settings, `zones/owl.red.zone`, DHCP scopes + reservations; synced by systemd timer |
+| LXC lifecycle | Terraform (`terraform/proxmox/technitium/technitium-lxc.tf`) | bpg/proxmox provider |
 | LXC OS configuration | Ansible (`ansible/roles/technitium_lxc`) | Zone sync service, git deploy key, packages |
 | Switch trunk (SW05) | `ansible/switch_configs/css326.yml` | Port 5 trunked: VLAN 10 native + 20-50 tagged |
 
@@ -89,9 +89,9 @@ DHCP pushes the **VLAN-local** Technitium IP as DNS server to clients on each VL
 | Check | Expected result |
 |-------|----------------|
 | DNS from VLAN 10 | `dig @10.0.10.30 rancher.owl.red` → `10.0.10.201`, `aa` flag |
-| DNS from VLAN 20 client | `dig @10.0.20.2 rancher.owl.red` → `10.0.10.201` |
-| DHCP on VLAN 20 | Client renews lease from Technitium; gets `10.0.20.2` as DNS server |
-| DHCP on VLAN 40 | IoT client gets lease; `dig @10.0.40.2 owl.red NS` resolves without cross-VLAN |
-| Zone sync timer | `systemctl list-timers technitium-zone-sync.timer` shows last trigger and next run |
+| DNS from VLAN 20 client | `dig @10.0.20.30 rancher.owl.red` → `10.0.10.201` |
+| DHCP on VLAN 20 | Client renews lease from Technitium; gets `10.0.20.30` as DNS server |
+| DHCP on VLAN 40 | IoT client gets lease; `dig @10.0.40.30 owl.red NS` resolves without cross-VLAN |
+| Zone sync timer | `systemctl list-timers technitium-sync.timer` shows last trigger and next run |
 | OPNsense DHCP disabled | No DHCP offers from OPNsense on VLANs 20–50 after cutover |
 | k8s decommission | `kubectl get all -n technitium-namespace` returns no resources |
