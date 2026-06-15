@@ -55,7 +55,7 @@ kubectl get bundledeployment -A | rg owl-red
 
 Fleet should begin reconciling:
 
-- `gitops/technitium`
+- `gitops/technitium-ingress`
 - `gitops/metallb`
 - `gitops/cert-manager`
 - `gitops/traefik`

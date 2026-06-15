@@ -8,7 +8,7 @@ spec:
   branch: main
   clientSecretName: owl-red-github-auth
   paths:
-    - gitops/technitium
+    - gitops/technitium-ingress
     - gitops/metallb
     - gitops/cert-manager
     - gitops/traefik
