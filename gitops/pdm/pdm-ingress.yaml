@@ -7,6 +7,9 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serversscheme: https
+    # Skip-verify scoped to this backend only (PDM self-signed cert); see
+    # gitops/pdm/pdm-serverstransport.yaml.
+    traefik.ingress.kubernetes.io/service.serverstransport: infra-services-pdm-insecure@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:

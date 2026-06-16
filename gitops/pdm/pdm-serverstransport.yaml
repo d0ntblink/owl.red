@@ -1,0 +1,13 @@
+# Scopes backend TLS skip-verify to PDM only. PDM serves a self-signed cert on
+# 10.0.10.31:8443, so Traefik must skip verification for THIS backend — instead of
+# the cluster-wide `--serversTransport.insecureSkipVerify=true` that was removed
+# from gitops/traefik/values.yaml. Referenced by the PDM Ingress via the
+# `traefik.ingress.kubernetes.io/service.serverstransport` annotation
+# (value: infra-services-pdm-insecure@kubernetescrd).
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: pdm-insecure
+  namespace: infra-services
+spec:
+  insecureSkipVerify: true

@@ -1,0 +1,23 @@
+# gitleaks configuration for owl.red
+# Extends the built-in ruleset and allowlists non-secret identifiers that would
+# otherwise trip generic high-entropy rules. Used by both the pre-commit hook and
+# the GitHub Actions "security" workflow.
+title = "owl.red gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret references and committed lockfiles"
+# Bitwarden Secrets Manager IDs (organizationId / bwSecretId) and Proxmox/Talos
+# resource IDs are UUID *references*, never secret values — the real secret lives
+# only in Bitwarden. A bare UUID is an identifier, so allowlist the UUID shape.
+regexes = [
+  '''[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}''',
+]
+# The generated BitwardenSecret manifests contain only UUID references (protected
+# separately by scripts/check-bitwarden-placeholders.sh); lockfiles carry hashes.
+paths = [
+  '''\.terraform\.lock\.hcl$''',
+  '''gitops/bitwarden-secrets/generated/.*\.ya?ml$''',
+]

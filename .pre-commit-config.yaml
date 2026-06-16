@@ -1,0 +1,31 @@
+# Pre-commit hooks for owl.red.
+# Setup:  pipx install pre-commit  (or: pip install pre-commit)
+#         pre-commit install
+# Run on the whole tree:  pre-commit run --all-files
+# Bump pinned revs:       pre-commit autoupdate
+repos:
+  # Secret scanning (SECURITY.md §Future Hardening #1) — shares .gitleaks.toml with CI.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: check-merge-conflict
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+
+  # Repo-local guard: block the issue-007 empty-secret trap.
+  - repo: local
+    hooks:
+      - id: bitwarden-placeholder-guard
+        name: Reject placeholder bwSecretId in BitwardenSecret CRs
+        entry: scripts/check-bitwarden-placeholders.sh
+        language: script
+        files: '^gitops/bitwarden-secrets/.*\.ya?ml$'
+        pass_filenames: false

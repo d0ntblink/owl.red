@@ -24,8 +24,10 @@ logs:
   general:
     level: INFO
 
-additionalArguments:
-  - "--serversTransport.insecureSkipVerify=true"
+# NOTE: the cluster-wide `--serversTransport.insecureSkipVerify=true` was REMOVED for
+# security. The only backend that needs it (PDM, self-signed HTTPS on 10.0.10.31:8443)
+# now uses a scoped ServersTransport — see gitops/pdm/pdm-serverstransport.yaml. The
+# Technitium backend is plain HTTP, so it needs no backend-TLS settings.
 
 ingressRoute:
   dashboard:

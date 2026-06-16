@@ -62,3 +62,10 @@ vault-password.txt
 # Downloaded cloud images (too large for git)
 ansible/roles/rke2-node/files/*.img
 ansible/roles/rke2-node/files/*.qcow2
+
+# Belt-and-suspenders: secret-bearing artifacts anywhere in the tree
+# (the scoped rules above already cover the common locations).
+*.tfstate
+*.tfstate.*
+talosconfig
+talos/config/
