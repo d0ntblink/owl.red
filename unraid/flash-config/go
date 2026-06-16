@@ -1,0 +1,7 @@
+#!/bin/bash
+# Start the Management Utility
+/usr/local/sbin/emhttp 
+modprobe ipmi_devintf
+modprobe ipmi_si
+modprobe i915
+chmod -R 777 /dev/dri

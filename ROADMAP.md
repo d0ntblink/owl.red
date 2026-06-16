@@ -390,6 +390,65 @@ Do this last — docs written after everything is running are accurate.
 
 ---
 
+## 16. Time Synchronization
+
+Two layers: a free consolidation fix (do first), and an optional GNSS stratum-1
+appliance (resilience / hobby). Nothing in the stack *requires* high-precision time
+(etcd/TLS/logs tolerate ordinary NTP), so 16.1 is the real win and 16.2 is optional.
+
+### 16.1 Point everything at OPNsense as the LAN NTP server (free, do first)
+Today hosts sync inconsistently: Unraid points at public `*.pool.ntp.org`, others at
+pool/mixed sources. **Decision: OPNsense (`10.0.10.1`) is the single internal NTP
+authority for the LAN.** Every host points at it; OPNsense itself uses the public
+pool as upstream. (If/when the GNSS appliance in 16.2 exists, it feeds OPNsense as an
+additional source.)
+
+- `[ ]` Confirm OPNsense NTP service is enabled and serving on `10.0.10.1`
+  (Services → Network Time → General); restrict to LAN VLANs
+- `[ ]` Point all hosts at `10.0.10.1` (manage via IaC where possible):
+  - `[ ]` Unraid — `ident.cfg` `NTP_SERVER1=10.0.10.1` (or GraphQL `updateSystemTime`;
+    see `docs/guides/unraid-iac-plan.md`)
+  - `[ ]` Proxmox hosts — chrony/systemd-timesyncd → `10.0.10.1` via Ansible
+  - `[ ]` Talos nodes — `machine.time.servers: [10.0.10.1]` in machine config, reapply
+  - `[ ]` Technitium LXC — NixOS `services.timesyncd`/chrony → `10.0.10.1`
+- `[ ]` Verify skew across all hosts is < ~100 ms (`chronyc tracking` / `timedatectl`)
+
+### 16.2 Optional — GNSS stratum-1 NTP appliance (Pi 4 + PPS)
+Internet-independent LAN time. **Accuracy comes from PPS (pulse-per-second) into a
+GPIO pin**, disciplined by chrony — *not* from NIC PTP. The existing **Pi 4 is ideal**
+for this (its lack of NIC hardware-PTP timestamping is irrelevant for a GPS NTP
+server; PTP only matters for distributing PTP over Ethernet, which nothing here uses).
+
+- `[ ]` Build the appliance (parts list below); wire PPS → GPIO18
+- `[ ]` Enable `dtoverlay=pps-gpio,gpiopin=18` + UART; install `gpsd` + `chrony`
+- `[ ]` chrony: PPS as `refclock`, **plus** internal/pool servers as fallback
+  (never single-source — a bad GPS fix must not poison LAN time)
+- `[ ]` Place on VLAN 10 (`time.owl.red`), add DNS A record + DHCP reservation
+- `[ ]` Feed it into 16.1 as **one source among several** on the internal NTP server
+- `[ ]` Mount antenna with real sky view (window/roof run) — this is the actual cost
+
+**Parts list (HAT build — recommended, no soldering):**
+
+| Part | Notes | Approx |
+|------|-------|--------|
+| Raspberry Pi 4 | **already owned** | — |
+| Uputronics GPS/RTC HAT (u-blox MAX-M8Q/M10, PPS on GPIO18 + RTC) | Gold standard for Pi NTP; PPS pre-wired | ~$60–80 |
+| Active GPS antenna (SMA, ≥28 dB) + adapter if u.FL | Sky view critical | ~$15–25 |
+| Pi PSU + case + microSD | likely on hand | ~$0–25 |
+
+**Cheaper DIY alternative (jumper wiring):** u-blox NEO-M8N/M9N breakout w/ PPS pin
+(~$15–25, antenna often included) wired to GPIO (PPS→18, TX/RX→UART, 3V3/GND).
+Functionally identical stratum-1; trades ~$45 for soldering/wiring + less tidy.
+
+> Prices are approximate (recalled) — confirm current SKUs/stock before buying.
+> Adafruit Ultimate GPS HAT is a valid fallback but needs a solder jumper for PPS.
+
+### Decision to record
+- `[ ]` `docs/decisions/018-time-sync-gnss.md` — internal NTP consolidation; GNSS
+  optional, justified by resilience not necessity; Pi 4 + PPS over PTP
+
+---
+
 ## Notes
 
 - **VLAN 40 vs. VLAN 50 for IoT**: devices that only need LAN access (printers, 3D printers, local sensors) go to 40. Devices that need cloud APIs (Ecobee, Bambu cloud, voice assistants) go to 50.

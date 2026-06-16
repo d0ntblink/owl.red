@@ -1,0 +1,3 @@
+# Generated languages version check schedule:
+10 0 1 * * /usr/local/emhttp/plugins/dynamix.plugin.manager/scripts/languagecheck &> /dev/null
+
