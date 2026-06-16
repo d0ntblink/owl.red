@@ -75,7 +75,7 @@ resource "opnsense_firewall_alias" "cluster_vip_range" {
   name        = "cluster_vip_range"
   type        = "network"
   description = "MetalLB VIP pool — Kubernetes LoadBalancer IPs"
-  content     = ["10.0.10.200/51"] # 10.0.10.200–10.0.10.250
+  content     = ["10.0.10.200-10.0.10.250"] # MetalLB pool owl-vip-pool — matches gitops/metallb/ippool.yaml
   enabled     = true
 }
 

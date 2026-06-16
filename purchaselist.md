@@ -1,3 +1,7 @@
+# owl.red — Cabling & Purchase List
+
+Cabling conventions, front-patch notes, and the copper/DAC/accessory shopping list for the rack.
+
 Notes:
 - `ap.owl.red` uplink is on `BLUE-C` (`SW19 <-> PP19`) because it is a tagged trunk, not an access/endpoint purple patch.
 - Additional purple ports stay unpatched until a real endpoint is added.

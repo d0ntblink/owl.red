@@ -14,7 +14,9 @@
 - name: Bootstrap admin account and API token via BWS
   ansible.builtin.import_tasks: bootstrap.yml
 
-- name: Configure DHCP scopes for all VLANs
+# DHCP scopes/reservations are GitOps-managed (sync.sh / technitium-sync.service);
+# dhcp.yml is an intentionally-empty placeholder. See gitops/technitium/dhcp/.
+- name: DHCP scopes are GitOps-managed (no imperative config here)
   ansible.builtin.import_tasks: dhcp.yml
 
 - name: Configure Git zone sync service

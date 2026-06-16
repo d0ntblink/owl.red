@@ -7,30 +7,3 @@
 #
 # The sync service is triggered by zone-sync.yml after bootstrap writes the token.
 # This file is intentionally empty — do not add imperative API calls here.
-
-- name: Create DHCP scope — {{ item.name }}
-  ansible.builtin.uri:
-    url: "{{ technitium_api_url }}/api/dhcp/scopes/set"
-    method: POST
-    body_format: form-urlencoded
-    body:
-      token: "{{ _technitium_api_token }}"
-      name: "{{ item.name }}"
-      startingAddress: "{{ item.starting }}"
-      endingAddress: "{{ item.ending }}"
-      subnetMask: "255.255.255.0"
-      routerAddress: "{{ item.router }}"
-      useThisDnsServer: "true"
-      leaseTimeDays: "1"
-      leaseTimeHours: "0"
-      leaseTimeMinutes: "0"
-      enabled: "true"
-    return_content: true
-    status_code: 200
-  register: _dhcp_scope_result
-  # set is idempotent by name — fail only on genuine errors
-  failed_when: >
-    (_dhcp_scope_result.json.status | default('ok')) == 'error'
-  loop: "{{ dhcp_scopes }}"
-  loop_control:
-    label: "{{ item.name }}"
