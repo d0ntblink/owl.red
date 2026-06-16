@@ -52,12 +52,19 @@ Optional environment variables:
   EXCLUDE_NAMESPACES_REGEX           Namespaces to exclude (regex)
                                      default: ^(kube-system|kube-public|kube-node-lease)$
   EXCLUDE_SECRET_NAME_REGEX          Secret names to exclude (regex)
-                                     default: ^(default-token-|sh\.helm\.release\.v1|kube-root-ca\.crt|bw-auth-token$)
+                                     default: ^(default-token-|sh\.helm\.release\.v1|kube-root-ca\.crt|bw-auth-token$|fleet-agent$|.*-webhook-ca$|.*-webhook-cert$|.*-cert-ca$|letsencrypt-production$|.*-kubeconfig$)
+  EXCLUDE_SECRET_TYPE_REGEX          Secret types to exclude (regex)
+                                     default: ^(kubernetes\.io/service-account-token|kubernetes\.io/tls|kubernetes\.io/dockercfg|kubernetes\.io/dockerconfigjson|helm\.sh/release\.v1|fleet\.cattle\.io/)
   KUBECTL_REQUEST_TIMEOUT            kubectl request timeout
                                      default: 20s
 
 Safety notes:
-  - Service-account token secrets are always excluded.
+  - Service-account token, TLS, docker-config, Helm-release and Fleet
+    bundle-deployment secret TYPES are always excluded (controller-managed).
+  - Secrets that carry ownerReferences are skipped: they are owned/rotated by a
+    controller (cert-manager, Rancher, MetalLB, Fleet, CAPI) and must not be
+    frozen into Bitwarden, or the operator will overwrite the live value and
+    cause hash/cert drift (see docs/issues/006).
   - Existing Bitwarden secrets with the same generated key are updated in place.
   - Generated key format: k8s__<namespace>__<secret-name>__<secret-key>
 EOF
@@ -82,7 +89,8 @@ main() {
   local output_dir="${OUTPUT_DIR:-gitops/bitwarden-secrets/generated}"
   local include_ns_regex="${INCLUDE_NAMESPACES_REGEX:-.*}"
   local exclude_ns_regex="${EXCLUDE_NAMESPACES_REGEX:-^(kube-system|kube-public|kube-node-lease)$}"
-  local exclude_secret_regex="${EXCLUDE_SECRET_NAME_REGEX:-^(default-token-|sh\\.helm\\.release\\.v1|kube-root-ca\\.crt|bw-auth-token$)}"
+  local exclude_secret_regex="${EXCLUDE_SECRET_NAME_REGEX:-^(default-token-|sh\\.helm\\.release\\.v1|kube-root-ca\\.crt|bw-auth-token$|fleet-agent$|.*-webhook-ca$|.*-webhook-cert$|.*-cert-ca$|letsencrypt-production$|.*-kubeconfig$)}"
+  local exclude_type_regex="${EXCLUDE_SECRET_TYPE_REGEX:-^(kubernetes\\.io/service-account-token|kubernetes\\.io/tls|kubernetes\\.io/dockercfg|kubernetes\\.io/dockerconfigjson|helm\\.sh/release\\.v1|fleet\\.cattle\\.io/)}"
   local request_timeout="${KUBECTL_REQUEST_TIMEOUT:-20s}"
 
   rm -rf "$output_dir"
@@ -177,8 +185,10 @@ main() {
       --arg includeNs "$include_ns_regex" \
       --arg excludeNs "$exclude_ns_regex" \
       --arg excludeName "$exclude_secret_regex" \
+      --arg excludeType "$exclude_type_regex" \
       '.items[]
-       | select(.type != "kubernetes.io/service-account-token")
+       | select((.type // "Opaque") | test($excludeType) | not)
+       | select((.metadata.ownerReferences // []) | length == 0)
        | select(.metadata.namespace | test($includeNs))
        | select((.metadata.namespace | test($excludeNs)) | not)
        | select((.metadata.name | test($excludeName)) | not)
