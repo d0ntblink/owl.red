@@ -1,0 +1,7 @@
+# BitwardenSecret CRs were originally applied out-of-band (e.g. kubectl apply of
+# the generated manifests), so they carry no Helm ownership metadata. takeOwnership
+# lets this Fleet/Helm release adopt them in place instead of failing the install.
+# Release namespace intentionally left as the default ("default") — each resource
+# declares its own target namespace.
+helm:
+  takeOwnership: true

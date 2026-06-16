@@ -1,0 +1,6 @@
+# The PDBs and the fleet-agent-local Bundle override target pre-existing,
+# out-of-band resources (the PDBs are 30+ days old; the fleet-agent-local Bundle
+# is created by Fleet itself). takeOwnership lets this Fleet/Helm release adopt
+# them in place instead of failing the install on missing Helm ownership metadata.
+helm:
+  takeOwnership: true

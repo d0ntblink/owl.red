@@ -1,1 +1,5 @@
 defaultNamespace: infra-services
+helm:
+  # Adopt the pre-existing infra-services namespace (created out-of-band) into
+  # this Fleet/Helm release instead of failing the install on ownership metadata.
+  takeOwnership: true
