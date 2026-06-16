@@ -4,7 +4,7 @@ This directory contains Phase 1 automation scaffold only. No topology changes ar
 
 ## Contents
 
-- `inventory/hosts.yml`: host inventory with current/planned state and current/target address objects.
+- `inventory/hosts.yml`: host inventory with current/target address objects.
 - `inventory/group_vars/all.yml`: shared defaults for preflight, baseline, and validation.
 - `inventory/group_vars/network_target.yml`: locked target network model and constraints.
 - `playbooks/00-preflight.yml`: backup artifacts + endpoint + Linux route/DNS prechecks.
@@ -39,8 +39,6 @@ ansible-galaxy collection install ansible.posix
 - Default execution target for Linux baseline/validation is `phase1_linux_baseline` (currently `edge_pve`).
 - To target a different group, pass `-e baseline_target_group=<group>` or `-e validation_target_group=<group>`.
 - Preflight requires backup artifacts to exist at paths defined in `inventory/group_vars/all.yml`.
-- `playbooks/02-proxmox-prep.yml` skips `state: planned` hosts by default. Set `-e proxmox_prep_include_planned_hosts=true` to include them.
-- `playbooks/03-proxmox-upgrade.yml` skips `state: planned` hosts by default. Set `-e proxmox_upgrade_include_planned_hosts=true` to include them.
 - Dist-upgrade remains disabled unless `-e proxmox_upgrade_run_dist_upgrade=true` is set.
 - Automatic reboot after dist-upgrade is disabled by default; set `-e proxmox_upgrade_reboot_after_upgrade=true` to reboot nodes one-at-a-time when `/var/run/reboot-required` exists.
 - `playbooks/02-proxmox-prep.yml` now includes NIC stability hardening for Proxmox hosts (managed EEE disable, e1000e module options, and optional PCIe ASPM disable via GRUB drop-in).
@@ -206,7 +204,7 @@ ansible-playbook playbooks/90-validate-platform.yml \
 	-e validation_linux_checks_enabled=false
 
 ansible-playbook playbooks/02-proxmox-prep.yml \
-	-e proxmox_prep_include_planned_hosts=false
+	-e proxmox_prep_execution_enabled=false
 
 ansible-playbook playbooks/03-proxmox-upgrade.yml \
 	-e proxmox_upgrade_execution_enabled=false

@@ -7,14 +7,6 @@
   any_errors_fatal: true
   ignore_unreachable: "{{ proxmox_prep_ignore_unreachable | default(true) | bool }}"
   pre_tasks:
-    - name: Skip planned hosts unless explicitly included
-      ansible.builtin.meta: end_host
-      when:
-        - not (proxmox_prep_include_planned_hosts | default(false) | bool)
-        - state | default('planned') != 'current'
-      tags:
-        - proxmox_prep
-
     - name: Gather facts for proxmox preparation
       ansible.builtin.setup:
       when: proxmox_prep_execution_enabled | default(true) | bool

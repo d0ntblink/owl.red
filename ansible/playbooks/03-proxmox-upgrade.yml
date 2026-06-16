@@ -8,14 +8,6 @@
   ignore_unreachable: "{{ proxmox_upgrade_ignore_unreachable | default(false) | bool }}"
 
   pre_tasks:
-    - name: Skip planned hosts unless explicitly included
-      ansible.builtin.meta: end_host
-      when:
-        - not (proxmox_upgrade_include_planned_hosts | default(false) | bool)
-        - state | default('planned') != 'current'
-      tags:
-        - proxmox_upgrade
-
     - name: Gather facts for proxmox upgrade
       ansible.builtin.setup:
       when: proxmox_upgrade_execution_enabled | default(true) | bool

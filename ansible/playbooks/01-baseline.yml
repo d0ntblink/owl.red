@@ -6,15 +6,6 @@
   serial: 1
   ignore_unreachable: "{{ baseline_ignore_unreachable | default(false) | bool }}"
   pre_tasks:
-    - name: Assert host is marked current
-      ansible.builtin.assert:
-        that:
-          - state | default('current') == 'current'
-        fail_msg: "Host {{ inventory_hostname }} is marked {{ state | default('unknown') }}; baseline role is for current hosts only."
-      when: baseline_execution_enabled | default(true) | bool
-      tags:
-        - baseline
-
     - name: Assert Debian-family for baseline role
       ansible.builtin.assert:
         that:

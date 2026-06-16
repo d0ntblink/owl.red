@@ -66,7 +66,6 @@ baseline_execution_enabled: true
 
 proxmox_prep_target_group: proxmox_hosts
 proxmox_prep_execution_enabled: true
-proxmox_prep_include_planned_hosts: false
 proxmox_prep_ignore_unreachable: true
 
 proxmox_disable_enterprise_repo: true
@@ -75,7 +74,6 @@ proxmox_manage_ceph_repo: false
 
 proxmox_upgrade_target_group: proxmox_hosts
 proxmox_upgrade_execution_enabled: true
-proxmox_upgrade_include_planned_hosts: false
 proxmox_upgrade_ignore_unreachable: false
 
 proxmox_upgrade_run_apt_update: true
