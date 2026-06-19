@@ -1,34 +1,16 @@
 ---
-# unraid_settings - hybrid IaC for the Unraid NAS (nas.owl.red).
-# Ansible-layer secrets are injected via env vars (like scripts/ansible-run.sh does
-# for the Proxmox password), sourced from Bitwarden per ADR 003.
+# unraid_settings - FILE + MANUAL lane IaC for the Unraid NAS (nas.owl.red).
+# API-settable settings (NTP / SSH / identity / UPS / Connect) are managed declaratively in
+# terraform/unraid/ (Terraform-GraphQL) - NOT here. This role does read-only drift detection +
+# flash-config recapture, and (Phase 2) allow-listed /boot/config file writes.
 
-# === Lane toggles (writes default OFF; enable per-run with -e) ===
-recapture_enabled: true        # read-only: refresh the committed flash snapshot
-drift_check_enabled: true      # read-only: report live-vs-desired drift
-api_enabled: false             # API-lane GraphQL writes (Phase 1: NTP)
-file_lane_enabled: false       # file-lane /boot/config writes (Phase 2; not implemented)
-
-# === Unraid GraphQL API key ===
-# The role reads the key from the UNRAID_API_KEY env var. Export it before running:
-#   export UNRAID_API_KEY="$(bw get password <bw-item-uuid> --session "$BW_SESSION")"
-# Reference: the key lives in bw item 'Unraid - GraphQL API key' (ADMIN role).
-unraid_api_key_bw_item: "56ea6570-7420-4172-a600-b46e00397fde"
-
-# === NAS GraphQL endpoint (HTTPS; Unraid redirects HTTP->HTTPS). Self-signed LAN cert. ===
-unraid_graphql_url: "https://{{ ansible_host }}/graphql"
-
-# === Desired NTP (strict: single internal authority - ROADMAP 16.1) ===
-# OPNsense (10.0.10.1) is the only LAN NTP server; servers 2-4 cleared.
-unraid_ntp_server1: "10.0.10.1"
-unraid_ntp_server2: ""
-unraid_ntp_server3: ""
-unraid_ntp_server4: ""
+# === Lane toggles (writes default OFF) ===
+recapture_enabled: true   # read-only: refresh the committed flash snapshot
+drift_check_enabled: true # read-only: report live-vs-desired drift
+file_lane_enabled: false  # file-lane /boot/config writes (Phase 2; not implemented)
 
 # === DNS - DRIFT-DETECT ONLY (MANUAL/lockout lane; never written) ===
-# Decision (2026-06-18): NAS DNS stays DHCP-provided (Automatic). DNS authority for
-# owl.red is set at the Technitium DHCP scope, NOT pinned static on the NAS. The role
-# only flags if the NAS is accidentally switched to Static.
+# Decision (2026-06-18): NAS DNS stays DHCP-provided (Automatic); authority is the Technitium scope.
 unraid_dns_expected_mode: "Automatic"
 
 # === Re-capture target + artifact dir ===
