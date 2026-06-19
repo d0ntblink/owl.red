@@ -377,10 +377,10 @@ Do this last — docs written after everything is running are accurate.
 - `[ ]` `mail-server.md` — user creation, SMTP relay config for services
 
 ### 15.2 Decisions (create in `docs/decisions/`)
-- `[ ]` `014-opnsense-terraform.md` — why OPNsense config is managed by Terraform
-- `[ ]` `015-mail-server-choice.md` — Stalwart vs. Migadu decision
-- `[ ]` `016-storage-backend.md` — NFS vs. Longhorn vs. Ceph decision
-- `[ ]` `017-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
+- `[ ]` `016-opnsense-terraform.md` — why OPNsense config is managed by Terraform
+- `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
+- `[ ]` `018-storage-backend.md` — NFS vs. Longhorn vs. Ceph decision
+- `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
 
 ### 15.3 README
 - `[ ]` Update README workload table to reflect final state
@@ -406,8 +406,8 @@ additional source.)
 - `[ ]` Confirm OPNsense NTP service is enabled and serving on `10.0.10.1`
   (Services → Network Time → General); restrict to LAN VLANs
 - `[ ]` Point all hosts at `10.0.10.1` (manage via IaC where possible):
-  - `[ ]` Unraid — `ident.cfg` `NTP_SERVER1=10.0.10.1` (or GraphQL `updateSystemTime`;
-    see `docs/guides/unraid-iac-plan.md`)
+  - `[x]` Unraid — NTP set to `10.0.10.1` via the `unraid_settings` role (GraphQL
+    `updateSystemTime`); verified `NTP_SERVER1=10.0.10.1` (2–4 cleared) in `ident.cfg`. (2026-06-18)
   - `[ ]` Proxmox hosts — chrony/systemd-timesyncd → `10.0.10.1` via Ansible
   - `[ ]` Talos nodes — `machine.time.servers: [10.0.10.1]` in machine config, reapply
   - `[ ]` Technitium LXC — NixOS `services.timesyncd`/chrony → `10.0.10.1`
@@ -444,7 +444,7 @@ Functionally identical stratum-1; trades ~$45 for soldering/wiring + less tidy.
 > Adafruit Ultimate GPS HAT is a valid fallback but needs a solder jumper for PPS.
 
 ### Decision to record
-- `[ ]` `docs/decisions/018-time-sync-gnss.md` — internal NTP consolidation; GNSS
+- `[ ]` `docs/decisions/020-time-sync-gnss.md` — internal NTP consolidation; GNSS
   optional, justified by resilience not necessity; Pi 4 + PPS over PTP
 
 ---

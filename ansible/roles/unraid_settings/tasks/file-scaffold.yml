@@ -1,0 +1,13 @@
+---
+# File lane (Phase 2) - SCAFFOLD ONLY. No writes happen in this iteration; this
+# file keeps the orchestrator import valid and documents the lane. When built it
+# will manage allow-listed /boot/config keys (unraid_cfg_write_allowlist) via
+# lineinfile/template with reload handlers, gated by file_lane_enabled, and
+# guarded so it can never touch network.cfg / go / super.dat / secrets.
+
+- name: File lane is scaffolded but not implemented
+  ansible.builtin.debug:
+    msg: >-
+      file_lane_enabled=true but the file lane is a Phase 2 scaffold (no writes yet).
+      Planned write targets: {{ unraid_cfg_write_allowlist }}.
+  tags: [unraid_settings, file]

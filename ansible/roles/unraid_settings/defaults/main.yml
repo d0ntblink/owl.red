@@ -1,0 +1,76 @@
+---
+# unraid_settings - hybrid IaC for the Unraid NAS (nas.owl.red).
+# Ansible-layer secrets are injected via env vars (like scripts/ansible-run.sh does
+# for the Proxmox password), sourced from Bitwarden per ADR 003.
+
+# === Lane toggles (writes default OFF; enable per-run with -e) ===
+recapture_enabled: true        # read-only: refresh the committed flash snapshot
+drift_check_enabled: true      # read-only: report live-vs-desired drift
+api_enabled: false             # API-lane GraphQL writes (Phase 1: NTP)
+file_lane_enabled: false       # file-lane /boot/config writes (Phase 2; not implemented)
+
+# === Unraid GraphQL API key ===
+# The role reads the key from the UNRAID_API_KEY env var. Export it before running:
+#   export UNRAID_API_KEY="$(bw get password <bw-item-uuid> --session "$BW_SESSION")"
+# Reference: the key lives in bw item 'Unraid - GraphQL API key' (ADMIN role).
+unraid_api_key_bw_item: "56ea6570-7420-4172-a600-b46e00397fde"
+
+# === NAS GraphQL endpoint (HTTPS; Unraid redirects HTTP->HTTPS). Self-signed LAN cert. ===
+unraid_graphql_url: "https://{{ ansible_host }}/graphql"
+
+# === Desired NTP (strict: single internal authority - ROADMAP 16.1) ===
+# OPNsense (10.0.10.1) is the only LAN NTP server; servers 2-4 cleared.
+unraid_ntp_server1: "10.0.10.1"
+unraid_ntp_server2: ""
+unraid_ntp_server3: ""
+unraid_ntp_server4: ""
+
+# === DNS - DRIFT-DETECT ONLY (MANUAL/lockout lane; never written) ===
+# Decision (2026-06-18): NAS DNS stays DHCP-provided (Automatic). DNS authority for
+# owl.red is set at the Technitium DHCP scope, NOT pinned static on the NAS. The role
+# only flags if the NAS is accidentally switched to Static.
+unraid_dns_expected_mode: "Automatic"
+
+# === Re-capture target + artifact dir ===
+recapture_local_dir: "{{ playbook_dir }}/../../unraid/flash-config"
+unraid_artifact_dir: "{{ playbook_dir }}/../artifacts/unraid"
+
+# === Files fetched for recapture (read-only). network.cfg/go/super.dat/secrets ABSENT. ===
+unraid_cfg_fetch_list:
+  - disk.cfg
+  - docker.cfg
+  - domain.cfg
+  - editor.cfg
+  - flash.cfg
+  - ident.cfg
+  - network-extra.cfg
+  - network-rules.cfg
+  - share.cfg
+  - smb-extra.conf
+
+# === Files the FILE lane may ever WRITE (Phase 2). Never manual/secret files. ===
+unraid_cfg_write_allowlist:
+  - ident.cfg
+  - share.cfg
+  - smb-extra.conf
+  - docker.cfg
+
+# === Hard-excluded: must NEVER be in fetch_list or write_allowlist (preflight guard). ===
+unraid_cfg_hard_excluded:
+  - myservers.cfg
+  - network.cfg
+  - "go"
+  - super.dat
+  - passwd
+  - shadow
+  - smbpasswd
+  - secrets.tdb
+
+unraid_shares:
+  - appdata
+  - backups
+  - isos
+  - media
+  - sharefiles
+  - system
+  - vms

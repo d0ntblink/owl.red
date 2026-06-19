@@ -1,0 +1,7 @@
+---
+# Handlers for unraid_settings.
+# Phase 0/1 (drift, recapture, API NTP write) need no handlers - the GraphQL
+# mutation applies live. Phase 2 (file lane) will add reload handlers here
+# (emhttp settings reload, smbd restart), triggered by changed cfg files.
+# Reload commands must be confirmed on a live Unraid box before use.
+[]

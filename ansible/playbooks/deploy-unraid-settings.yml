@@ -1,0 +1,32 @@
+---
+# Configure Unraid NAS (nas.owl.red) settings via the hybrid unraid_settings role.
+#
+# Read-only by default (drift + recapture). Writes are feature-flagged OFF and must
+# be enabled explicitly with -e. See ansible/roles/unraid_settings/README.md and
+# docs/guides/unraid-iac.md.
+#
+# Prerequisites (controller): ansible installed; ~/.ssh/id_ed25519_owl_ansible present
+# (pulled from Bitwarden `bw`); BWS_ACCESS_TOKEN exported (only needed when api_enabled=true).
+#
+# Examples:
+#   # 1) read-only drift report
+#   ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/deploy-unraid-settings.yml --check --diff --tags preflight,drift
+#   # 2) re-capture the flash snapshot into the repo (no --check)
+#   ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/deploy-unraid-settings.yml --tags preflight,recapture
+#   # 3) verify GraphQL schema only (no write)
+#   ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/deploy-unraid-settings.yml --tags preflight,api,schema -e api_enabled=true --check
+#   # 4) first real write: set NTP -> 10.0.10.1
+#   ansible-playbook -i ansible/inventory/hosts.yml \
+#     ansible/playbooks/deploy-unraid-settings.yml --tags preflight,api -e api_enabled=true
+#
+# NAS uses SSH-key auth, so this playbook is run directly (NOT via scripts/ansible-run.sh,
+# which is the Proxmox password-injection wrapper).
+- name: Configure Unraid NAS settings (hybrid API + file IaC)
+  hosts: nas_hosts
+  gather_facts: false # Slackware may lack python; the role probes via raw and uses delegate_to for HTTP
+  become: false # ansible_user is already root
+  roles:
+    - unraid_settings

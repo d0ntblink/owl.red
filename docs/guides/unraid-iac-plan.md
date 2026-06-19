@@ -122,7 +122,7 @@ exists), **File** (manage allow-listed `/boot/config` keys via Ansible), **Manua
 | Docker service settings | folder image, eth1 net | **File** | `docker.cfg` |
 | Scheduler (parity/mover) | crons present | **File** | `dynamix/*.cron` (API can run, not schedule) |
 | Container definitions | 17 running | **File** | compose-in-git **or** keep dockerMan XML; future k8s migration |
-| Network (bridge/DNS) | eth0 DHCP | **Manual** ⚠️ | `network.cfg` — lockout risk |
+| Network (bridge/DNS) | eth0 DHCP | **Manual** ⚠️ | `network.cfg` — lockout risk; DNS kept **DHCP-provided** by decision (2026-06-18), authority at the Technitium scope |
 | Boot params / `go` | gpu/ipmi modprobe | **Manual** ⚠️ | flash `go`/syslinux |
 | Array / disks / pools | 11 disks STARTED | **Manual** ⛔ | data layer — never IaC |
 | License / users / WG / SSL | secrets | **Manual** ⛔ | secret-bearing |
@@ -138,21 +138,26 @@ Ordering favors safety: read/drift-detection before enforcement, low-blast-radiu
 areas before risky ones, and reuse of existing Ansible/Fleet rather than new tools.
 
 ### Phase 0 — Foundations (safe, do first)
-- [ ] Add an `nas_unraid` Ansible play target (host already in inventory; fix the
-      SSH key — recon used `~/.ssh/id_ed25519`, **not** the ansible key; decide which
-      key Unraid should trust and document it).
-- [ ] Create `ansible/roles/unraid_settings/` skeleton, **check/diff mode only**
-      (no writes), reading current `/boot/config` keys and reporting drift vs a
-      declared allow-list.
-- [ ] Add a secret-exclusion guard (refuse to read/store `*.key`, `super.dat`,
-      `passwd`/`shadow`/`smbpasswd`/`secrets.tdb`, `ssh/`, `wireguard/`, `ssl/`,
-      `rclone/`).
+- [x] Add an `nas_unraid` Ansible play target — `ansible/inventory/group_vars/nas_hosts.yml`
+      + `ansible/playbooks/deploy-unraid-settings.yml`. SSH key resolved: use
+      `id_ed25519_owl_ansible` (stored in Bitwarden `bw`, authorized on the NAS);
+      `scripts/owl-controller-bootstrap.sh` pulls it onto the controller.
+- [x] Create `ansible/roles/unraid_settings/` (check/diff-first): read-only `drift.yml`
+      reports live-vs-desired (NAS reads via `raw`); `recapture.yml` refreshes the flash
+      snapshot via `fetch` — enabled by installing `python3` on the NAS via `un-get`
+      (persists in `/boot/extra`). GraphQL/Bitwarden run on the controller.
+- [x] Secret-exclusion guard — `preflight.yml` asserts `unraid_cfg_hard_excluded`
+      (`myservers.cfg`, `network.cfg`, `go`, `super.dat`, `passwd`/`shadow`/`smbpasswd`/
+      `secrets.tdb`) never appears in any managed list; `*.key`/`ssh`/`wireguard`/`ssl`/
+      `rclone` are never fetched.
 
 ### Phase 1 — API lane (low risk, genuine write coverage)
-- [ ] Create an Unraid API key (least-privilege) via `unraid-api apikey --create`;
-      store in Bitwarden (per ADR 003), expose to automation like other secrets.
-- [ ] `unraid_api_settings` tasks (GraphQL): manage **Date/Time, SSH, server
-      identity, plugin set**; optionally **UPS** if/when a UPS is connected.
+- [x] Unraid API key (ADMIN) created via `unraid-api apikey --create --name 'ansible unraid settings'
+      --roles ADMIN --json`, stored in bw item `Unraid - GraphQL API key`. The role reads it from the
+      `UNRAID_API_KEY` env var (exported from bw at run time, like `ansible-run.sh` injects the PVE password).
+- [x] Date/Time (NTP → `10.0.10.1`, ROADMAP 16.1) applied via the API lane (`tasks/api.yml`,
+      read → compare → `updateSystemTime` → verify, over HTTPS). Verified + idempotent (2026-06-18).
+      SSH / server identity / plugin set deferred to a later pass.
 - [ ] Wire API **reads** (array/disk/docker/container health) into Homepage/alerting.
 
 ### Phase 2 — File lane: SMB/NFS/shares (the requested scope)
@@ -187,6 +192,9 @@ areas before risky ones, and reuse of existing Ansible/Fleet rather than new too
 1. **SSH key**: recon worked with `~/.ssh/id_ed25519` (personal), not
    `id_ed25519_owl_ansible`. Should the ansible key be authorized on Unraid, or will
    automation use the personal key? (Affects how `nas_unraid` is wired.)
+   **Resolved (2026-06-18):** use `id_ed25519_owl_ansible` — already authorized on the
+   NAS and stored in Bitwarden `bw`; `scripts/owl-controller-bootstrap.sh` pulls it onto
+   the controller. (Password auth also works but `sshpass` is not installed.)
 2. **Container strategy**: compose-in-git on Unraid vs. k8s migration per app — the
    GPU pin means Plex/*arr likely stay; confirm the split.
 3. **NFS**: currently disabled globally. Will the k8s cluster consume NFS from Unraid

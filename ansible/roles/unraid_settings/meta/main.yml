@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: unraid_settings
+  author: owl.red
+  description: >-
+    Hybrid IaC for the Unraid NAS (nas.owl.red): read-only drift detection and
+    flash-config recapture, plus an API lane (Unraid GraphQL) for safe settings
+    writes. network.cfg / boot go / array / secrets are never touched.
+  license: MIT
+  min_ansible_version: "2.15"
+dependencies: []

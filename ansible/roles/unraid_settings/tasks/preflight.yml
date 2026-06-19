@@ -1,0 +1,58 @@
+---
+# Preflight: probe the NAS (no Python needed), validate the environment, and
+# enforce the secret / manual-lane guards before any lane runs.
+
+- name: Probe NAS for a Python interpreter (raw; no Python needed)
+  ansible.builtin.raw: "command -v python3 || command -v python || echo NO_PYTHON"
+  register: _py_probe
+  changed_when: false
+  tags: [unraid_settings, preflight, python]
+
+- name: Record Python availability
+  ansible.builtin.set_fact:
+    nas_python_available: "{{ 'NO_PYTHON' not in _py_probe.stdout }}"
+  tags: [unraid_settings, preflight, python]
+
+- name: Note when NAS has no Python (recapture fetch will be skipped)
+  ansible.builtin.debug:
+    msg: >-
+      NAS has no Python: module steps (fetch recapture) are skipped. Drift and the
+      API lane still work (NAS reads use raw; GraphQL runs on the controller).
+  when: not (nas_python_available | bool)
+  tags: [unraid_settings, preflight, python]
+
+- name: Guard - secret/lockout files must never be in a managed list
+  ansible.builtin.assert:
+    that:
+      - (unraid_cfg_fetch_list | intersect(unraid_cfg_hard_excluded)) | length == 0
+      - (unraid_cfg_write_allowlist | intersect(unraid_cfg_hard_excluded)) | length == 0
+    fail_msg: >-
+      A secret/lockout file is present in a managed list:
+      {{ (unraid_cfg_fetch_list + unraid_cfg_write_allowlist) | intersect(unraid_cfg_hard_excluded) }}
+    success_msg: "Guard OK - network.cfg / go / super.dat / secrets are not in any managed list."
+  delegate_to: localhost
+  run_once: true
+  tags: [unraid_settings, preflight, guard]
+
+- name: Assert UNRAID_API_KEY is set (API lane)
+  ansible.builtin.assert:
+    that: lookup('env', 'UNRAID_API_KEY') | length > 0
+    fail_msg: "UNRAID_API_KEY must be exported when api_enabled=true (export from bw)."
+  delegate_to: localhost
+  run_once: true
+  when: api_enabled | bool
+  tags: [unraid_settings, preflight, api]
+
+- name: Probe unraid-api process (raw)
+  ansible.builtin.raw: "pgrep -f unraid-api >/dev/null 2>&1 && echo API_UP || echo API_DOWN"
+  register: _api_probe
+  changed_when: false
+  when: api_enabled | bool
+  tags: [unraid_settings, preflight, api]
+
+- name: Assert unraid-api is running (API lane)
+  ansible.builtin.assert:
+    that: "'API_UP' in _api_probe.stdout"
+    fail_msg: "unraid-api is not running on the NAS; cannot use the API lane."
+  when: api_enabled | bool
+  tags: [unraid_settings, preflight, api]

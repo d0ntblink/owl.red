@@ -54,6 +54,7 @@
 
 | IP / Range | Name | Backing Service | Notes |
 |------------|------|-----------------|-------|
+| `10.0.10.20` | k8s control-plane VIP | Talos `cp1`–`cp3` shared VIP | `kube-apiserver` endpoint `https://10.0.10.20:6443`; floating VIP managed by Talos, not a DHCP host |
 | `10.0.10.30` | `ns1.owl.red` | Technitium LXC on edge.pve | DNS service endpoint |
 | `10.0.10.201` | `rancher.owl.red`, `dns.owl.red`, `home.owl.red`, `traefik.owl.red` | Traefik + MetalLB | Shared internal ingress VIP for Rancher, Technitium web, Homepage, and Traefik |
 | `10.0.10.200-250` | MetalLB VIP pool | Kubernetes LoadBalancer pool | Active for ingress and future services |

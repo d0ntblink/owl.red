@@ -1,0 +1,30 @@
+---
+# unraid_settings orchestrator. Tags let you run lanes independently:
+#   --tags preflight,drift      (read-only drift report)
+#   --tags preflight,recapture  (refresh snapshot in the repo)
+#   --tags preflight,api        (API-lane writes; also needs -e api_enabled=true)
+# Facts set in preflight (python availability, api-up) persist to later imports.
+
+- name: Preflight checks and guards
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [unraid_settings, preflight]
+
+- name: Re-capture flash config snapshot (read-only on NAS)
+  ansible.builtin.import_tasks: recapture.yml
+  when: recapture_enabled | bool
+  tags: [unraid_settings, recapture]
+
+- name: Detect configuration drift (read-only)
+  ansible.builtin.import_tasks: drift.yml
+  when: drift_check_enabled | bool
+  tags: [unraid_settings, drift]
+
+- name: API lane - Unraid GraphQL writes
+  ansible.builtin.import_tasks: api.yml
+  when: api_enabled | bool
+  tags: [unraid_settings, api]
+
+- name: File lane - boot config writes (Phase 2 scaffold)
+  ansible.builtin.import_tasks: file-scaffold.yml
+  when: file_lane_enabled | bool
+  tags: [unraid_settings, file]

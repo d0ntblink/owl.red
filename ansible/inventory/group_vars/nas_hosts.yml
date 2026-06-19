@@ -1,0 +1,15 @@
+---
+# Group vars for the Unraid NAS (nas.owl.red, 10.0.10.5).
+#
+# Unraid is Slackware-based and does not guarantee /usr/bin/python3, so override
+# the global ansible.cfg interpreter and let Ansible probe at connect time. The
+# unraid_settings role keeps NAS-side reads on the `raw` connection and runs all
+# GraphQL/Bitwarden work on the controller (delegate_to: localhost), so most of
+# the role works even if the NAS has no Python; `fetch`-based recapture is the
+# only step that requires it (gated on a preflight probe).
+ansible_python_interpreter: auto_silent
+
+# SSH: key auth with id_ed25519_owl_ansible (already authorized on the NAS;
+# private half lives in Bitwarden `bw` and is placed in ~/.ssh on the controller
+# by scripts/owl-controller-bootstrap.sh). ansible.cfg sets private_key_file.
+# No ProxyJump — the controller has a direct route to 10.0.0.0/16.

@@ -4,6 +4,8 @@
 
 Selected and implemented as part of the Phase 3 Kubernetes baseline.
 
+> **Update:** The Git-managed DNS model below remains in force, but the *reconciliation mechanism* was superseded by [ADR 013](013-technitium-single-resolver-all-vlans.md). Technitium now runs as an LXC on `edge.pve`, and the zone is imported by a **systemd timer inside the LXC** (`technitium-sync.service`, every 15 min) rather than a Fleet-managed Kubernetes CronJob. References to a "CronJob" below describe the original design.
+
 ## Quick Summary
 
 | Area | Decision |
@@ -11,7 +13,7 @@ Selected and implemented as part of the Phase 3 Kubernetes baseline.
 | Authoritative DNS | Technitium at `10.0.10.30` |
 | Desired-state source | Git-managed RFC 1035 zone file |
 | Kubernetes reconciler | Rancher Fleet |
-| Drift correction | Fleet-managed CronJob imports the zone through the Technitium API |
+| Drift correction | Originally a Fleet CronJob; now a systemd timer in the Technitium LXC (see ADR 013) imports the zone through the Technitium API |
 | Manual UI edits | Treated as drift and overwritten on the next sync |
 
 ## Context

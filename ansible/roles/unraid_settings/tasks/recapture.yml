@@ -1,0 +1,55 @@
+---
+# Re-capture allow-listed /boot/config files into the committed snapshot
+# (unraid/flash-config/). Read-only on the NAS. Needs Python on the NAS for the
+# fetch module; skipped with a note if absent. nut.cfg is redacted before commit.
+
+- name: Recapture skipped (NAS has no Python)
+  ansible.builtin.debug:
+    msg: "Recapture skipped: NAS has no Python (fetch unavailable). Install python3 on Unraid to enable."
+  when: not (nas_python_available | bool)
+  tags: [unraid_settings, recapture]
+
+- name: Re-capture allow-listed config files
+  when: nas_python_available | bool
+  tags: [unraid_settings, recapture]
+  block:
+    - name: Ensure local snapshot subdirs exist (controller)
+      ansible.builtin.file:
+        path: "{{ recapture_local_dir }}/{{ item }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      loop: [".", "shares", "plugins/nut"]
+
+    - name: Fetch top-level config files (read-only on NAS)
+      ansible.builtin.fetch:
+        src: "/boot/config/{{ item }}"
+        dest: "{{ recapture_local_dir }}/{{ item }}"
+        flat: true
+        fail_on_missing: false
+      loop: "{{ unraid_cfg_fetch_list }}"
+
+    - name: Fetch per-share config files
+      ansible.builtin.fetch:
+        src: "/boot/config/shares/{{ item }}.cfg"
+        dest: "{{ recapture_local_dir }}/shares/{{ item }}.cfg"
+        flat: true
+        fail_on_missing: false
+      loop: "{{ unraid_shares }}"
+
+    - name: Read live nut.cfg for redaction (if present)
+      ansible.builtin.slurp:
+        src: /boot/config/plugins/nut/nut.cfg
+      register: _nut_raw
+      failed_when: false
+
+    - name: Write redacted nut.cfg into the snapshot (controller)
+      ansible.builtin.copy:
+        dest: "{{ recapture_local_dir }}/plugins/nut/nut.cfg"
+        mode: "0644"
+        content: "{{ (_nut_raw.content | b64decode) | regex_replace('MONPASS=\"[^\"]*\"', 'MONPASS=\"<REDACTED-SET-VIA-BITWARDEN>\"') | regex_replace('SLAVEPASS=\"[^\"]*\"', 'SLAVEPASS=\"<REDACTED-SET-VIA-BITWARDEN>\"') }}"
+      delegate_to: localhost
+      become: false
+      when: _nut_raw.content is defined

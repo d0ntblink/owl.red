@@ -25,7 +25,8 @@ terraform {
 }
 
 # Credentials via environment variables (same cluster as proxmox/):
-#   PROXMOX_VE_ENDPOINT   = https://10.0.10.11:8006/
-#   PROXMOX_VE_API_TOKEN  = root@pam!terraform=<secret>
+#   PROXMOX_VE_ENDPOINT   = https://10.0.10.3:8006/   (edge.pve)
+#   PROXMOX_VE_USERNAME   = root@pam
+#   PROXMOX_VE_PASSWORD   = <root@pam password, injected by scripts/terraform-run.sh from Bitwarden SM>
 #   PROXMOX_VE_INSECURE   = true
 provider "proxmox" {}
