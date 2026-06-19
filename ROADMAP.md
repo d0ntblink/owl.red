@@ -303,15 +303,15 @@ Known workloads — add `.tf` file per workload, import into state:
 
 | Workload | Node | VMID | Status |
 |----------|------|------|--------|
-| `edge.owl.red` (OPNsense VM) | edge.pve | 100 | `[ ]` needs `.tf` |
-| `nas.owl.red` (Unraid VM) | storage.pve | 101 | `[~]` `nas.tf` exists |
-| Technitium LXC | edge.pve | 200 | `[~]` `technitium-lxc.tf` exists |
-| PDM LXC | cp1.pve | 231 | `[ ]` needs `.tf` |
+| `edge.owl.red` (OPNsense VM) | edge.pve | 100 | `[~]` scaffold `terraform/proxmox/opnsense-vm/` — import pending |
+| `nas.owl.red` (Unraid VM) | storage.pve | 101 | `[x]` `terraform/proxmox/nas/nas.tf` |
+| Technitium LXC | edge.pve | 200 | `[x]` `terraform/proxmox/technitium/technitium-lxc.tf` |
+| PDM LXC | cp1.pve | 231 | `[~]` scaffold `terraform/proxmox/pdm/` — import pending |
 | PBS VM | storage.pve | TBD | `[ ]` not yet provisioned |
-| Talos cp1.k8s VM | cp1.pve | 601 | `[ ]` needs `.tf` |
-| Talos cp2.k8s VM | cp2.pve | 602 | `[ ]` needs `.tf` |
-| Talos cp3.k8s VM | cp3.pve | 603 | `[ ]` needs `.tf` |
-| Talos worker1.k8s VM | worker1.pve | 604 | `[ ]` needs `.tf` |
+| Talos cp1.k8s VM | cp1.pve | 601 | `[x]` `terraform/proxmox/technitium/main.tf` (`control_planes`) |
+| Talos cp2.k8s VM | cp2.pve | 602 | `[x]` `main.tf` (`control_planes`) |
+| Talos cp3.k8s VM | cp3.pve | 603 | `[x]` `main.tf` (`control_planes`) |
+| Talos worker1.k8s VM | worker1.pve | 604 | `[x]` `main.tf` (`workers`) |
 
 - `[ ]` `terraform -chdir=terraform/proxmox/<workload> import <resource> <vmid>` for each
 - `[ ]` Verify `terraform plan` shows no diff after import
@@ -368,7 +368,7 @@ Do this last — docs written after everything is running are accurate.
 ### 15.1 Guides (create in `docs/guides/`)
 - `[ ]` `opnsense-terraform.md` — bootstrap API user, run terraform, import workflow
 - `[ ]` `talos-iac.md` — full Talos VM → config → bootstrap → upgrade sequence
-- `[ ]` `proxmox-terraform.md` — how to add a new VM/LXC via Terraform
+- `[x]` `proxmox-terraform.md` — cluster IaC coverage audit, passthrough commands, add-a-node (incl. Talos) — done 2026-06-18
 - `[ ]` `fleet-gitops.md` — how Fleet watches this repo, how to add a new app
 - `[ ]` `vlan-setup.md` — VLAN architecture, how to add a new VLAN end-to-end
 - `[ ]` `storage-setup.md` — NFS share → CSI driver → StorageClass → PVC workflow
@@ -381,6 +381,7 @@ Do this last — docs written after everything is running are accurate.
 - `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
 - `[ ]` `018-storage-backend.md` — NFS vs. Longhorn vs. Ceph decision
 - `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
+- `[x]` `021-unraid-hybrid-iac.md` — hybrid API/File/Manual IaC for the Unraid NAS (done 2026-06-18)
 
 ### 15.3 README
 - `[ ]` Update README workload table to reflect final state
