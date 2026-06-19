@@ -16,40 +16,40 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ## 0. OPNsense — Terraform IaC
 
-OPNsense config is currently all manual. Everything in OPNsense must be reproducible from code before VLAN work begins — otherwise VLAN firewall rules, aliases, and DNS overrides will drift and be unrecoverable after a reinstall.
+OPNsense config is brought under IaC before VLAN work, so rules/aliases/overrides are reproducible and survive a reinstall. **Decision: Terraform-primary + a documented manual floor** — see [ADR 016](docs/decisions/016-opnsense-terraform.md). Run via `scripts/opnsense-terraform-run.sh <plan|apply>`.
 
-Scaffold exists at `terraform/opnsense/`. Provider: `browningluke/opnsense` (~> 0.11).
+**Survey finding (2026-06-19):** a read-only survey via the dedicated `terraform` API user found the router **near-default** — WAN `igc0`, LAN `ixl1` on a single **flat `10.0.10.1/16`** (no VLAN interfaces yet), and **0** custom aliases / automation filter rules / NAT / Unbound overrides (only built-in defaults + 1 auto-generated Unbound forward). So there is **nothing custom to import**; firewall aliases/rules get **created during the VLAN transition (§1)**, authored as Terraform — not imported. Forward-looking `/24` drafts are parked in `terraform/opnsense/planned/`.
 
-> Scope note: this phase is the OPNsense **config** (firewall/aliases/DNS overrides) via `terraform/opnsense/`.
-> The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is a separate concern, scaffolded under
-> `terraform/proxmox/opnsense-vm/` (§13). The `aliases.tf` + `dns.tf` here are written but the module has
-> never been `init`-ed; firewall rules (`firewall_rules.tf`) don't exist yet — that's the bulk of 0.4.
+**Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0) owns firewall rules, NAT, aliases, VLAN/VIP, Unbound DNS, Kea DHCP, VPN, certs, routes. A **manual floor** stays in the WebUI (no safe API in any tool): base interface assignment + IP/WAN, gateways, system general settings incl. **NTP (§16.1)**, captive portal, traffic shaper, IDS/IPS.
+
+> Scope note: this phase is the OPNsense **config** via `terraform/opnsense/`. The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is separate, scaffolded under `terraform/proxmox/opnsense-vm/` (§13). `opnsense_firewall_filter` rules live under Firewall → **Automation** → Filter (separate from classic per-interface rules) — see the module README for the safe "delete classic rules" procedure.
 
 ### 0.1 Bootstrap API Access
-- `[ ]` Create dedicated API user in OPNsense: System → Access → Users → Add
-- `[ ]` Assign privileges: Firewall, DHCP, Interfaces, Unbound DNS, VPN (as needed)
-- `[ ]` Generate API key+secret; store in Bitwarden SM
-- `[ ]` Add `OPNSENSE_API_KEY` / `OPNSENSE_API_SECRET` / `OPNSENSE_ENDPOINT` handling to `scripts/terraform-run.sh`
-- `[ ]` `terraform -chdir=terraform/opnsense init` — verify provider downloads
+- `[x]` Dedicated least-privilege API user `terraform` created in OPNsense (replaces the root key)
+- `[x]` API key+secret stored in Bitwarden `OPNsense — terraform` item NOTES
+- `[x]` `scripts/opnsense-terraform-run.sh` injects key/secret as `TF_VAR_opnsense_api_*` (no secrets in code)
+- `[x]` `terraform -chdir=terraform/opnsense init` verified; provider `browningluke/opnsense` v0.24.0 (lock committed)
+- `[!]` **Revoke the old root API key in the OPNsense WebUI** — removed from bw, but still valid on the router until revoked (System → Access → Users → root → API keys)
 
 ### 0.2 Import Existing Config
-- `[ ]` Run `terraform plan` and identify all resources that already exist in OPNsense
-- `[ ]` Import existing aliases, firewall rules, and Unbound overrides into state
-- `[ ]` Verify `terraform plan` shows no diff after import (no unintended changes)
+- `[x]` Surveyed live config (read-only): router is near-default — **nothing custom to import**
+- `[x]` 0 custom aliases / filter rules / NAT / overrides; the 1 auto-generated Unbound forward (Dnsmasq) is left unmanaged
+- `[x]` Active module declares no resources; `plan` shows no changes (clean baseline)
 
-### 0.3 Codify All Current Devices / DHCP Static Mappings
-- `[ ]` Add all known devices from `gitops/technitium/dhcp-reservations.json` as OPNsense firewall alias entries and/or DHCP static leases if OPNsense serves DHCP for any scope
-- `[ ]` VLAN 10 reserved hosts → aliases in `terraform/opnsense/aliases.tf`
-- `[ ]` IoT device aliases (VLAN 40/50) in `terraform/opnsense/aliases.tf`
+### 0.3 Codify Devices / Aliases (created during the VLAN transition §1 — not imported)
+> Aliases reference per-VLAN subnets that don't exist on the firewall yet; drafts are staged in `terraform/opnsense/planned/aliases.tf` with `/24` *target* masks. Activate per the §1.5 cutover.
+- `[ ]` VLAN 10 reserved hosts → aliases (from `gitops/technitium/dhcp-reservations.json`)
+- `[ ]` IoT device aliases (VLAN 40/50)
 
-### 0.4 Codify Firewall Rules
-- `[ ]` Add all inter-VLAN policy rules to `terraform/opnsense/firewall_rules.tf`:
+### 0.4 Codify Firewall Rules (created during the VLAN transition §1)
+> Authored as `opnsense_firewall_filter` (Automation lane) in a new `terraform/opnsense/firewall_rules.tf` once the VLANs exist. They won't appear on the classic per-interface Rules pages — see the module README.
+- `[ ]` Inter-VLAN policy rules:
   - VLAN 10 admin → all VLANs allowed
   - VLAN 20 private → internet + VLAN 10 services, no lateral
   - VLAN 30 guest → internet only via captive portal, blocked from all VLANs
   - VLAN 40 IoT → LAN only, no internet, no lateral
   - VLAN 50 IoT → internet, no lateral movement
-- `[ ]` `terraform apply` — verify rules appear in OPNsense firewall UI
+- `[ ]` `terraform apply` — review the plan first; verify rules under Firewall → Automation → Filter
 - `[ ]` Test each VLAN segment for correct connectivity
 
 ### 0.5 Ongoing
@@ -389,7 +389,7 @@ Do this last — docs written after everything is running are accurate.
 - `[ ]` `mail-server.md` — user creation, SMTP relay config for services
 
 ### 15.2 Decisions (create in `docs/decisions/`)
-- `[ ]` `016-opnsense-terraform.md` — why OPNsense config is managed by Terraform
+- `[x]` `016-opnsense-terraform.md` — OPNsense config: Terraform-primary + manual floor (done 2026-06-19)
 - `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
 - `[x]` `018-storage-backend.md` — NFS-from-NAS now, Longhorn later (created 2026-06-18)
 - `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
