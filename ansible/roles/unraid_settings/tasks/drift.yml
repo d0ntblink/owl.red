@@ -1,14 +1,7 @@
 ---
-# Drift detection (read-only). NAS reads use raw (no Python needed). Reports the
-# effective resolver + NTP vs desired, and the network.cfg DNS mode. Writes a JSON
-# artifact (gitignored). DNS is intentionally DHCP-provided (decision 2026-06-18);
-# the role only flags if DNS is accidentally pinned Static.
-
-- name: Read NTP_SERVER1 from live ident.cfg (raw)
-  ansible.builtin.raw: "awk -F'\"' '/^NTP_SERVER1=/{print $2}' /boot/config/ident.cfg | head -n1"
-  register: _live_ntp_raw
-  changed_when: false
-  tags: [unraid_settings, drift]
+# Drift detection (read-only). NAS reads use raw (no Python needed). NTP is owned by
+# terraform/unraid/ now, so it is NOT checked here. Reports the network.cfg DNS mode
+# (expected Automatic / DHCP-provided) and writes a JSON artifact (gitignored).
 
 - name: Read DNS mode + static DNS1 from live network.cfg (raw; MANUAL lane)
   ansible.builtin.raw: "awk -F'\"' '/^DHCP_KEEPRESOLV=/{k=$2} /^DNS_SERVER1=/{d=$2} END{print k\"|\"d}' /boot/config/network.cfg"
@@ -24,7 +17,6 @@
 
 - name: Normalize drift facts
   ansible.builtin.set_fact:
-    _live_ntp1: "{{ _live_ntp_raw.stdout | trim }}"
     _dns_keepresolv: "{{ (_live_dnscfg_raw.stdout | trim).split('|')[0] }}"
     _dns_static1: "{{ ((_live_dnscfg_raw.stdout | trim).split('|') + ['', ''])[1] }}"
     _live_resolvers: "{{ _live_resolv_raw.stdout | trim | split() }}"
@@ -33,13 +25,6 @@
 - name: Derive DNS mode
   ansible.builtin.set_fact:
     _dns_mode: "{{ 'Static' if _dns_keepresolv == 'yes' else 'Automatic' }}"
-  tags: [unraid_settings, drift]
-
-- name: Report NTP drift (API lane)
-  ansible.builtin.debug:
-    msg: >-
-      DRIFT [NTP, API lane]: live='{{ _live_ntp1 }}' desired='{{ unraid_ntp_server1 }}'
-      {{ 'OK (in sync)' if _live_ntp1 == unraid_ntp_server1 else '-> set when api_enabled=true' }}
   tags: [unraid_settings, drift]
 
 - name: Report DNS state (MANUAL lane - informational; DNS is DHCP-provided by design)
@@ -68,11 +53,7 @@
   vars:
     _drift:
       host: "{{ inventory_hostname }}"
-      ntp:
-        live: "{{ _live_ntp1 }}"
-        desired: "{{ unraid_ntp_server1 }}"
-        in_sync: "{{ _live_ntp1 == unraid_ntp_server1 }}"
-        lane: api
+      note: "NTP and other API settings are managed by terraform/unraid/ (Terraform-GraphQL)."
       dns:
         mode: "{{ _dns_mode }}"
         expected_mode: "{{ unraid_dns_expected_mode }}"

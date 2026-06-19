@@ -152,12 +152,14 @@ areas before risky ones, and reuse of existing Ansible/Fleet rather than new too
       `rclone` are never fetched.
 
 ### Phase 1 — API lane (low risk, genuine write coverage)
+> **Superseded (2026-06-18, ADR 021 revision):** the API lane is now **Terraform-GraphQL** in
+> `terraform/unraid/` (provider `sullivtr/graphql`), not Ansible. Every safe GraphQL setting (NTP, SSH,
+> identity, Connect, UPS) is declared there; run `scripts/unraid-terraform-run.sh plan/apply`. Ansible keeps
+> the file/manual + drift/recapture lanes. The items below are historical.
 - [x] Unraid API key (ADMIN) created via `unraid-api apikey --create --name 'ansible unraid settings'
-      --roles ADMIN --json`, stored in bw item `Unraid - GraphQL API key`. The role reads it from the
-      `UNRAID_API_KEY` env var (exported from bw at run time, like `ansible-run.sh` injects the PVE password).
-- [x] Date/Time (NTP → `10.0.10.1`, ROADMAP 16.1) applied via the API lane (`tasks/api.yml`,
-      read → compare → `updateSystemTime` → verify, over HTTPS). Verified + idempotent (2026-06-18).
-      SSH / server identity / plugin set deferred to a later pass.
+      --roles ADMIN --json`, stored in bw item `Unraid - GraphQL API key` (now used as `TF_VAR_unraid_api_key`).
+- [x] Date/Time (NTP → `10.0.10.1`, ROADMAP 16.1) — now `terraform/unraid/system-time.tf`. Verified live.
+      SSH / identity / Connect also codified in `terraform/unraid/`.
 - [ ] Wire API **reads** (array/disk/docker/container health) into Homepage/alerting.
 
 ### Phase 2 — File lane: SMB/NFS/shares (the requested scope)

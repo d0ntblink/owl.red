@@ -2,8 +2,15 @@
 
 ## Status
 
-Accepted and partially implemented (2026-06-18). The API lane is live: NTP is managed
-end-to-end via the `unraid_settings` Ansible role (`ansible/roles/unraid_settings/`).
+Accepted and implemented (2026-06-18).
+
+> **Revision (2026-06-18):** the **API lane moved from Ansible to Terraform-GraphQL** at the user's
+> direction. The declarative source of truth for every safe GraphQL-settable Unraid setting is now
+> `terraform/unraid/` (provider `sullivtr/graphql`), applied via `scripts/unraid-terraform-run.sh`. The
+> Ansible `unraid_settings` role now owns only the **file** and **manual/drift** lanes. The three-lane model
+> below still holds; only the API-lane *engine* changed (Terraform, not Ansible). **Drive protection:**
+> destructive mutations (`array`/`parityCheck`/`vm`/`docker*`/…) are excluded from Terraform. See
+> [`docs/guides/unraid-making-changes.md`](../guides/unraid-making-changes.md) and `terraform/unraid/README.md`.
 
 ## Context
 

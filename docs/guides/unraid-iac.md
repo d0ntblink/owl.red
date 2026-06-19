@@ -5,7 +5,7 @@ Day-2 companion to [`unraid-iac-plan.md`](unraid-iac-plan.md) (the "what/why") f
 
 ## Lanes
 
-- **API** — Unraid GraphQL, run from the controller against `http://10.0.10.5/graphql` with an `x-api-key` header. Used for settings with a write mutation (Phase 1: NTP).
+- **API** — **Terraform-GraphQL** (`terraform/unraid/`, provider `sullivtr/graphql`) against `https://nas.owl.red/graphql`. Declarative source of truth for NTP/SSH/identity/Connect/UPS; run via `scripts/unraid-terraform-run.sh plan/apply`. (Was Ansible; moved to Terraform — ADR 021 revision.)
 - **File** — allow-listed `/boot/config` keys managed by Ansible (Phase 2; scaffolded, writes off).
 - **Manual** — `network.cfg`, boot `go`, array/`super.dat`, secrets: never automated; drift-reported only.
 
@@ -21,8 +21,9 @@ Create the Unraid API key and store it in `bw` (Password Manager, per ADR 003):
 
 ```bash
 ssh root@10.0.10.5 "unraid-api apikey --create --name 'ansible unraid settings' --roles ADMIN --json"
-# store the returned key in a bw login item, then export it for API-lane runs:
-export UNRAID_API_KEY="$(bw get password <bw-item-uuid> --session "$BW_SESSION")"
+# store the returned key in a bw login item, then export it for Terraform (the API lane):
+export TF_VAR_unraid_api_key="$(bw get password <bw-item-uuid> --session "$BW_SESSION")"
+# (scripts/unraid-terraform-run.sh does this for you)
 ```
 
 ## Daily operations
@@ -31,7 +32,7 @@ export UNRAID_API_KEY="$(bw get password <bw-item-uuid> --session "$BW_SESSION")
 |------|---------|
 | Drift report (read-only) | `ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy-unraid-settings.yml --check --diff --tags preflight,drift` |
 | Refresh flash snapshot | `… --tags preflight,recapture` then `git diff unraid/flash-config/` |
-| Set NTP (API lane) | `export UNRAID_API_KEY=…` then `… --tags preflight,api -e api_enabled=true` (reads → compares → writes only on drift → verifies) |
+| Set NTP / SSH / identity (API lane) | edit `terraform/unraid/` vars → `scripts/unraid-terraform-run.sh plan` then `apply` |
 
 Always run `pre-commit run --files $(git diff --name-only unraid/flash-config/)` before committing a recapture.
 
