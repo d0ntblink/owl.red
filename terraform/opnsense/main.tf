@@ -37,8 +37,10 @@ terraform {
 # Run via scripts/terraform-run.sh once opnsense env vars are added to it,
 # or source env.secret and run terraform directly for local dev.
 provider "opnsense" {
-  uri              = var.opnsense_endpoint
-  api_key          = var.opnsense_api_key
-  api_secret       = var.opnsense_api_secret
-  allow_unverified = true
+  uri        = var.opnsense_endpoint
+  api_key    = var.opnsense_api_key
+  api_secret = var.opnsense_api_secret
+  # Self-signed OPNsense cert on the LAN: skip TLS verification (provider arg name
+  # is allow_insecure in browningluke/opnsense ~> 0.11).
+  allow_insecure = true
 }
