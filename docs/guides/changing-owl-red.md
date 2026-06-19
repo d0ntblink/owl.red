@@ -20,6 +20,7 @@ Workflow everywhere: edit the source of truth → run the apply for that lane �
 | Add a **new bootstrap script** (one-off host/LXC provisioning) | **scripts/** + Terraform for the resource | write `scripts/<name>.sh`; then codify the created resource in `terraform/proxmox/<x>/` (don't leave it script-only) |
 | Change **NTP** for a host | per host | **Unraid** → Terraform (`terraform/unraid`); **Proxmox** → Ansible (chrony); **Talos** → machine config; the LAN NTP authority is OPNsense `10.0.10.1` (ROADMAP 16.1) |
 | Change a **host's IP** | depends | reserved IP → Technitium DHCP (above); static-in-OS → that host's lane (Talos config / Ansible / Unraid manual `network.cfg`) |
+| Mount / change **shared storage** (NFS PVCs, Proxmox shared disks) | per consumer | NAS is the store ([ADR 018](../decisions/018-storage-backend.md)). Export config → Ansible file-lane; k8s CSI → Fleet; Proxmox `pvesm` → Ansible. Full plan: [shared-storage.md](shared-storage.md) |
 
 **Stay Manual (never IaC):** array/disk/pool layout & parity, local users, license, secret material (keys/certs/WG).
 **Always push:** a change has no effect until it's committed and pushed to `origin/main` (Fleet/Technitium reconcile from git).

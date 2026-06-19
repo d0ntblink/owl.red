@@ -126,20 +126,19 @@ Currently some hosts and DHCP scopes reference `255.255.0.0` (`/16`) instead of 
 
 ---
 
-## 4. Shared Storage for Cluster Workloads
+## 4. Shared Storage for HA workloads (NAS = central store)
 
-Prerequisite for any stateful apps on k8s, including Home Assistant.
+The NAS is the central shared store for **all HA/stateful things** — k8s PVCs (Home Assistant, *arr config),
+Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and personal files. **Plan + design:
+[`docs/guides/shared-storage.md`](docs/guides/shared-storage.md); decision: [ADR 018](docs/decisions/018-storage-backend.md).**
 
-- `[ ]` Decide storage backend:
-  - Option A: NFS export from `nas.owl.red` (Unraid) — quick, no extra infra
-  - Option B: Ceph on cluster nodes — resilient, complex with only 4 small nodes
-  - Option C: Longhorn on cluster — simpler than Ceph, fits current node sizes
-  - **Likely: NFS from nas short-term, Longhorn medium-term after Unraid→VM migration**
-- `[ ]` Create NFS share on `nas.owl.red` for cluster PVCs (`/mnt/user/k8s-pvcs`)
-- `[ ]` Deploy NFS CSI driver on Talos cluster (`democratic-csi` or `nfs-subdir-external-provisioner`)
-- `[ ]` Create `StorageClass` pointing to NAS NFS export
-- `[ ]` Smoke-test with a PVC — confirm pod can write and data persists across pod reschedule
-- `[ ]` Document storage class name and NFS path in README
+- `[x]` Decide storage backend → **NFS from `nas.owl.red`, reusing existing shares** (NFS for HA/infra: k8s/Proxmox/LXC;
+  SMB for personal). Longhorn medium-term (post Unraid→VM migration) to remove the NAS SPOF. (Ceph rejected: too heavy for 4 small nodes.)
+- `[ ]` Lock NFS exports (`shareSecurityNFS=private` + `shareHostListNFS`=VLAN 10; fix `media`'s `public`) — Ansible file-lane (`--check` first)
+- `[ ]` Enable NFS globally on Unraid (`shareNFSEnabled=yes`) — array untouched
+- `[ ]` k8s: deploy NFS CSI (`nfs-subdir-external-provisioner`/`democratic-csi`) via Fleet → `StorageClass` → smoke-test a PVC (write + survive reschedule)
+- `[ ]` Proxmox: `pvesm add nfs` (images/rootdir/iso/backup) on each node → verify CT HA failover (unblocks PDM HA, §11/§13)
+- `[ ]` Document StorageClass name, NFS paths, and per-share export rules back into the guide + README
 
 ---
 
