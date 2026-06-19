@@ -4,6 +4,14 @@ Ordered list of outstanding work. Each item is either a prerequisite for somethi
 
 Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
+**Current focus: Phase 0 — OPNsense Terraform IaC** (codify the firewall before VLAN work, so rules/aliases/overrides are reproducible and survive a reinstall).
+
+**Recently completed (2026-06-18; driven by the "IaC-everything" principle, not phase-numbered):**
+- **Unraid (`nas.owl.red`) settings IaC** — API-settable settings are declarative in `terraform/unraid/` (Terraform-GraphQL); flash-file + drift/recapture via the `unraid_settings` Ansible role; array/users/secrets stay manual. NTP→`10.0.10.1` applied + verified (closes §16.1 for the NAS). ADR 021; guides `unraid-making-changes.md`, `unraid-iac.md`.
+- **Proxmox cluster Terraform coverage** — audited all 8 guests; scaffolded the 2 gaps (OPNsense VM `100`, PDM LXC `231`); Talos VMs confirmed already in `main.tf`. See §13 and `docs/guides/proxmox-terraform.md`.
+- **Shared-storage decision** — NAS NFS for all HA workloads (reuse shares; NFS for k8s/Proxmox/LXC, SMB personal). See §4, ADR 018, `docs/guides/shared-storage.md`.
+- **Repo-wide change-method matrix** — `docs/guides/changing-owl-red.md` ("I want to do X → which tool"). Plus README/discrepancy cleanup.
+
 ---
 
 ## 0. OPNsense — Terraform IaC
@@ -11,6 +19,11 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 OPNsense config is currently all manual. Everything in OPNsense must be reproducible from code before VLAN work begins — otherwise VLAN firewall rules, aliases, and DNS overrides will drift and be unrecoverable after a reinstall.
 
 Scaffold exists at `terraform/opnsense/`. Provider: `browningluke/opnsense` (~> 0.11).
+
+> Scope note: this phase is the OPNsense **config** (firewall/aliases/DNS overrides) via `terraform/opnsense/`.
+> The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is a separate concern, scaffolded under
+> `terraform/proxmox/opnsense-vm/` (§13). The `aliases.tf` + `dns.tf` here are written but the module has
+> never been `init`-ed; firewall rules (`firewall_rules.tf`) don't exist yet — that's the bulk of 0.4.
 
 ### 0.1 Bootstrap API Access
 - `[ ]` Create dedicated API user in OPNsense: System → Access → Users → Add
@@ -378,7 +391,7 @@ Do this last — docs written after everything is running are accurate.
 ### 15.2 Decisions (create in `docs/decisions/`)
 - `[ ]` `016-opnsense-terraform.md` — why OPNsense config is managed by Terraform
 - `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
-- `[ ]` `018-storage-backend.md` — NFS vs. Longhorn vs. Ceph decision
+- `[x]` `018-storage-backend.md` — NFS-from-NAS now, Longhorn later (created 2026-06-18)
 - `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
 - `[x]` `021-unraid-hybrid-iac.md` — hybrid API/File/Manual IaC for the Unraid NAS (done 2026-06-18)
 
