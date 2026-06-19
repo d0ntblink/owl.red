@@ -16,7 +16,8 @@ Workflow everywhere: edit the source of truth → run the apply for that lane �
 | Add/change a **DHCP scope** or a **host's reserved IP** | **GitOps** (Technitium) | `gitops/technitium/dhcp/scopes.json` / `dhcp-reservations.json` |
 | Deploy/change a **k8s app** | **GitOps** (Fleet) | `gitops/<app>/` + add the path to the GitRepo in `gitops/rancher/fleet/` |
 | Add a **k8s secret** | **Bitwarden + operator** | `scripts/bitwarden-k8s-secrets-sync.sh` → `gitops/bitwarden-secrets/` (never a placeholder `bwSecretId`) |
-| Change **OPNsense** (firewall, aliases, DNS overrides) | **Terraform** | `terraform/opnsense/` |
+| Change **OPNsense** firewall rules / NAT / aliases / DNS overrides / VLAN+VIP / VPN / certs | **Terraform** | `terraform/opnsense/` ([ADR 016](../decisions/016-opnsense-terraform.md)) — run `scripts/opnsense-terraform-run.sh plan` then `apply` |
+| Change **OPNsense** base interfaces / IP / WAN / gateways / system / **NTP** / captive portal / shaper / IDS | **Manual** (WebUI) | no safe declarative API in any tool ([ADR 016](../decisions/016-opnsense-terraform.md)); change in WebUI + document |
 | Add a **new bootstrap script** (one-off host/LXC provisioning) | **scripts/** + Terraform for the resource | write `scripts/<name>.sh`; then codify the created resource in `terraform/proxmox/<x>/` (don't leave it script-only) |
 | Change **NTP** for a host | per host | **Unraid** → Terraform (`terraform/unraid`); **Proxmox** → Ansible (chrony); **Talos** → machine config; the LAN NTP authority is OPNsense `10.0.10.1` (ROADMAP 16.1) |
 | Change a **host's IP** | depends | reserved IP → Technitium DHCP (above); static-in-OS → that host's lane (Talos config / Ansible / Unraid manual `network.cfg`) |
