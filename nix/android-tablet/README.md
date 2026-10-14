@@ -15,7 +15,7 @@ HA-200 dock and stock 60% charging limit have not been validated on another ROM.
 | Management | Wi-Fi ADB `10.0.10.166:5555`; key-only SSH `d0ntblink@10.0.10.166:8022` |
 | Network | DHCP, no reservation; see [MAC inventory](../../docs/mac-inventory.md) |
 | Charging | `battery_protected_charge=1`; stock UI specifies a 60% limit |
-| Reboot test | SSH and Wi-Fi ADB returned automatically on 2026-10-14 |
+| Reboot test | Wi-Fi ADB passed; latest SSH boot job recovered after a scheduling fix; fresh reboot test pending |
 
 No further reboot, factory reset, or backup is authorized by these scripts.
 A new tablet needs separate unlock/wipe approval and its own recovery images.
@@ -329,12 +329,30 @@ users only from `10.0.10.0/24` and `10.0.20.0/24`. Root is a separate Magisk `su
 action. TCP forwarding, agent forwarding, and direct root login are disabled.
 Other VPN source subnets require an explicit configuration update.
 
-Termux:Boot invokes `~/.termux/boot/00-sshd`. Termux is exempted from battery
-optimization. The managed daemon uses `owl-tablet-sshd.pid`, separate from a
+Termux:Boot invokes `~/.termux/boot/00-sshd`. Both Termux and Termux:Boot are
+exempted from battery optimization. Provisioning also sets Termux:Boot's standby
+bucket to `active`. The managed daemon uses `owl-tablet-sshd.pid`, separate from a
 diagnostic listener. On 2026-10-14, both a targeted boot-receiver test and a
 subsequent approved software reboot passed: SSH started in Termux's normal app
 sandbox and accepted the authorized key. A power-loss cold start and startup
 before the first device unlock remain separate, untested cases.
+
+On a later reboot the same day, Wi-Fi ADB returned but SSH did not. Android
+queued `com.termux.boot/.BootJobService` job `1000` in standby bucket `NEVER`
+with an unsatisfied `WITHIN_QUOTA` constraint. Exempting only `com.termux` had
+not prevented that restriction on the boot app. Applied through the existing
+ADB connection:
+
+```sh
+adb_device shell dumpsys deviceidle whitelist +com.termux.boot
+adb_device shell am set-standby-bucket com.termux.boot active
+```
+
+The queued job then ran without a forced job execution or manual daemon start.
+Verified authorized-key SSH in Termux's normal SELinux sandbox, root access,
+enforcing SELinux, and read-only system on the same boot. The deployment script
+now includes both commands. A fresh reboot after this fix still needs separate
+approval and validation; recovery of the queued job is not a new reboot test.
 
 For diagnostics, use a separate port **and PID file** in a separate Termux
 session; leave unrelated user programs running:

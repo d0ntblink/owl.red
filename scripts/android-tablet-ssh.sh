@@ -45,5 +45,7 @@ adb_device shell "su --drop-cap -g $termux_uid -G 3003 $termux_uid -c 'HOME=$ter
 restore_termux_labels
 trap - EXIT
 adb_device shell dumpsys deviceidle whitelist +com.termux
+adb_device shell dumpsys deviceidle whitelist +com.termux.boot
+adb_device shell am set-standby-bucket com.termux.boot active
 adb_device shell am start -n com.termux.boot/.BootActivity
 printf 'Configuration ready. Run ~/.termux/boot/00-sshd once inside Termux to start SSH in its normal app sandbox.\n'
