@@ -1,6 +1,6 @@
 # MAC Inventory — owl.red
 
-Personal reference. Not machine-consumed. Last updated: 2026-06-09.
+Personal reference. Not machine-consumed. Last updated: 2026-10-13.
 
 ---
 
@@ -86,6 +86,11 @@ Personal reference. Not machine-consumed. Last updated: 2026-06-09.
 | `80:65:99:a1:5f:9c` | Bambu Lab A1 3D printer | VLAN 40 | local only | reservation at 10.0.40.11 |
 | `44:61:32:08:d6:2c` | ecobee thermostat | VLAN 50 | ecobee Inc. OUI; needs cloud API | 10.0.10.185 (wrong VLAN, reservation at 10.0.50.10) |
 | `3c:6d:66:0e:1f:67` | NVIDIA Shield TV | VLAN 50 | Needs internet | 10.0.10.161 (wrong VLAN) |
+| `78:d6:dc:00:01:75` | Lenovo Tab M10 FHD Plus (`TB-X606FA`, serial `HVA0GSZV`) | TBD | Hardware WLAN MAC shown in About tablet, 2026-10-13; bedside Home Assistant kiosk, alarms and media; HA-200 dock | Current SSID uses the locally administered MAC below |
+| `82:f3:5c:c9:92:46` | Lenovo TB-X606FA - active WiFi | TBD | Active locally administered MAC on `TELUS2221`, distinct from the hardware WLAN MAC | `10.0.10.166/16` (DHCP, observed 2026-10-13; no reservation) |
+| `78:d6:dc:08:01:75` | Lenovo TB-X606FA - Bluetooth | N/A | Bluetooth address shown in About tablet, 2026-10-13 | N/A |
+| `02:7f:f6:05:40:fc` | WUUK Y0510 (wuuk-ptz-foyer) sc4336p t31x ZB25VQ128 | VLAN 50 | local only | reservation at 10.0.10.186 (needs change) |
+| `02:2d:1f:56:ee:b8` | WUUK Y0510 (wuuk-ptz-office) sc4336p t31x ZB25VQ128 | VLAN 50 | local only | reservation at 10.0.10.124 (needs change) |
 
 ---
 
@@ -100,6 +105,7 @@ Personal reference. Not machine-consumed. Last updated: 2026-06-09.
 
 ## Notes
 
-- All personal/IoT devices above are currently leaking into VLAN 10 because switch ports and WAP SSID-to-VLAN steering aren't configured yet.
+- The tablet's MAC/IP above were verified on 2026-10-13. Its target VLAN and hostname are not assigned; verify a stable per-network MAC before creating a reservation. The LG phone's `10.0.10.166` entry is an older observation, not a reservation or a confirmed simultaneous IP conflict. See [tablet management](../nix/android-tablet/README.md) for SSH and deployment details.
+- The older personal/IoT observations above reflect devices leaking into VLAN 10 while switch ports and WAP SSID-to-VLAN steering were not configured. The tablet's current SSID/subnet alone does not confirm its VLAN.
 - `10.0.203.172` for the work laptop suggests it hit a wrong scope entirely — likely connected to a port without 802.1Q tagging or caught a different DHCP scope.
 - `84:fc:14:61:1f:df` OUI lookup returned no match; could be a locally-administered MAC (randomization).
