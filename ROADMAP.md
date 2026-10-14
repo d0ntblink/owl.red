@@ -63,16 +63,26 @@ OPNsense config is brought under IaC before VLAN work, so rules/aliases/override
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
 
 ### 1.1 VLAN Steering on WAP (`ap.owl.red`)
+- `[x]` Complete the known-client target allocation registry (2026-10-14): workstation, LG phone, Shield and WUUK cameras have reservations/DNS; tablet is pending target-SSID MAC; work laptop remains dynamic. No live VLAN cutover performed.
 - `[ ]` Log into OpenWrt on `10.0.10.40`
 - `[ ]` Confirm SSID → VLAN bridge mappings:
   - `owl.red` → VLAN 20 (`private-net`)
   - `silence of the lans` → VLAN 30 (`guest-net`)
   - `owl.red-iot` → VLAN 40/50 (split by device; see below)
 - `[ ]` Decide: split IoT SSIDs (`owl.red-iot-local` VLAN 40, `owl.red-iot-cloud` VLAN 50) **or** keep single SSID and steer by MAC in OPNsense
+- `[ ]` Move known private clients to VLAN 20 after steering and management access are verified:
+  - `w1ngz.owl.red` → `10.0.20.10`
+  - `paranoid-android.owl.red` → `10.0.20.11`
+  - Bedside tablet → planned `10.0.20.12`; verify target-SSID MAC before confirming reservation/DNS
+  - Work laptop `KAM1WL102916` → dynamic DHCP, no fixed lease
 - `[ ]` Move IoT devices to correct SSID once steering is confirmed:
   - `ecobee.owl.red` → VLAN 50 (currently on VLAN 10)
   - `printer.owl.red` (Canon) → VLAN 40 (currently on VLAN 10)
   - `bambu.owl.red` → VLAN 40 (needs to join network)
+  - `shield.owl.red` → VLAN 50, `10.0.50.11`; explicitly allow required local-media access
+  - `wuuk-ptz-foyer.owl.red` → VLAN 40, `10.0.40.12`
+  - `wuuk-ptz-office.owl.red` → VLAN 40, `10.0.40.13`
+  - Inspect and explicitly remove any legacy VLAN 10 camera reservations during the approved migration; test local operation without internet
 
 ### 1.2 VLAN Access Rules on Switch (`switch.owl.red`)
 - `[ ]` Audit `ansible/switch_configs/css326.yml` — confirm all ports have correct PVID and tagged VLAN membership

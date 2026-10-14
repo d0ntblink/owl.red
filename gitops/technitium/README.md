@@ -33,6 +33,10 @@ edits in the Technitium web UI are drift and get overwritten on the next sync.
 | `dhcp/scopes.json` | `/api/dhcp/scopes/set` | One DHCP scope per VLAN |
 | `dhcp-reservations.json` | `/api/dhcp/scopes/addReservedLease` | MAC registry → static leases (only `status: confirmed`, non-`TBD`) |
 
+`dynamicClients` in the registry is metadata for known devices that must remain
+on dynamic DHCP, not a second reservation list. Pending reservations also remain
+in the address plan without being emitted by the sync.
+
 Zone files are discovered by basename: every `zones/*.zone` is imported as a Primary
 zone named after the filename.
 
@@ -80,6 +84,33 @@ scripts/ansible-run.sh ansible-playbook \
 - Confirm the timer: `systemctl list-timers technitium-sync.timer`.
 - Update the SOA serial in `zones/owl.red.zone` whenever the zone changes.
 - Keep VLAN 10 reservations in `dhcp-reservations.json` aligned with `README.md`.
+
+## Device Allocation And Migration
+
+- Keep target allocations aligned across the registry, zone, root README, and
+  [MAC inventory](../../docs/mac-inventory.md). Recorded addresses are not fresh
+  evidence of VLAN membership.
+- The tablet is staged at `10.0.20.12` with `status: pending` and lease MAC `TBD`.
+  Verify its MAC on the target SSID before confirming the reservation and adding
+  `tablet.owl.red` to DNS. Do not replace the current SSH/ADB endpoint prematurely.
+- The work laptop remains in VLAN 20 `dynamicClients`; do not assign a fixed lease
+  or a static DNS record to it.
+- A reservation only controls a lease within a scope. Before an approved cutover,
+  establish the matching switch-port/SSID VLAN, gateway, firewall rules, and a
+  working management path. Validate camera local operation without internet and
+  explicitly permit any Shield access to local media services.
+- Deploy desired-state changes only after approval and commit/push. Check the
+  sync result, actual reserved leases, DNS answers, and client lease renewal.
+  Neither editing this repository nor adding a reservation moves a live client.
+- The camera records previously listed VLAN 10 addresses. The sync only upserts
+  declared reservations; it does not prune removed entries. Inspect and explicitly
+  remove any legacy camera reservations during the approved migration.
+
+Rollback: restore the previous reservation/record data, increase the SOA serial
+again, and reconcile the approved revision. Explicitly remove any newly added
+server-side reservations if abandoning the allocation; reverting JSON alone does
+not delete them. Restore prior port/SSID policy and renew affected clients if a
+live VLAN cutover was performed. No cutover is performed by this documentation.
 
 ## Validation
 

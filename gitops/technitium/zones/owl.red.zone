@@ -1,7 +1,7 @@
 $ORIGIN owl.red.
 $TTL 300
 @ IN SOA ns1.owl.red. hostmaster.owl.red. (
-  2026060902 ; serial (update on every record change)
+  2026101401 ; serial (update on every record change)
   3600       ; refresh
   600        ; retry
   1209600    ; expire
@@ -36,3 +36,8 @@ ap              IN A 10.0.10.40
 printer         IN A 10.0.40.10
 bambu           IN A 10.0.40.11
 ecobee          IN A 10.0.50.10
+w1ngz           IN A 10.0.20.10
+paranoid-android IN A 10.0.20.11
+shield          IN A 10.0.50.11
+wuuk-ptz-foyer   IN A 10.0.40.12
+wuuk-ptz-office  IN A 10.0.40.13

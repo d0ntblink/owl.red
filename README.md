@@ -11,10 +11,15 @@
 | VLAN | Name | Subnet | Gateway | DHCP | Purpose |
 |------|------|--------|---------|------|---------|
 | 10 | `network-devices` | `10.0.10.0/24` | `10.0.10.1` | Technitium `10.0.10.100-199` | Infrastructure management; known devices use MAC reservations |
-| 20 | `private-net` | `10.0.20.0/24` | `10.0.20.1` | Technitium `10.0.20.100-254` | Trusted wired and WiFi clients |
-| 30 | `guest-net` | `10.0.30.0/24` | `10.0.30.1` | Technitium `10.0.30.100-254` | Guest WiFi with captive portal |
-| 40 | `iot-no-inter` | `10.0.40.0/24` | `10.0.40.1` | Technitium `10.0.40.100-254` | IoT with local-only access |
-| 50 | `iot-with-inter` | `10.0.50.0/24` | `10.0.50.1` | Technitium `10.0.50.100-254` | IoT with internet, no lateral movement |
+| 20 | `private-net` | `10.0.20.0/24` | `10.0.20.1` | Technitium `10.0.20.100-199` | Trusted wired and WiFi clients |
+| 30 | `guest-net` | `10.0.30.0/24` | `10.0.30.1` | Technitium `10.0.30.100-199` | Guest WiFi with captive portal |
+| 40 | `iot-no-inter` | `10.0.40.0/24` | `10.0.40.1` | Technitium `10.0.40.100-199` | IoT with local-only access |
+| 50 | `iot-with-inter` | `10.0.50.0/24` | `10.0.50.1` | Technitium `10.0.50.100-199` | IoT with internet, no lateral movement |
+
+These are target VLAN allocations, not proof of a completed network cutover. DHCP
+reservations do not configure switch-port or WiFi VLAN membership. The canonical
+[DHCP registry](gitops/technitium/dhcp-reservations.json) and
+[scope definitions](gitops/technitium/dhcp/scopes.json) own the address plan.
 
 ### VLAN 10 Infrastructure Hosts
 
@@ -38,18 +43,31 @@
 | `10.0.10.31` | `pdm.owl.red` | PDM VM on storage.pve | Proxmox Datacenter Manager |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM on storage.pve | Proxmox Backup Server |
 | `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | WAP management |
+
+### VLAN 20 Private Clients (target allocations)
+
+| IP / Range | Name | Device | Status |
+|------------|------|--------|--------|
+| `10.0.20.10` | `w1ngz.owl.red` | Main workstation | Confirmed recorded MAC; target reservation |
+| `10.0.20.11` | `paranoid-android.owl.red` | LG personal phone | Confirmed recorded MAC; target reservation |
+| `10.0.20.12` | `tablet.owl.red` (planned) | Lenovo TB-X606FA bedside tablet | Pending target-SSID MAC; not applied to DHCP or DNS |
+| `10.0.20.100-199` | `KAM1WL102916` | Work laptop | Dynamic only; no fixed lease |
+
 ### VLAN 40 IoT Hosts (local only)
 
 | IP | Hostname | Device | Purpose |
 |----|----------|--------|---------|
 | `10.0.40.10` | `printer.owl.red` | Canon printer (Canon1c2258) | Local network printing |
 | `10.0.40.11` | `bambu.owl.red` | Bambu Lab A1 3D printer | Local 3D printing |
+| `10.0.40.12` | `wuuk-ptz-foyer.owl.red` | WUUK Y0510 PTZ camera | Foyer monitoring; local-only target |
+| `10.0.40.13` | `wuuk-ptz-office.owl.red` | WUUK Y0510 PTZ camera | Office monitoring; local-only target |
 
 ### VLAN 50 IoT Hosts (internet permitted)
 
 | IP | Hostname | Device | Purpose |
 |----|----------|--------|---------|
 | `10.0.50.10` | `ecobee.owl.red` | Ecobee thermostat | Smart thermostat — needs cloud API access |
+| `10.0.50.11` | `shield.owl.red` | NVIDIA Shield TV | Media playback; internet and explicit local-media access |
 ### Service VIPs and Pools
 
 | IP / Range | Name | Backing Service | Notes |
@@ -218,6 +236,7 @@ Each node is a single-NIC Lenovo ThinkCentre M73 SFF. The `vmbr0` bridge inherit
 | Display | 1200 x 1920 |
 | OS | Lenovo Android 10 (API 29) |
 | Dock | Lenovo HA-200 |
+| Target network | VLAN 20, `10.0.20.12`, planned `tablet.owl.red`; lease MAC pending, current management endpoints unchanged |
 | Purpose | Bedside Home Assistant dashboard, alarm clock, and media playback |
 
 See [MAC inventory](docs/mac-inventory.md) for network addresses and
@@ -240,14 +259,15 @@ with `bash scripts/android-tablet-inventory.sh` after app changes.
 | Firmware | Not recorded |
 | Purpose | Local camera monitoring, foyer and office |
 
-| Device | Location | MAC | Recorded IP reservation |
-|--------|----------|-----|-------------------------|
-| `wuuk-ptz-foyer` | Foyer | `02:7f:f6:05:40:fc` | `10.0.10.186` |
-| `wuuk-ptz-office` | Office | `02:2d:1f:56:ee:b8` | `10.0.10.124` |
+| Device | Location | MAC | Target VLAN | Target reservation |
+|--------|----------|-----|-------------|--------------------|
+| `wuuk-ptz-foyer` | Foyer | `02:7f:f6:05:40:fc` | 40 | `10.0.40.12` |
+| `wuuk-ptz-office` | Office | `02:2d:1f:56:ee:b8` | 40 | `10.0.40.13` |
 
-Source: [MAC inventory](docs/mac-inventory.md). Its recorded VLAN 50 target and
-local-only requirement need reconciliation; the IP reservations are also marked
-for migration there. No network assignment was changed by this documentation update.
+Source: [MAC inventory](docs/mac-inventory.md). VLAN 40 follows the local-only
+policy selected on 2026-10-14. The older VLAN 10 addresses remain historical
+records there; inspect any legacy reservations during the approved cutover.
+No live network assignment was changed by this allocation update.
 
 ---
 
@@ -268,10 +288,10 @@ for migration there. No network assignment was changed by this documentation upd
 | VLAN | DHCP Authority | Range | Router | DNS | Notes |
 |------|----------------|-------|--------|-----|-------|
 | `10` | Technitium | `10.0.10.100-199` | `10.0.10.1` | `10.0.10.30` | Known infrastructure devices use reservations |
-| `20` | Technitium | `10.0.20.100-254` | `10.0.20.1` | `10.0.20.30` | Trusted wired and WiFi clients |
-| `30` | Technitium | `10.0.30.100-254` | `10.0.30.1` | `10.0.30.30` | Guest scope with captive portal signaling |
-| `40` | Technitium | `10.0.40.100-254` | `10.0.40.1` | `10.0.40.30` | IoT local-only policy |
-| `50` | Technitium | `10.0.50.100-254` | `10.0.50.1` | `10.0.50.30` | IoT with internet, no lateral movement |
+| `20` | Technitium | `10.0.20.100-199` | `10.0.20.1` | `10.0.20.30` | Trusted wired and WiFi clients |
+| `30` | Technitium | `10.0.30.100-199` | `10.0.30.1` | `10.0.30.30` | Guest scope with captive portal signaling |
+| `40` | Technitium | `10.0.40.100-199` | `10.0.40.1` | `10.0.40.30` | IoT local-only policy |
+| `50` | Technitium | `10.0.50.100-199` | `10.0.50.1` | `10.0.50.30` | IoT with internet, no lateral movement |
 
 Technitium is authoritative for `owl.red` and runs as a multi-homed LXC on `edge.pve` with native interfaces on all VLANs. DNS records are Git-managed and reconciled by a Fleet-managed sync job. If Technitium is not serving the zone authoritatively, clients can fall through to public DNS and internal service names such as `dns.owl.red` or `rancher.owl.red` will resolve incorrectly.
 

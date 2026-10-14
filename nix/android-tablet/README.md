@@ -14,6 +14,7 @@ HA-200 dock and stock 60% charging limit have not been validated on another ROM.
 | System | Read-only after the approved reboot on 2026-10-14 |
 | Management | Wi-Fi ADB `10.0.10.166:5555`; key-only SSH `d0ntblink@10.0.10.166:8022` |
 | Network | DHCP, no reservation; see [MAC inventory](../../docs/mac-inventory.md) |
+| Target allocation | VLAN 20, planned `tablet.owl.red` at `10.0.20.12`; pending target-SSID MAC verification, no active reservation or DNS record |
 | Charging | `battery_protected_charge=1`; stock UI specifies a 60% limit |
 | Reboot test | After the scheduling fix, SSH and Wi-Fi ADB returned automatically on the approved 2026-10-14 reboot |
 
@@ -459,8 +460,11 @@ check alone is not enough: validate device scripts in Android's actual shell.
 - Supply the Home Assistant URL, choose kiosk behavior, and sign into the media
   services on the tablet; no backend URL or credentials are stored here.
 - Test an audible alarm with the screen off, and HA-200 audio/charging cutoff.
-- Confirm the intended per-network MAC and create a DHCP reservation if wanted;
-  disabling randomization was attempted but not verified successful.
+- Verify the lease MAC on the target VLAN 20 SSID before activating the pending
+  `10.0.20.12` / `tablet.owl.red` allocation in the
+  [DHCP registry](../../gitops/technitium/dhcp-reservations.json) and DNS. Disabling
+  randomization was attempted but not verified successful. Keep the current
+  SSH/ADB endpoint until an approved migration has actually completed.
 - Validate and lock the host Nix flake. Its shell is not a full declarative
   Android OS/app-data manager.
 - Decide whether to reconcile the desired app manifest with the live snapshot;

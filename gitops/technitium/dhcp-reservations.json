@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "generated": "2026-06-09",
+    "generated": "2026-10-14",
     "dns_suffix": "owl.red",
-    "note": "MAC directory for owl.red. Consumed by Technitium DHCP to build static lease reservations. MAC format: uppercase hex, dash-separated (AA-BB-CC-DD-EE-FF). TBD entries require device to be powered on / provisioned before filling in."
+    "note": "Target device allocations for owl.red. The sync applies only confirmed, non-TBD reservations; pending reservations and dynamicClients are not applied. MAC format: uppercase hex, dash-separated (AA-BB-CC-DD-EE-FF). Reservations do not configure switch ports or WiFi VLANs."
   },
 
   "scopes": {
@@ -10,7 +10,7 @@
     "vlan10_network_devices": {
       "network": "10.0.10.0/24",
       "gateway": "10.0.10.1",
-      "description": "Infrastructure management — DHCP range 10.0.10.100-199 served by Technitium on k8s. All known devices have MAC reservations; pool handles unknown devices.",
+      "description": "Infrastructure management — DHCP range 10.0.10.100-199 served by the Technitium LXC. All known devices have MAC reservations; pool handles unknown devices.",
       "reservations": [
 
         {
@@ -191,7 +191,45 @@
       "network": "10.0.20.0/24",
       "gateway": "10.0.20.1",
       "description": "Trusted devices — wired and WiFi. DHCP pool active; reservations added per device as needed.",
-      "reservations": []
+      "reservations": [
+
+        {
+          "hardwareAddress": "5C-87-9C-FA-10-F4",
+          "ipAddress": "10.0.20.10",
+          "hostName": "w1ngz.owl.red",
+          "comments": "Main workstation - Intel WiFi. Target VLAN 20 allocation; the older VLAN 10 address is an observation, not this reservation.",
+          "macSource": "docs/mac-inventory.md - recorded workstation WiFi MAC",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "A0-4F-85-F6-EC-76",
+          "ipAddress": "10.0.20.11",
+          "hostName": "paranoid-android.owl.red",
+          "comments": "Personal LG phone. Target VLAN 20 allocation; the older 10.0.10.166 observation does not establish a current conflict with the tablet.",
+          "macSource": "docs/mac-inventory.md - recorded LG phone WiFi MAC",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "TBD",
+          "ipAddress": "10.0.20.12",
+          "hostName": "tablet.owl.red",
+          "comments": "Lenovo TB-X606FA, serial HVA0GSZV - bedside tablet. Approved VLAN 20 target; pending lease MAC verification on the target SSID. No static DNS record yet; current SSH/ADB address remains unchanged.",
+          "macSource": "2026-10-13: hardware WLAN MAC 78:D6:DC:00:01:75; active TELUS2221 MAC 82:F3:5C:C9:92:46. Neither is verified for the target SSID.",
+          "status": "pending"
+        }
+
+      ],
+      "dynamicClients": [
+        {
+          "hardwareAddress": "BC-CD-99-2B-3C-A7",
+          "hostName": "KAM1WL102916",
+          "comments": "Work laptop - VLAN 20 target, dynamic DHCP only. Metadata for allocation coverage; do not create a fixed lease or static DNS record.",
+          "macSource": "docs/mac-inventory.md - recorded work laptop WiFi MAC",
+          "status": "confirmed"
+        }
+      ]
     },
 
     "vlan30_guest_net": {
@@ -223,6 +261,24 @@
           "comments": "Bambu Lab A1 3D printer — local only, no internet needed",
           "macSource": "user provided 2026-06-09",
           "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-7F-F6-05-40-FC",
+          "ipAddress": "10.0.40.12",
+          "hostName": "wuuk-ptz-foyer.owl.red",
+          "comments": "WUUK Y0510 foyer camera - approved local-only VLAN 40 target. Prior recorded reservation 10.0.10.186 is not migrated by adding this target; inspect and remove any legacy reservation during the approved cutover.",
+          "macSource": "docs/mac-inventory.md - recorded foyer camera MAC",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-2D-1F-56-EE-B8",
+          "ipAddress": "10.0.40.13",
+          "hostName": "wuuk-ptz-office.owl.red",
+          "comments": "WUUK Y0510 office camera - approved local-only VLAN 40 target. Prior recorded reservation 10.0.10.124 is not migrated by adding this target; inspect and remove any legacy reservation during the approved cutover.",
+          "macSource": "docs/mac-inventory.md - recorded office camera MAC",
+          "status": "confirmed"
         }
 
       ]
@@ -240,6 +296,15 @@
           "hostName": "ecobee.owl.red",
           "comments": "Ecobee smart thermostat — needs internet for cloud API",
           "macSource": "OPNsense DHCP lease 2026-06-09 (ecobee inc)",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "3C-6D-66-0E-1F-67",
+          "ipAddress": "10.0.50.11",
+          "hostName": "shield.owl.red",
+          "comments": "NVIDIA Shield TV - internet required. Target VLAN 50 allocation; access to local media services requires explicit inter-VLAN policy.",
+          "macSource": "docs/mac-inventory.md - recorded Shield network MAC",
           "status": "confirmed"
         }
 
