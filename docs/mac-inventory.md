@@ -1,6 +1,7 @@
 # MAC Inventory — owl.red
 
-Personal reference. Not machine-consumed. Last updated: 2026-10-13.
+Personal reference. Not machine-consumed. Allocation decisions updated: 2026-10-14.
+Recorded MACs and prior addresses were not re-probed during this allocation update.
 
 ---
 
@@ -69,28 +70,27 @@ Personal reference. Not machine-consumed. Last updated: 2026-10-13.
 
 ## Personal Devices — VLAN 20 (target)
 
-| MAC | Device | Notes | Current IP |
-|-----|--------|-------|------------|
-| `5c:87:9c:fa:10:f4` | w1ngz workstation (Intel WiFi) | Main workstation | 10.0.10.188 (wrong VLAN) |
-| `a0:4f:85:f6:ec:76` | paranoid-android (LG phone) | Personal phone | 10.0.10.166 (wrong VLAN) |
-| `bc:cd:99:2b:3c:a7` | work laptop (KAM1WL102916) | Intel WiFi; dynamic only | 10.0.203.172 (wrong subnet?) |
-| `8c:04:ba:80:b9:a8` | TBD (Dell device) | Unknown Dell; seen on VLAN 10 | 10.0.10.139 (wrong VLAN) |
+| MAC | Device | Notes | Prior Recorded IP | Target Allocation |
+|-----|--------|-------|-------------------|-------------------|
+| `5c:87:9c:fa:10:f4` | w1ngz workstation (Intel WiFi) | Main workstation | `10.0.10.188` | `w1ngz.owl.red` - `10.0.20.10` |
+| `a0:4f:85:f6:ec:76` | paranoid-android (LG phone) | Personal phone | `10.0.10.166` | `paranoid-android.owl.red` - `10.0.20.11` |
+| `bc:cd:99:2b:3c:a7` | work laptop (KAM1WL102916) | Intel WiFi; dynamic only | `10.0.203.172` | VLAN 20 dynamic pool `10.0.20.100-199`; no fixed lease |
 
 ---
 
 ## IoT / Smart Home
 
-| MAC | Device | Target VLAN | Notes | Current IP |
-|-----|--------|-------------|-------|------------|
-| `20:0b:74:a5:15:05` | Canon printer (Canon1c2258) | VLAN 40 | AzureWave WiFi module; local only | 10.0.10.184 (wrong VLAN, reservation at 10.0.40.10) |
-| `80:65:99:a1:5f:9c` | Bambu Lab A1 3D printer | VLAN 40 | local only | reservation at 10.0.40.11 |
-| `44:61:32:08:d6:2c` | ecobee thermostat | VLAN 50 | ecobee Inc. OUI; needs cloud API | 10.0.10.185 (wrong VLAN, reservation at 10.0.50.10) |
-| `3c:6d:66:0e:1f:67` | NVIDIA Shield TV | VLAN 50 | Needs internet | 10.0.10.161 (wrong VLAN) |
-| `78:d6:dc:00:01:75` | Lenovo Tab M10 FHD Plus (`TB-X606FA`, serial `HVA0GSZV`) | TBD | Hardware WLAN MAC shown in About tablet, 2026-10-13; bedside Home Assistant kiosk, alarms and media; HA-200 dock | Current SSID uses the locally administered MAC below |
-| `82:f3:5c:c9:92:46` | Lenovo TB-X606FA - active WiFi | TBD | Active locally administered MAC on `TELUS2221`, distinct from the hardware WLAN MAC | `10.0.10.166/16` (DHCP, observed 2026-10-13; no reservation) |
-| `78:d6:dc:08:01:75` | Lenovo TB-X606FA - Bluetooth | N/A | Bluetooth address shown in About tablet, 2026-10-13 | N/A |
-| `02:7f:f6:05:40:fc` | WUUK Y0510 (wuuk-ptz-foyer) sc4336p t31x ZB25VQ128 | VLAN 50 | local only | reservation at 10.0.10.186 (needs change) |
-| `02:2d:1f:56:ee:b8` | WUUK Y0510 (wuuk-ptz-office) sc4336p t31x ZB25VQ128 | VLAN 50 | local only | reservation at 10.0.10.124 (needs change) |
+| MAC | Device | Target VLAN | Notes | Prior Recorded Address | Target Allocation |
+|-----|--------|-------------|-------|------------------------|-------------------|
+| `20:0b:74:a5:15:05` | Canon printer (Canon1c2258) | VLAN 40 | AzureWave WiFi module; local only | `10.0.10.184` | `printer.owl.red` - `10.0.40.10` |
+| `80:65:99:a1:5f:9c` | Bambu Lab A1 3D printer | VLAN 40 | Local only | Not recorded | `bambu.owl.red` - `10.0.40.11` |
+| `44:61:32:08:d6:2c` | ecobee thermostat | VLAN 50 | ecobee Inc. OUI; needs cloud API | `10.0.10.185` | `ecobee.owl.red` - `10.0.50.10` |
+| `3c:6d:66:0e:1f:67` | NVIDIA Shield TV | VLAN 50 | Needs internet; local media access requires explicit inter-VLAN policy | `10.0.10.161` | `shield.owl.red` - `10.0.50.11` |
+| `78:d6:dc:00:01:75` | Lenovo Tab M10 FHD Plus (`TB-X606FA`, serial `HVA0GSZV`) | VLAN 20 | Hardware WLAN MAC shown in About tablet, 2026-10-13; bedside dashboard, alarms and media; HA-200 dock | Recorded SSID uses the MAC below | Planned `tablet.owl.red` - `10.0.20.12`; lease MAC pending |
+| `82:f3:5c:c9:92:46` | Lenovo TB-X606FA - observed active WiFi | VLAN 20 | Locally administered MAC on `TELUS2221`, distinct from hardware WLAN MAC; not verified for the target SSID | `10.0.10.166/16` (DHCP, observed 2026-10-13) | Same pending tablet allocation; not a second reservation |
+| `78:d6:dc:08:01:75` | Lenovo TB-X606FA - Bluetooth | N/A | Bluetooth address shown in About tablet, 2026-10-13 | N/A | N/A; not an IP interface |
+| `02:7f:f6:05:40:fc` | WUUK Y0510 (wuuk-ptz-foyer) sc4336p t31x ZB25VQ128 | VLAN 40 | Local-only policy approved 2026-10-14 | `10.0.10.186` (prior recorded reservation) | `wuuk-ptz-foyer.owl.red` - `10.0.40.12` |
+| `02:2d:1f:56:ee:b8` | WUUK Y0510 (wuuk-ptz-office) sc4336p t31x ZB25VQ128 | VLAN 40 | Local-only policy approved 2026-10-14 | `10.0.10.124` (prior recorded reservation) | `wuuk-ptz-office.owl.red` - `10.0.40.13` |
 
 ---
 
@@ -98,14 +98,25 @@ Personal reference. Not machine-consumed. Last updated: 2026-10-13.
 
 | MAC | OUI | Device hint | Last seen | Notes |
 |-----|-----|-------------|-----------|-------|
+| `8c:04:ba:80:b9:a8` | Dell (recorded) | Unidentified Dell device | `10.0.10.139` | Identify owner/function before choosing a VLAN or fixed lease |
 | `04:70:56:5c:6d:3a` | Arcadyan | Boost2 mobile hotspot | 10.0.10.141 | Transient; no reservation needed |
 | `84:fc:14:61:1f:df` | TBD | Unknown | 10.0.10.198 | Unidentified |
 
 ---
 
+## Allocation Status
+
+- The [DHCP registry](../gitops/technitium/dhcp-reservations.json) is the machine-consumed source for target allocations. Confirmed reservations have matching [DNS records](../gitops/technitium/zones/owl.red.zone), except the existing PDM ingress/backend split.
+- The tablet's VLAN 20 address is reserved in the plan only: `status: pending`, lease MAC `TBD`, and no static DNS record. Verify the MAC on its target SSID before confirming the lease. Current SSH/ADB endpoints are unchanged.
+- The work laptop is recorded under VLAN 20 `dynamicClients` metadata, which the sync ignores. It must remain dynamic rather than receive an invented fixed lease.
+- WAN, spare NICs and Bluetooth are not missing DHCP clients. Unidentified and transient devices above remain explicitly unallocated rather than receive guessed identities or policies.
+- A DHCP reservation does not select a VLAN. Switch-port/SSID steering, firewall policy, lease renewal, and removal of any legacy camera reservations are separate cutover work. See [rollout and rollback](../gitops/technitium/README.md#device-allocation-and-migration).
+
+---
+
 ## Notes
 
-- The tablet's MAC/IP above were verified on 2026-10-13. Its target VLAN and hostname are not assigned; verify a stable per-network MAC before creating a reservation. The LG phone's `10.0.10.166` entry is an older observation, not a reservation or a confirmed simultaneous IP conflict. See [tablet management](../nix/android-tablet/README.md) for SSH and deployment details.
-- The older personal/IoT observations above reflect devices leaking into VLAN 10 while switch ports and WAP SSID-to-VLAN steering were not configured. The tablet's current SSID/subnet alone does not confirm its VLAN.
-- `10.0.203.172` for the work laptop suggests it hit a wrong scope entirely — likely connected to a port without 802.1Q tagging or caught a different DHCP scope.
+- The tablet's MAC/IP above were verified on 2026-10-13; target VLAN 20 and the pending hostname/address were selected on 2026-10-14. The LG phone's `10.0.10.166` entry is an older observation, not a reservation or a confirmed simultaneous IP conflict. See [tablet management](../nix/android-tablet/README.md) for SSH and deployment details.
+- The prior personal/IoT addresses were recorded before verified per-VLAN steering. An address or SSID alone does not prove VLAN membership.
+- The work laptop's `10.0.203.172` lies within the recorded flat `10.0.0.0/16` baseline; it does not by itself prove a rogue DHCP scope. Its target remains VLAN 20 dynamic DHCP.
 - `84:fc:14:61:1f:df` OUI lookup returned no match; could be a locally-administered MAC (randomization).
