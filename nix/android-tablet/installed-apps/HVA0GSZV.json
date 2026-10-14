@@ -1,18 +1,13 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-14T18:13:52Z",
+  "capturedAt": "2026-10-14T19:01:42Z",
   "serial": "HVA0GSZV",
   "firmware": "TB-X606FA_S300623_230730_BMP",
   "observedHost": "10.0.10.166",
   "androidUser": 0,
   "source": "pm list packages -f --show-versioncode --user 0",
-  "packageCount": 181,
+  "packageCount": 178,
   "packages": [
-    {
-      "apkPath": "/system/priv-app/Vega/Vega.apk",
-      "package": "amazon.speech.sim",
-      "versionCode": 1200642
-    },
     {
       "apkPath": "/system/framework/framework-res.apk",
       "package": "android",
@@ -509,11 +504,6 @@
       "versionCode": 29
     },
     {
-      "apkPath": "/data/app/com.github.muellerma.coffee-eIklXBx9NoiJ16fm2SbCXw==/base.apk",
-      "package": "com.github.muellerma.coffee",
-      "versionCode": 47
-    },
-    {
       "apkPath": "/system/product/priv-app/GoogleRestore/GoogleRestore.apk",
       "package": "com.google.android.apps.restore",
       "versionCode": 9069
@@ -572,11 +562,6 @@
       "apkPath": "/system/product/priv-app/CarrierServices/CarrierServices.apk",
       "package": "com.google.android.ims",
       "versionCode": 30245097
-    },
-    {
-      "apkPath": "/data/app/com.google.android.inputmethod.latin-_oco_ZbxC_gzSsVkbxH4cA==/base.apk",
-      "package": "com.google.android.inputmethod.latin",
-      "versionCode": 176027078
     },
     {
       "apkPath": "/system/product/app/ModuleMetadataGooglePrebuilt/ModuleMetadataGooglePrebuilt.apk",
@@ -707,11 +692,6 @@
       "apkPath": "/system/priv-app/OCZ_ClientDownloader/OCZ_ClientDownloader.apk",
       "package": "com.lenovo.ocpl",
       "versionCode": 22083101
-    },
-    {
-      "apkPath": "/system/priv-app/LenovoOTA/LenovoOTA.apk",
-      "package": "com.lenovo.ota",
-      "versionCode": 999000002
     },
     {
       "apkPath": "/system/priv-app/LenovoScreenAssistant/LenovoScreenAssistant.apk",
@@ -897,6 +877,11 @@
       "apkPath": "/data/app/de.baumann.browser-Z4WiK3Pqcw-WN6sZqUvFRg==/base.apk",
       "package": "de.baumann.browser",
       "versionCode": 159
+    },
+    {
+      "apkPath": "/data/app/juloo.keyboard2-qyLE1IVzlV0piR29acsmrw==/base.apk",
+      "package": "juloo.keyboard2",
+      "versionCode": 56
     },
     {
       "apkPath": "/data/app/me.zhanghai.android.files-ClFFsnAGjc6ani_4CGQN4A==/base.apk",

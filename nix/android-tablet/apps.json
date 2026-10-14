@@ -7,8 +7,13 @@
     "sshUser": "d0ntblink",
     "sshPort": 8022,
     "browserPackage": "de.baumann.browser",
+    "launcherPackage": "com.tblenovo.launcher",
+    "keyboardPackage": "juloo.keyboard2",
+    "inputMethod": "juloo.keyboard2/.Keyboard2",
     "clockPackage": "com.best.deskclock",
     "screensaverComponent": "com.best.deskclock/.screensaver.Screensaver",
+    "dockUse": "audio-and-charging-only",
+    "alexaVoiceEnabled": false,
     "homeAssistantUrl": null
   },
   "fdroidSigningKey": "37D2C98789D8311948394E3E41E7044E1DBA2E89",
@@ -18,6 +23,7 @@
     {"package": "com.termux.boot", "versionCode": 1000, "url": "https://f-droid.org/repo/com.termux.boot_1000.apk"},
     {"package": "com.shinydiscoballsdev.kifossk", "versionCode": 7, "url": "https://f-droid.org/repo/com.shinydiscoballsdev.kifossk_7.apk"},
     {"package": "de.baumann.browser", "versionCode": 159, "url": "https://f-droid.org/repo/de.baumann.browser_159.apk"},
+    {"package": "juloo.keyboard2", "versionCode": 56, "url": "https://f-droid.org/repo/juloo.keyboard2_56_0fd96da.apk"},
     {"package": "com.best.deskclock", "versionCode": 2037, "url": "https://f-droid.org/repo/com.best.deskclock_2037.apk"},
     {"package": "org.jellyfin.mobile", "versionCode": 2070399, "url": "https://f-droid.org/repo/org.jellyfin.mobile_2070399.apk"},
     {"package": "com.unicornsonlsd.finamp", "versionCode": 52, "url": "https://f-droid.org/repo/com.unicornsonlsd.finamp_52.apk"}

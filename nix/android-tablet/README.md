@@ -25,9 +25,9 @@ and unattended first-unlock behavior still need physical validation.
 
 ## Current Installed Apps
 
-The [2026-10-14 snapshot](installed-apps/2026-10-14T174435Z-HVA0GSZV.json) contains
-**181 installed packages for Android user 0**, including framework, vendor and
-Google services, and overlays. This is not a count of 181 launcher apps. Each
+The [current app snapshot](installed-apps/HVA0GSZV.json), captured on 2026-10-14, contains
+**178 installed packages for Android user 0**, including framework, vendor and
+Google services, and overlays. This is not a count of 178 launcher apps. Each
 record includes package ID, version code, and APK path; no app data or secrets.
 
 | App | Package | Observed version code / status |
@@ -37,6 +37,8 @@ record includes package ID, version code, and APK path; no app data or secrets.
 | Termux:Boot | `com.termux.boot` | `1000` |
 | kiFOSSk | `com.shinydiscoballsdev.kifossk` | `7` |
 | FOSS Browser | `de.baumann.browser` | `159` |
+| Lenovo Launcher | `com.tblenovo.launcher` | Retained; default Home and stock Recent Apps |
+| Unexpected Keyboard | `juloo.keyboard2` | `56`; selected input method |
 | Open-source Clock | `com.best.deskclock` | `2037` |
 | Finamp | `com.unicornsonlsd.finamp` | `52` |
 | Plexamp | `tv.plex.labs.plexamp` | `324001157` |
@@ -55,9 +57,9 @@ From the repository root, refresh the inventory after maintenance:
 bash scripts/android-tablet-inventory.sh
 ```
 
-The exporter checks device identity through SSH and creates a new timestamped
-JSON file under `installed-apps/`, without overwriting previous logs or copying
-APKs/app data. Overrides: `TABLET_MANIFEST`, `TABLET_INVENTORY_DIR`, `TABLET_HOST`,
+The exporter checks device identity through SSH, validates the new JSON, and
+atomically replaces `installed-apps/HVA0GSZV.json`. It does not copy APKs or app
+data. Overrides: `TABLET_MANIFEST`, `TABLET_INVENTORY_DIR`, `TABLET_HOST`,
 `SSH_USER`, `SSH_PORT`, `SSH_IDENTITY_FILE`, and `SSH_KNOWN_HOSTS`.
 
 ## Host Deployment
@@ -238,18 +240,21 @@ The copy took approximately six minutes at 11 MB/s. `e2fsck -fn system-stock.img
 passed all five checks. A new unit requires its own size/hash. Do not repeat
 this full backup per app or create extra backups without approval.
 
-Install the replacement browser and Clock before deleting their originals:
+Install the replacement browser, Clock, and keyboard before deleting their originals:
 
 ```sh
 bash scripts/android-tablet-apps.sh install
 ```
 
 The [cleanup script](../../scripts/android-tablet-debloat.sh) now contains all
-**38 approved removal targets**, including the first 17 previously removed
+**42 approved removal targets**, including the first 17 previously removed
 outside the repo. Review the list for each fresh device. It preserves Settings,
 the launcher, Google core services, WebView, Bluetooth/audio, Dolby's service,
 integrated Lenovo dock components, and charging support. Standalone Alexa and
 the Dolby UI were removed by request; Dolby restoration was cancelled.
+Gboard, Coffee, and Lenovo OTA are also removed. The Gboard removal requires
+Unexpected Keyboard to be installed and selected. Lenovo OTA is separate from
+the retained `com.tonly.vega` dock firmware helper.
 
 Transfer the script with `adb push`, restore mode `0700` after each upload, and
 run its read-only preflight before the actual removal:
@@ -408,6 +413,21 @@ check alone is not enough: validate device scripts in Android's actual shell.
   services, root, enforcing SELinux, read-only system and charging preference.
 - **2026-10-14:** verified SSH alias `d0ntblink` and saved the 181-package log.
   Material Files is present; Plex video and Jellyfin video are currently absent.
+- **2026-10-14:** changed dock intent to audio and charging only. Physically
+  removed `amazon.speech.sim` and cleared its assistant, voice-interaction, and
+  recognition bindings. Retained `com.lenovo.smart_tab_m10_alexa`,
+  `com.tonly.vega`, Bluetooth, and Dolby's audio service. Charge protection
+  remained enabled. Saved the new 180-package snapshot; no reboot or backup.
+  Global system remount remained busy/writable. Physical dock audio and automatic
+  pairing after Alexa removal still require testing; retained components alone
+  do not prove those functions work.
+- **Launcher/keyboard cleanup:** installed Unexpected Keyboard and selected
+  `juloo.keyboard2/.Keyboard2`. Tried KISS, then fully uninstalled it and restored
+  Lenovo Launcher as Home at the user's request. Removed KISS from the managed
+  app list. Physically removed Gboard factory/update APKs and Lenovo OTA, and
+  fully uninstalled Coffee. Refreshed the canonical inventory to 178 packages.
+  No reboot or backup; the global system mount remains writable after a busy
+  read-only remount attempt.
 
 ## Remaining Setup
 
