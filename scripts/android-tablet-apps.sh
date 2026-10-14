@@ -77,4 +77,13 @@ if [[ "$mode" = install ]]; then
     if [[ -n "$browser_package" ]]; then
         adb_command -s "$target" shell cmd role add-role-holder --user 0 android.app.role.BROWSER "$browser_package"
     fi
+    launcher_package=$(jq -r '.device.launcherPackage // empty' "$manifest")
+    if [[ -n "$launcher_package" ]]; then
+        adb_command -s "$target" shell cmd role add-role-holder --user 0 android.app.role.HOME "$launcher_package"
+    fi
+    input_method=$(jq -r '.device.inputMethod // empty' "$manifest")
+    if [[ -n "$input_method" ]]; then
+        adb_command -s "$target" shell ime enable "$input_method"
+        adb_command -s "$target" shell ime set "$input_method"
+    fi
 fi

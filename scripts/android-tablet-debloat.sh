@@ -1,5 +1,6 @@
 #!/system/bin/sh
 set -eu
+export PATH=/system/bin:/system/xbin:/sbin
 
 [[ "$(id -u)" = 0 ]]
 [[ "$(getprop ro.serialno)" = HVA0GSZV ]]
@@ -49,7 +50,15 @@ com.amazon.dee.app|/data/app-3rd/Vox
 com.tblenovo.center|/system/priv-app/TabletCenter
 com.android.chrome|/system/product/app/Chrome
 com.google.android.deskclock|/system/product/app/DeskClockGoogle
-com.dolby.daxappui|/system/app/DaxUI'
+com.dolby.daxappui|/system/app/DaxUI
+amazon.speech.sim|/system/priv-app/Vega
+com.google.android.inputmethod.latin|/system/product/app/LatinImeGoogle
+com.lenovo.ota|/system/priv-app/LenovoOTA'
+
+if [[ -d /system/product/app/LatinImeGoogle ]]; then
+    [[ -n "$(pm path juloo.keyboard2 2>/dev/null || true)" ]]
+    [[ "$(settings get secure default_input_method)" = juloo.keyboard2/.Keyboard2 ]]
+fi
 
 if [[ -d /system/product/app/Chrome ]]; then
     [[ -n "$(pm path de.baumann.browser 2>/dev/null || true)" ]]
@@ -83,6 +92,12 @@ if [[ "$mode" = --check ]]; then
     printf 'Removal preflight passed; no device changes made.\n'
     exit 0
 fi
+
+for setting in assistant voice_interaction_service voice_recognition_service; do
+    case "$(settings get secure "$setting")" in
+        amazon.speech.sim/*) settings put secure "$setting" "" ;;
+    esac
+done
 
 restore_readonly() {
     if ! mount -o remount,ro /; then
@@ -128,6 +143,13 @@ for entry in $apps; do
     removed_count=$((removed_count + 1))
     printf 'Removed %s, including factory and update APKs\n' "$package"
 done
+
+if [[ -n "$(pm path com.github.muellerma.coffee 2>/dev/null || true)" ]]; then
+    am force-stop com.github.muellerma.coffee
+    pm uninstall com.github.muellerma.coffee
+    removed_count=$((removed_count + 1))
+    printf 'Uninstalled com.github.muellerma.coffee\n'
+fi
 
 sync
 restore_readonly

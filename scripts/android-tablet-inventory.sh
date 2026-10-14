@@ -24,11 +24,10 @@ serial=$(printf '%s\n' "$raw" | sed -n '1p')
 firmware=$(printf '%s\n' "$raw" | sed -n '2p')
 [[ "$serial" = "$expected_serial" && -n "$firmware" ]]
 captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-filename="$(date -u +%Y-%m-%dT%H%M%SZ)-$serial.json"
+filename="$serial.json"
 
 umask 077
 mkdir -p "$output_dir"
-[[ ! -e "$output_dir/$filename" ]]
 temporary=$(mktemp "$output_dir/.inventory.XXXXXX")
 trap 'rm -f "$temporary"' EXIT
 
@@ -50,6 +49,7 @@ printf '%s\n' "$raw" | sed '1,2d' | jq -Rn \
     } end' > "$temporary"
 
 jq -e '.packageCount == (.packages | length) and .packageCount > 0' "$temporary" >/dev/null
-mv "$temporary" "$output_dir/$filename"
+
+mv -fT -- "$temporary" "$output_dir/$filename"
 trap - EXIT
 printf 'Recorded %s packages: %s\n' "$(jq -r '.packageCount' "$output_dir/$filename")" "$output_dir/$filename"
