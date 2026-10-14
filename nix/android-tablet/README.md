@@ -15,7 +15,7 @@ HA-200 dock and stock 60% charging limit have not been validated on another ROM.
 | Management | Wi-Fi ADB `10.0.10.166:5555`; key-only SSH `d0ntblink@10.0.10.166:8022` |
 | Network | DHCP, no reservation; see [MAC inventory](../../docs/mac-inventory.md) |
 | Charging | `battery_protected_charge=1`; stock UI specifies a 60% limit |
-| Reboot test | Wi-Fi ADB passed; latest SSH boot job recovered after a scheduling fix; fresh reboot test pending |
+| Reboot test | After the scheduling fix, SSH and Wi-Fi ADB returned automatically on the approved 2026-10-14 reboot |
 
 No further reboot, factory reset, or backup is authorized by these scripts.
 A new tablet needs separate unlock/wipe approval and its own recovery images.
@@ -351,8 +351,15 @@ adb_device shell am set-standby-bucket com.termux.boot active
 The queued job then ran without a forced job execution or manual daemon start.
 Verified authorized-key SSH in Termux's normal SELinux sandbox, root access,
 enforcing SELinux, and read-only system on the same boot. The deployment script
-now includes both commands. A fresh reboot after this fix still needs separate
-approval and validation; recovery of the queued job is not a new reboot test.
+now includes both commands. A separately approved reboot on 2026-10-14 then
+passed: boot ID changed to `d4ebe114-6bbb-404b-9982-1d7e922da05f`, Wi-Fi ADB
+returned first, and SSH followed automatically without a forced job execution,
+manual daemon start, or another exemption change. Verified authorized-key login
+in Termux's normal sandbox, root, enforcing SELinux, read-only system, both
+persisted battery exemptions, and Termux:Boot standby bucket `5` (exempted).
+Lenovo Home, Unexpected Keyboard, charging protection, and the latest app
+removals survived. Audio/Bluetooth services were running; physical dock audio,
+charge cutoff, and audible alarms remain separate checks.
 
 For diagnostics, use a separate port **and PID file** in a separate Termux
 session; leave unrelated user programs running:
