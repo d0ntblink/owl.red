@@ -1,0 +1,28 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+export HOME=/data/data/com.termux/files/home
+export PREFIX=/data/data/com.termux/files/usr
+export PATH="$PREFIX/bin:/system/bin"
+export TMPDIR="$PREFIX/tmp"
+export LANG=C.UTF-8
+source_dir=${1:?Provide the staged configuration directory}
+[[ "$(id -u)" -ne 0 ]]
+umask 077
+
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y openssh
+mkdir -p "$HOME/.ssh" "$HOME/.termux/boot"
+chmod 700 "$HOME/.ssh" "$HOME/.termux/boot"
+touch "$HOME/.ssh/authorized_keys"
+chmod 600 "$HOME/.ssh/authorized_keys"
+while IFS= read -r public_key || [[ -n "$public_key" ]]; do
+    [[ -n "$public_key" ]] || continue
+    if ! grep -qxF -- "$public_key" "$HOME/.ssh/authorized_keys"; then
+        printf '%s\n' "$public_key" >> "$HOME/.ssh/authorized_keys"
+    fi
+done < "$source_dir/public-key.pub"
+install -m 600 "$source_dir/sshd_config" "$HOME/.ssh/sshd_config"
+install -m 700 "$source_dir/start-sshd" "$HOME/.termux/boot/00-sshd"
+"$HOME/.termux/boot/00-sshd"
+printf 'SSH user: %s\n' "$(whoami)"
+ssh-keygen -lf "$PREFIX/etc/ssh/ssh_host_ed25519_key.pub"

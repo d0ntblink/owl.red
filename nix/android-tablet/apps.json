@@ -1,0 +1,34 @@
+{
+  "device": {
+    "serial": "HVA0GSZV",
+    "adbTarget": "10.0.10.166:5555",
+    "sshUser": "u0_a165",
+    "sshPort": 8022,
+    "browserPackage": "de.baumann.browser",
+    "clockPackage": "com.best.deskclock",
+    "screensaverComponent": "com.best.deskclock/.screensaver.Screensaver",
+    "homeAssistantUrl": null
+  },
+  "fdroidSigningKey": "37D2C98789D8311948394E3E41E7044E1DBA2E89",
+  "apps": [
+    {"package": "org.fdroid.fdroid", "versionCode": 1023052, "url": "https://f-droid.org/repo/org.fdroid.fdroid_1023052.apk"},
+    {"package": "com.termux", "versionCode": 1002, "url": "https://f-droid.org/repo/com.termux_1002.apk"},
+    {"package": "com.termux.boot", "versionCode": 1000, "url": "https://f-droid.org/repo/com.termux.boot_1000.apk"},
+    {"package": "com.shinydiscoballsdev.kifossk", "versionCode": 7, "url": "https://f-droid.org/repo/com.shinydiscoballsdev.kifossk_7.apk"},
+    {"package": "de.baumann.browser", "versionCode": 159, "url": "https://f-droid.org/repo/de.baumann.browser_159.apk"},
+    {"package": "com.best.deskclock", "versionCode": 2037, "url": "https://f-droid.org/repo/com.best.deskclock_2037.apk"},
+    {"package": "org.jellyfin.mobile", "versionCode": 2070399, "url": "https://f-droid.org/repo/org.jellyfin.mobile_2070399.apk"},
+    {"package": "com.unicornsonlsd.finamp", "versionCode": 52, "url": "https://f-droid.org/repo/com.unicornsonlsd.finamp_52.apk"}
+  ],
+  "storeApps": [
+    {"name": "Plex", "package": "com.plexapp.android", "url": "https://play.google.com/store/apps/details?id=com.plexapp.android"},
+    {"name": "Plexamp", "package": "tv.plex.labs.plexamp", "url": "https://play.google.com/store/apps/details?id=tv.plex.labs.plexamp"},
+    {"name": "Android System WebView", "package": "com.google.android.webview", "url": "https://play.google.com/store/apps/details?id=com.google.android.webview"}
+  ],
+  "constraints": {
+    "rebootAllowed": false,
+    "additionalBackupsAllowed": false,
+    "preserveGoogleCore": true,
+    "preserveLenovoDockAndChargeProtection": true
+  }
+}

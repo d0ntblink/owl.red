@@ -205,6 +205,46 @@ Each node is a single-NIC Lenovo ThinkCentre M73 SFF. The `vmbr0` bridge inherit
 | Utility services | speedtest-tracker, Librespeed, flarednsresolver | Internal utility and observability services |
 | Future / specialized | flaresolver, GPU-backed workloads | Planned once GPU path is ready |
 
+### Bedside Tablet : Lenovo Tab M10 FHD Plus
+
+| Field | Value |
+|-------|-------|
+| Model | Lenovo `TB-X606FA` |
+| Serial | `HVA0GSZV` |
+| CPU | MediaTek MT8768, 8 cores, up to 2.3 GHz, ARM64 |
+| GPU | PowerVR Rogue GE8320 |
+| RAM | 2 GB (1.76 GiB visible to Android) |
+| Storage | 32 GB eMMC |
+| Display | 1200 x 1920 |
+| OS | Lenovo Android 10 (API 29) |
+| Dock | Lenovo HA-200 |
+| Purpose | Bedside Home Assistant dashboard, alarm clock, and media playback |
+
+See [MAC inventory](docs/mac-inventory.md) for network addresses and
+[tablet management](nix/android-tablet/README.md) for SSH and deployment details.
+
+### Cameras : WUUK Y0510 (x2)
+
+| Field | Value |
+|-------|-------|
+| Model | WUUK Y0510 |
+| Type | PTZ IP camera |
+| CPU / SoC | `t31x` (recorded platform; exact variant not verified) |
+| RAM | Not recorded |
+| Image sensor | `SC4336P` |
+| Flash | `ZB25VQ128` |
+| Firmware | Not recorded |
+| Purpose | Local camera monitoring, foyer and office |
+
+| Device | Location | MAC | Recorded IP reservation |
+|--------|----------|-----|-------------------------|
+| `wuuk-ptz-foyer` | Foyer | `02:7f:f6:05:40:fc` | `10.0.10.186` |
+| `wuuk-ptz-office` | Office | `02:2d:1f:56:ee:b8` | `10.0.10.124` |
+
+Source: [MAC inventory](docs/mac-inventory.md). Its recorded VLAN 50 target and
+local-only requirement need reconciliation; the IP reservations are also marked
+for migration there. No network assignment was changed by this documentation update.
+
 ---
 
 ## Core Services and Network Behavior
