@@ -2,7 +2,7 @@ Port 8022
 AddressFamily inet
 ListenAddress 0.0.0.0
 HostKey /data/data/com.termux/files/usr/etc/ssh/ssh_host_ed25519_key
-PidFile /data/data/com.termux/files/usr/var/run/sshd.pid
+PidFile /data/data/com.termux/files/usr/var/run/owl-tablet-sshd.pid
 AuthorizedKeysFile .ssh/authorized_keys
 PubkeyAuthentication yes
 AuthenticationMethods publickey

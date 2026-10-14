@@ -36,6 +36,14 @@ push_file "$config_dir/sshd_config" "$stage/sshd_config"
 push_file "$config_dir/start-sshd" "$stage/start-sshd"
 push_file "$config_dir/setup-termux-ssh" "$stage/setup-termux-ssh"
 adb_device shell "su -c 'mkdir -p $termux_home/.cache/owl-ssh && cp $stage/public-key.pub $stage/sshd_config $stage/start-sshd $stage/setup-termux-ssh $termux_home/.cache/owl-ssh/ && chown -R $termux_uid:$termux_uid $termux_home/.cache/owl-ssh && chmod 700 $termux_home/.cache/owl-ssh && chmod 600 $termux_home/.cache/owl-ssh/*'"
+restore_termux_labels() {
+    adb_device shell su -c 'restorecon -RF /data/data/com.termux'
+}
+trap restore_termux_labels EXIT
+restore_termux_labels
 adb_device shell "su --drop-cap -g $termux_uid -G 3003 $termux_uid -c 'HOME=$termux_home PREFIX=$termux_prefix TMPDIR=$termux_prefix/tmp PATH=$termux_prefix/bin:/system/bin $termux_prefix/bin/bash $termux_home/.cache/owl-ssh/setup-termux-ssh $termux_home/.cache/owl-ssh'"
+restore_termux_labels
+trap - EXIT
 adb_device shell dumpsys deviceidle whitelist +com.termux
 adb_device shell am start -n com.termux.boot/.BootActivity
+printf 'Configuration ready. Run ~/.termux/boot/00-sshd once inside Termux to start SSH in its normal app sandbox.\n'

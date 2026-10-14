@@ -221,7 +221,11 @@ Each node is a single-NIC Lenovo ThinkCentre M73 SFF. The `vmbr0` bridge inherit
 | Purpose | Bedside Home Assistant dashboard, alarm clock, and media playback |
 
 See [MAC inventory](docs/mac-inventory.md) for network addresses and
-[tablet management](nix/android-tablet/README.md) for SSH and deployment details.
+[the tablet setup runbook](nix/android-tablet/README.md) for the fresh-device
+sequence, rooting, one-batch cleanup, apps, SSH/Wi-Fi ADB, and known fixes.
+The [dated installed-app log](nix/android-tablet/installed-apps/2026-10-14T174435Z-HVA0GSZV.json)
+records the current package IDs and versions. Refresh it from the repo root
+with `bash scripts/android-tablet-inventory.sh` after app changes.
 
 ### Cameras : WUUK Y0510 (x2)
 
