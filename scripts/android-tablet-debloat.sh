@@ -6,7 +6,30 @@ set -eu
 [[ "$(getprop ro.build.display.id)" = TB-X606FA_S300623_230730_BMP ]]
 [[ "$(getprop ro.boot.veritymode)" = disabled ]]
 
-apps='com.google.android.youtube|/system/product/app/YouTube
+mode=${1:-apply}
+case "$mode" in
+    apply|--check) ;;
+    *) printf 'Usage: %s [apply|--check]\n' "$0" >&2; exit 2 ;;
+esac
+
+apps='com.android.egg|/system/app/EasterEgg
+com.android.bips|/system/app/BuiltInPrintService
+com.android.printspooler|/system/app/PrintSpooler
+com.google.android.printservice.recommendation|/system/app/GooglePrintRecommendationService
+com.google.android.gm|/system/product/app/Gmail2
+com.google.android.apps.docs|/system/product/app/Drive
+com.google.android.apps.maps|/system/product/app/Maps
+com.google.android.apps.tachyon|/system/product/app/Duo
+com.google.android.videos|/system/product/app/Videos
+com.google.android.calendar|/system/product/app/CalendarGoogle
+com.tblenovo.kidslauncher|/system/priv-app/KidsLauncher
+cn.sinoangel.monsterclass|/data/app-3rd/MonsterClasscomm
+cn.sinoangel.color|/data/app-3rd/MonsterColor
+cn.sinoangel.kidcamera|/data/app-3rd/MonsterCamera
+com.microsoft.bing.wallpapers|/data/app-3rd/BingWallpaper
+com.google.android.calculator|/data/app-3rd/CalculatorGoogle
+com.tblenovo.soundrecorder|/data/app-3rd/LenovoSoundRecorder
+com.google.android.youtube|/system/product/app/YouTube
 com.google.android.apps.youtube.music|/system/app/YTMusic
 com.amazon.mp3|/data/app-3rd/AmazonMusic
 com.google.android.googlequicksearchbox|/system/product/priv-app/Velvet
@@ -55,6 +78,11 @@ for entry in $apps; do
         esac
     done
 done
+
+if [[ "$mode" = --check ]]; then
+    printf 'Removal preflight passed; no device changes made.\n'
+    exit 0
+fi
 
 restore_readonly() {
     if ! mount -o remount,ro /; then

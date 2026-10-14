@@ -2,7 +2,9 @@
   "device": {
     "serial": "HVA0GSZV",
     "adbTarget": "10.0.10.166:5555",
-    "sshUser": "u0_a165",
+    "persistentWifiAdb": true,
+    "wifiAdbPort": 5555,
+    "sshUser": "d0ntblink",
     "sshPort": 8022,
     "browserPackage": "de.baumann.browser",
     "clockPackage": "com.best.deskclock",
