@@ -1,5 +1,9 @@
 # Changing owl.red — which tool owns what
 
+Install and verify the owning lane's prerequisites from
+[Controller Setup And Tool Requirements](controller-setup.md) before running
+the commands below. Document new tool/script dependencies there when adding them.
+
 Pick the right place to make a change. Ownership follows [ADR 007](../decisions/007-terraform-vs-ansible-boundaries.md):
 **Terraform** provisions infrastructure, **Ansible** configures mutable hosts,
 **Fleet** owns Kubernetes resources, and the **Technitium LXC systemd sync**

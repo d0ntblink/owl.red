@@ -60,15 +60,20 @@ tagged behavior at every boundary before attaching NICs or changing management.
 
 Desired state (`gitops/technitium/`: server settings, the `zones/owl.red.zone` zone
 file, DHCP scopes and reservations) remains Git-managed. The LXC systemd timer
-checks every 15 minutes and skips an unchanged SHA. Any new repository SHA,
-including a documentation-only commit, triggers the full settings/zone/scope/
-reservation pass. It is not a Fleet-managed CronJob.
+checks every 15 minutes. The prepared reconciler checks DHCP serving state even
+on unchanged SHAs; a new SHA triggers the full settings/zone/scope/reservation
+pass. The previously audited binary skipped unchanged SHAs entirely and remains
+the runtime baseline until the Nix-host update is deployed. This is not a
+Fleet-managed CronJob.
 
 Before making target interfaces reachable, establish explicit disabled DHCP
-scope state and verify that reconciliation/restart cannot undo it. Source
-`enabled` fields passed to `scopes/set` are not a demonstrated enable/disable
-implementation; the upstream API documents separate `scopes/enable` and
-`scopes/disable` calls. Verify them against the installed version. Do not
+scope state and verify that reconciliation/restart cannot undo it. Source now
+prepares all scopes disabled, with separate `scopes/enable`, `scopes/disable`
+and `/list` read-back plus Nix-owned `DHCP_ENABLE_ALLOWED=false`. Offline tests
+pass, but live deployment and packet checks remain required. Missing scopes are
+rejected before writes because upstream creation starts enabled; isolated IaC
+bootstrap is required for a fresh server. The activation lock prevents new
+enables, not an emergency shutdown of already-serving scopes. Do not
 enable the replacement server until the old authority for that broadcast domain
 is disabled and outstanding leases/pool exclusions are accounted for.
 
@@ -121,7 +126,7 @@ management listeners and forwarding so it does not become an isolation bypass.
 |------|------------|
 | edge.pve node failure | Existing leases/static addresses can preserve L2 communication, not lost DNS/routing. Verify recovery access independent of edge and evaluate later fenced failover; the failed host's own web console is not independent recovery. |
 | Technitium LXC process crash | `systemd` (inside LXC) restarts `dns.service` automatically. LXC configured `start_on_boot = true`. |
-| Zone sync fails or only partly converges | Inspect the service journal and actual API/record state; the timer schedule and saved SHA do not prove convergence. Reservation warnings can still allow SHA recording. |
+| Zone sync fails or only partly converges | Inspect the service journal and actual state. The prepared revision fails before activation/SHA recording on reservation API errors; the old running script could warn and save a SHA. A failed full pass can leave managed DHCP disabled. |
 | Trunk/PVID change breaks management | Save the affected switch/host configuration, prove a recovery port and match ingress/egress behavior first. An intended native VLAN is not a guarantee of uninterrupted access. |
 | Technitium loses DHCP leases on restart | Technitium persists leases to disk on the LXC. Local storage survives process restart. |
 | Contained `/24` targets conflict with legacy `/16` on-link routing | Resolve the overlap in the approved transition design before routing the targets; do not default to IoT-first cutover. |

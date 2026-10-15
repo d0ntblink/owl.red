@@ -276,6 +276,71 @@ passed-through GTX 1060 is visible with NVIDIA driver `580.178.04`.
 - Camera operation, physical cable labels, battery runtime, audible alarms,
   restore integrity and actual VLAN isolation were not tested.
 
+## Follow-Up: Authenticated Router Survey
+
+**Observed:** 2026-10-14 America/Edmonton; API/DNS probes through
+2026-10-15T02:44:54Z. **Repository baseline:** `f50da7f`.
+This follow-up resolves the earlier API-access gap, not the network faults.
+Router requests were GET-only; no configuration, lease, service, rule, resolver,
+interface or VM change was applied. The original audit observations above remain
+dated history.
+
+### Vault Access Root Cause
+
+The installed Bitwarden CLI `2026.4.1` reproduced
+[upstream issue 20703](https://github.com/bitwarden/clients/issues/20703): a valid
+password returned an 88-character session key, but subsequent status and
+non-interactive item reads remained locked. Correct environment assignment and
+explicit `--session` did not fix it; this was not evidence of a wrong password,
+missing TOTP, or a session duration that needed extending.
+
+The official Linux `2026.7.0` release was downloaded and its published SHA256
+digest verified. Using a private, owner-only copy of the CLI profile, both
+`status` and an actual dedicated router-item read succeeded in separate
+processes. The installed binary and original profile were left unchanged; the
+audit helper uses the isolated working CLI. The local credential file remains
+Git-ignored and was restricted to mode `600`. No password, session key or API
+credential is recorded here.
+
+### Current Router Evidence
+
+| Surface | Authenticated observation |
+|---------|---------------------------|
+| Version and interfaces | OPNsense `26.1.9`; LAN `ixl1` is up at `10.0.10.1/16`, with MAC `6c:fe:54:70:08:31`; WAN `igc0` is up; spare `ixl0` has no carrier. No VLAN devices are configured. |
+| IPv4 routing | Connected LAN route is `10.0.0.0/16` on `ixl1`, with the default route through WAN. No target VLAN `/24` connected routes are present. |
+| DHCP authority | OPNsense Dnsmasq is running on LAN. Kea is disabled. The configured dynamic range is `10.0.10.100` through `10.0.10.200`; range mask and lease-time fields are blank, not explicit `/24` settings. There are 16 lease records and eight host/reservation entries. Lease records are not proof every client is currently online. |
+| Address evidence | All returned LAN lease addresses and LAN ARP entries are inside `10.0.10.0/24`; 25 ARP entries include WAN/self entries. This supports evaluating mask contraction, but cannot discover every offline/static client or prove client masks. |
+| DNS ownership | Unbound is running on port 53; Dnsmasq DNS is on port 53053. Unbound has an enabled `owl.red` forward to `127.0.0.1:53053`, described as forwarding the default domain to Dnsmasq DHCP. No Technitium forward or Unbound host override was present in these responses. |
+| DNS behavior | Router `10.0.10.1` returns NXDOMAIN for `rancher.owl.red`; Technitium `10.0.10.30` returns authoritative `10.0.10.201`. Both resolve `example.com`. This confirms a resolver-path fault, not a Technitium authoritative-zone failure. |
+| Aliases/filter coverage | Seven alias results are built-in/internal tables, not seven custom aliases. The automation filter search returns zero rules; this does not mean the classic or effective firewall is empty. Runtime rule labels include default LAN IPv4/IPv6 allow rules, WAN bogon/private blocks, DHCP rules and anti-lockout. Full classic-rule semantics remain to be captured. |
+| Inbound NAT | One configured enabled IPv4 TCP WAN rule, `Plex Media Server`, forwards WAN port `32400` to `10.0.10.5:32400`, with source `any` and pass enabled. Anti-lockout redirect entries are separate built-ins. No external reachability test was performed; configuration is not proof of reachability. Do not remove the rule without reviewing the intended Plex exception to ADR 012. |
+| Other NAT/portal | API searches returned no explicit source-NAT or one-to-one rules and no captive portal zones. The legacy automatic outbound-NAT mode was not established by these empty lists. |
+| IPv6 | The live route table has a WAN IPv6 default and a global LAN `/56` connected route. Dnsmasq's RA enable flag is set; the separate radvd status endpoint reports `unknown`. Actual RA/DHCPv6 advertisements, client behavior and IPv6 policy need explicit checks before segmentation. |
+
+### Transition Implications
+
+- Preserve OPNsense Dnsmasq DHCP and Unbound client DNS during preparation.
+  Any interim DNS repair would be a separately approved change to the existing
+  OPNsense path, not an early client/CoreDNS switch to the final design.
+- The live DHCP pool includes `.200`, inside the existing MetalLB
+  `.200-.250` allocation range. Reconcile that overlap before allocating or
+  migrating addresses; no conflicting `.200` lease was observed in this snapshot.
+- Keep the eight current OPNsense reservations in the handoff/rollback map,
+  not just the 26 Technitium target records. The storage-host entry is named
+  `nas.pve.owl.red` at `.4`; the NAS lease/reservation MAC differs from its ARP
+  MAC at `.5`. The workstation appears under multiple MACs, and the work-laptop
+  lease uses a different MAC from the target registry. Verify identities and the
+  operator's actual NIC before moving or pruning anything; none of these alone
+  proves a duplicate IP.
+- Prefer evaluating mask-only contraction on the current untagged L2 before
+  routed target VLANs, subject to the remaining client/static-address and
+  recovery checks. IPv6 and existing Plex access must be part of that design,
+  not silently disabled or bypassed.
+- Remaining prerequisites include the affected configuration export/restore
+  method, independent router/switch recovery, full legacy filter/outbound-NAT
+  settings, current root-key status, real-client DHCP options and actual AP
+  cabling/bridges. No Terraform import, plan or apply was run.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
@@ -292,8 +357,12 @@ NFS/stateful work, not network preparation.
 `/24`, so management-mask contraction and management VLAN tagging cannot be
 collapsed into an unconditional "IoT first, management last" instruction.
 Technitium's audited enabled scopes need explicit lifecycle control before new
-NICs become reachable; `sync.sh` only sets scope properties, while the upstream
-API documents separate enable/disable operations. A new repository SHA can
+NICs become reachable; the audited running script only sets scope properties,
+while the upstream API documents separate enable/disable operations. The next
+offline IaC change prepares disabled scope intent, a Nix-owned activation lock,
+explicit lifecycle/read-back checks and a network-free CI regression suite.
+That source change is not deployed and does not close the live DHCP gate.
+A new repository SHA can
 trigger a full sync even for a documentation-only commit. These are transition
 risks, not proof that the observed zero-lease scopes are actively serving clients.
 
