@@ -4,6 +4,21 @@
 > All changes network, infrastructure, k8s, config : are made here first, then applied.  
 > No configuration is managed outside this repo except for initial hardware bootstrap.
 
+## Observed State (2026-10-14)
+
+The [live audit](docs/issues/008-live-state-vs-repository.md) distinguishes
+deployed state from the target tables below. All six PVE hosts, eight guests and
+four Talos nodes were online, and all 26 confirmed reservations matched Git.
+The network was still flat /16, however: switch ports used PVID 1, the AP uplink
+had no link, and Technitium had one NIC with its VLAN 10 DHCP scope disabled.
+Gateway/pod DNS, Fleet convergence and management TLS still need correction;
+there was no shared-storage/PVC setup or registered PVE backup coverage.
+
+Follow the [roadmap stabilization gates](ROADMAP.md#stabilization-gates) before
+disruptive Phase 0/1 deployment. Read-only/offline work can continue; full PBS,
+off-cluster certificate distribution and optional GNSS hardware are not blanket
+prerequisites. No remediation was performed by the audit or this doc update.
+
 ## Quick Reference
 
 ### VLANs
@@ -29,7 +44,7 @@ reservations do not configure switch-port or WiFi VLAN membership. The canonical
 | `10.0.10.2` | `switch.owl.red` | MikroTik CSS326 | Switch management |
 | `10.0.10.3` | `edge.pve.owl.red` | CSE-523L Proxmox | Router node PVE host |
 | `10.0.10.4` | `storage.pve.owl.red` | RSV-L4500U Proxmox | Storage node PVE host |
-| `10.0.10.5` | `nas.owl.red` | Unraid | NFS/SMB storage, Plex media server |
+| `10.0.10.5` | `nas.owl.red` | Unraid VM 101 on storage.pve | SMB/Plex; NFS planned, currently disabled |
 | `10.0.10.6` | `ipmi.storage.owl.red` | X10SRi-F IPMI/BMC | Remote management for storage node |
 | `10.0.10.9` | `pdu.owl.red` | APC AP7900B PDU | Rack PDU management |
 | `10.0.10.11` | `cp1.pve.owl.red` | ThinkCentre M73 #1 | PVE host for k8s control plane |
@@ -40,9 +55,9 @@ reservations do not configure switch-port or WiFi VLAN membership. The canonical
 | `10.0.10.22` | `cp2.k8s.owl.red` | Talos VM on cp2.pve | k8s control plane node |
 | `10.0.10.23` | `cp3.k8s.owl.red` | Talos VM on cp3.pve | k8s control plane node |
 | `10.0.10.24` | `worker1.k8s.owl.red` | Talos VM on worker1.pve | k8s worker node |
-| `10.0.10.31` | `pdm.owl.red` | PDM VM on storage.pve | Proxmox Datacenter Manager |
-| `10.0.10.33` | `pbs.owl.red` | PBS VM on storage.pve | Proxmox Backup Server |
-| `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | WAP management |
+| `10.0.10.31` | `pdm.owl.red` | PDM LXC 231 on cp1.pve | Proxmox Datacenter Manager; cp1-only HA affinity |
+| `10.0.10.33` | `pbs.owl.red` | PBS VM planned on storage.pve | Not yet provisioned |
+| `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | Recorded WAP management address; unreachable at audit |
 
 ### VLAN 20 Private Clients (target allocations)
 
@@ -95,7 +110,7 @@ Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it
 
 CSS326 front numbering is staggered by column: top row is even ports, bottom row is odd ports.
 
-| Switch Port | Patch | Target | Role / VLANs | Notes |
+| Switch Port | Patch | Target | Target Role / VLANs | Notes |
 |-------------|-------|--------|--------------|-------|
 | `SW02` | `PP25` | `cp1.pve.owl.red` | VLAN 10 access | Active |
 | `SW04` | `PP26` | `cp2.pve.owl.red` | VLAN 10 access | Active |
@@ -105,7 +120,7 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | `SW12` | `PP30` | `storage.pve.owl.red` | VLAN 10 access | Active, obnic1 (bond standby) |
 | `SW14` | `PP31` | `ipmi.storage.owl.red` | VLAN 10 access | Active |
 | `SW16` | `PP32` | `pdu.owl.red` | VLAN 10 access | Active |
-| `SW18` | `PP33` | `ap.owl.red` | 802.1Q trunk `10/20/30/40/50` | Active, 1G |
+| `SW18` | `PP33` | `ap.owl.red` | 802.1Q trunk `10/20/30/40/50` | No link in 2026-10-14 audit |
 | `SW22` | `PP35` | `Network Cabinet` | 802.1Q trunk `10/20/30/40/50` | Active |
 | `SW24` | `PP36` | `edge.pve.owl.red` eth0 | VLAN 10 management | Active |
 | `SFP+1` | `PP16 to PP37` | `edge.owl.red` SFP+ passthrough | 10G OPNsense uplink path | Active |
@@ -120,7 +135,7 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | Field | Value |
 |-------|-------|
 | Chassis | Supermicro CSE-523L-505B (2U) |
-| CPU | Intel i3 8300 |
+| CPU | Intel Core i3-8100 (live audit) |
 | Motherboard | Asus PRIME B365M |
 | RAM | 32 GB (4 × 8 GB) |
 | Hypervisor | Proxmox VE — `edge.pve.owl.red` `10.0.10.3` |
@@ -141,7 +156,7 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | OS | SwOS `2.18` |
 | Management IP | `10.0.10.2` (`switch.owl.red`) |
 | Management MAC | `48:8f:5a:0c:d1:82` |
-| VLAN mode | 802.1Q — access + trunk by port |
+| VLAN mode | Target: 802.1Q access/trunk by port; audited ports still Optional/PVID 1, VLAN membership only on disabled port 5 |
 | IaC source | `ansible/switch_configs/css326.yml` |
 
 ### Storage Node : RSV-L4500U / Supermicro X10SRi-F
@@ -152,13 +167,13 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | Platform | Supermicro X10SRi-F | LGA 2011 / Xeon |
 | RAM | 32 GB | 4 × 8 GB |
 | Hypervisor | Proxmox VE | `storage.pve.owl.red` — `10.0.10.4` (bond0 via obnic0+obnic1) |
-| Unraid | bare metal | `nas.owl.red` — `10.0.10.5`; VM migration planned |
+| Unraid | VM 101 on storage.pve | `nas.owl.red` — `10.0.10.5`; Unraid 7.3.3, NFS disabled |
 | IPMI | `10.0.10.6` | Always-on BMC |
-| PDM | `10.0.10.31` | Proxmox Datacenter Manager workload |
-| PBS | `10.0.10.33` | Proxmox Backup Server workload |
-| Passthrough NIC | Intel X710 2-port SFP+ | Passed to Unraid → SW SFP+2 |
-| Passthrough HBA 1 | LSI 9207-8i | Passed to Unraid for direct disk access |
-| Passthrough HBA 2 | LSI 9207-8i | Passed to Unraid for direct disk access |
+| PDM | `10.0.10.31` | LXC 231 actually runs on cp1.pve, not this storage host |
+| PBS | `10.0.10.33` | Planned, not yet provisioned |
+| Passthrough NIC | Intel 82599ES 2-port SFP+ | Passed to Unraid → SW SFP+2 |
+| Passthrough HBA 1 | Broadcom / LSI SAS3008 | Passed to Unraid for direct disk access |
+| Passthrough HBA 2 | Broadcom / LSI SAS3008 | Passed to Unraid for direct disk access |
 | Passthrough GPU | NVIDIA GeForce GTX 1060 6GB | Passed to Unraid for AI / transcoding |
 
 | Interface | Hardware | MAC | Role | Speed |
@@ -176,9 +191,9 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | Model | D-Link DIR-885L (OpenWrt) |
 | Management IP | `10.0.10.40` (`ap.owl.red`) |
 | Management MAC | `10:be:f5:d9:1e:37` |
-| Uplink | `SW18` via `PP33` — 802.1Q trunk VLANs `10/20/30/40/50`, 1G |
+| Uplink | Recorded `SW18` via `PP33`; target trunk VLANs `10/20/30/40/50`, but no link at audit |
 
-| SSID | VLAN | Notes |
+| Target SSID | Target VLAN | Notes |
 |------|------|-------|
 | `owl.red` | `20` | Trusted clients |
 | `silence of the lans` | `30` | Guest clients behind captive portal |
@@ -199,26 +214,26 @@ Each node is a single-NIC Lenovo ThinkCentre M73 SFF. The `vmbr0` bridge inherit
 
 | Field | Value | Info |
 |-------|-------|------|
-| Distribution | Talos Linux + vanilla Kubernetes | Current repo standard |
+| Distribution | Talos Linux 1.8.1 + Kubernetes 1.31.1 | Audited runtime; source/ISO still pins Talos 1.7.5 |
 | Control plane nodes | `3` | Quorum survives one control-plane failure |
 | Worker nodes | `1` | General workload capacity |
 | CNI | Flannel (VXLAN) | Current network overlay |
 | Placement policy | Availability first | Critical workloads can land on all nodes |
-| Control-plane fallback | Enabled | Via tolerations and bounded requests |
+| Control-plane fallback | Partial | Several platform workloads tolerate control-plane nodes; fleet-agent currently does not |
 | Ingress strategy | Traefik + MetalLB | Shared ingress VIP on VLAN 10 |
-| DNS strategy | Technitium LXC on `edge.pve` | Zone sync job runs on k8s; LXC serves DNS/DHCP for all VLANs |
-| Replica policy | Critical services spread across nodes | Technitium remains single-replica until shared-safe HA exists |
+| DNS strategy | Technitium LXC on `edge.pve` | Systemd sync timer in LXC, not k8s; only one live NIC and incomplete DHCP serving path |
+| Replica policy | HA is incomplete | Rancher/Traefik/MetalLB have 3 replicas without guaranteed one-per-node placement; fleet-agent has 1; Technitium is one LXC |
 
 | Node Role | vCPU | Memory | Disk | Notes |
 |-----------|------|--------|------|-------|
-| Control plane (`cp1-3.k8s`) | `2` | `6 GiB` | `60 GiB` | Prioritize etcd stability |
-| Worker (`worker1.k8s`) | `4` | `8 GiB` | `100 GiB` | General workload capacity |
+| Control plane (`cp1-3.k8s`) | `2` | `10 GiB` | `40 GiB` | Audited allocation; matches Terraform sizing |
+| Worker (`worker1.k8s`) | `4` | `12 GiB` | `40 GiB` | Audited allocation; matches Terraform sizing |
 
 | Workload Group | Services | Placement / Notes |
 |----------------|----------|-------------------|
-| Ingress and PKI | Traefik, cert-manager | MetalLB-exposed ingress, wildcard TLS via DNS-01 |
+| Ingress and PKI | Traefik, cert-manager | Ingress active; trusted DNS-01 cert only observed for dns.owl.red, other frontend TLS incomplete |
 | Platform control | Rancher, Homepage | Cluster management and operator dashboard |
-| DNS | Technitium DNS, zone sync job | Authoritative `owl.red` DNS, VLAN 10 DHCP reservations |
+| DNS | Technitium DNS, LXC sync timer | Authoritative `owl.red` DNS and Git-managed reservations; end-to-end DHCP/VLAN serving incomplete |
 | Media and apps | Plex target, Arr stack, qBittorrent, slskd, Seer, Tautulli, Reclaimerr | Mixed k8s and media-integrated workloads |
 | Utility services | speedtest-tracker, Librespeed, flarednsresolver | Internal utility and observability services |
 | Future / specialized | flaresolver, GPU-backed workloads | Planned once GPU path is ready |
@@ -278,10 +293,10 @@ No live network assignment was changed by this allocation update.
 | Function | Primary Service | Endpoint | Notes |
 |----------|-----------------|----------|-------|
 | Routing and firewall | OPNsense | `10.0.10.1` and per-VLAN gateways | Default gateway and policy engine |
-| DHCP (All VLANs) | Technitium | Multi-homed IPs | Native L2 broadcast via LXC 5-NIC config |
-| Authoritative DNS | Technitium | Multi-homed IPs | Hosted in LXC on edge.pve, Fleet-managed zone sync |
+| DHCP (target: all VLANs) | Technitium | Target multi-homed IPs | Live LXC has one NIC, VLAN 10 scope disabled, no leases; current client-serving authority needs authenticated verification |
+| Authoritative DNS | Technitium | Live `10.0.10.30` | LXC on edge.pve; Git sync via its systemd timer |
 | Ingress and TLS | Traefik + cert-manager | `10.0.10.201` | Internal ingress VIP for cluster web services; not a public origin endpoint |
-| Guest captive portal | OPNsense | `https://captive.owl.red` | RFC 8910 / 8908 path |
+| Guest captive portal (target) | OPNsense | `https://captive.owl.red` | Hostname was NXDOMAIN at audit; portal configuration not authenticated/verified |
 
 ### DHCP and DNS Plan
 
@@ -293,14 +308,21 @@ No live network assignment was changed by this allocation update.
 | `40` | Technitium | `10.0.40.100-199` | `10.0.40.1` | `10.0.40.30` | IoT local-only policy |
 | `50` | Technitium | `10.0.50.100-199` | `10.0.50.1` | `10.0.50.30` | IoT with internet, no lateral movement |
 
-Technitium is authoritative for `owl.red` and runs as a multi-homed LXC on `edge.pve` with native interfaces on all VLANs. DNS records are Git-managed and reconciled by a Fleet-managed sync job. If Technitium is not serving the zone authoritatively, clients can fall through to public DNS and internal service names such as `dns.owl.red` or `rancher.owl.red` will resolve incorrectly.
+Technitium is authoritative for `owl.red` on `10.0.10.30`; five native VLAN
+interfaces are the target, not the audited live configuration. Its systemd timer
+pulls Git every 15 minutes and skips unchanged commits. All confirmed target
+reservations matched live, but there were no leases and VLAN 10's scope was
+disabled. Direct gateway queries returned NXDOMAIN for internal ingress names,
+and an existing pod received public answers or ENOTFOUND. Repair the resolver
+path under roadmap G2; do not blindly enable another DHCP server.
 
 ### Traefik and TLS
 
 - Traefik is exposed as a MetalLB `LoadBalancer` service on `10.0.10.201` for LAN clients.
 - `dns.owl.red`, `rancher.owl.red`, `home.owl.red`, and `traefik.owl.red` are expected to resolve internally to `10.0.10.201`.
-- cert-manager issues wildcard certificates using DNS-01 because internal services are not reachable for HTTP-01.
-- Traefik dashboard access is intended to remain limited to VLAN 10, with middleware as the primary control and OPNsense rules as defense in depth.
+- DNS-01 is the intended issuance method for internal services. Only `dns.owl.red` had a trusted certificate at audit; no wildcard Certificate was found and other management names served Traefik's default self-signed certificate.
+- Source policy limits backend TLS skip-verification to PDM, but the running Traefik still had the global skip-verification flag. Fleet reconciliation and runtime policy must be verified before calling this fixed.
+- Traefik dashboard access must be restricted to verified management sources. No IP-allowlist middleware was present; an IP range alone does not prove VLAN 10 isolation while the LAN is flat.
 
 ### Cluster Hostname Troubleshooting
 
@@ -311,6 +333,9 @@ Technitium is authoritative for `owl.red` and runs as a multi-homed LXC on `edge
 - If Technitium answers with a public IP for internal names, fix the authoritative zone path first; ingress hostnames behind Traefik will not work until internal DNS returns the correct VIP.
 
 ### Guest VLAN Captive Portal
+
+The following is target configuration, not a verified live portal. The October
+audit could not authenticate to OPNsense and `captive.owl.red` was NXDOMAIN.
 
 | Setting | Value | Notes |
 |---------|-------|-------|
@@ -332,12 +357,16 @@ Guest isolation rules should explicitly block access from VLAN 30 to VLANs 10, 2
 
 ### Power and Recovery
 
-| Component | Power Source | Recovery Model | Notes |
-|-----------|--------------|----------------|-------|
-| OPNsense, switch, storage, one k8s node | LX1500GU UPS | NUT-triggered WoL and staged recovery | Core infra path |
-| Technitium LXC | LX1500GU UPS | Starts automatically with `edge.pve` | DNS and DHCP are available immediately |
-| Remaining k8s nodes | Separate power path | Quorum-based cluster survival | One control-plane loss is tolerable |
+| Component | Recorded Power Source | Recovery Target | Audit Status |
+|-----------|-----------------------|-----------------|--------------|
+| OPNsense, switch, storage, one k8s node | LX1500GU UPS (recorded model) | NUT-triggered WoL and staged recovery | CyberPower USB UPS attached to storage.pve; no running NUT monitoring demonstrated; physical circuit coverage/runtime not tested |
+| Technitium LXC | Edge host power path | Starts automatically with `edge.pve` | On-boot configured; DNS runs independently of k8s/storage, but DHCP readiness is incomplete |
+| Remaining k8s nodes | Separate power path (recorded) | Quorum-based survival | Three-member etcd healthy; outage/failover behavior not tested |
 
-Known gap: if all UPS-backed infrastructure is down for longer than available runtime, DNS and dependent services recover only after storage and cluster services return.
+NUT enable flags are not proof of monitoring or safe shutdown. Verify the power
+path before stateful rollout under G6. No PVE backup jobs or registered local
+backup objects were found; establish G1's minimum recovery path without waiting
+for full PBS deployment. The audit's disabled array slot was empty parity2, not
+a demonstrated failed data disk; it did not authorize a repair or rebuild.
 
 ---

@@ -4,7 +4,42 @@ Ordered list of outstanding work. Each item is either a prerequisite for somethi
 
 Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
-**Current focus: Phase 0 — OPNsense Terraform IaC** (codify the firewall before VLAN work, so rules/aliases/overrides are reproducible and survive a reinstall).
+**Current focus: close the stabilization gates below, then resume Phase 0/1.**
+The 2026-10-14 live audit found working hosts and Kubernetes control planes, but
+broken internal resolver paths, incomplete Fleet reconciliation/TLS, and an
+unparseable cluster Terraform root. Do not treat the target address plan as an
+operational VLAN deployment.
+
+## Stabilization Gates
+
+Evidence: [live state audit](docs/issues/008-live-state-vs-repository.md).
+These gates qualify the existing roadmap; phase numbers remain unchanged.
+Unchecked means not remediated or not yet verified, not permission to deploy.
+Read-only discovery, documentation and offline code validation can continue.
+
+| Gate | Blocks | Required Exit Evidence |
+|------|--------|------------------------|
+| G1 `[ ]` Admin Access And Recovery | Disruptive router, switch, host or cluster changes | One accepted reusable Password Manager session; dedicated OPNsense API access and a fresh read-only survey; console/break-glass path; off-node critical configuration, guest/state and Talos recovery material with a checked restore/rollback procedure. Full PBS deployment is not required first. |
+| G2 `[ ]` Internal DNS And Public Namespace | Further service deployment and network cutover | LAN clients, gateway-dependent hosts and existing pods resolve internal service names to their intended private IPs, while external DNS still works. Review public wildcard/DDNS dependencies, then remove the conflicting wildcard under ADR 012; an arbitrary public subdomain must not resolve through it. |
+| G3 `[ ]` GitOps, TLS And Platform Resilience | Changes that depend on Fleet, ingress or node maintenance | All 9 owl.red bundles ready, desired/applied revisions agree, and Fleet-agent ownership resolved in its owning release. Verify secret retrieval freshness; remove runtime cluster-wide backend TLS skip-verify, retaining only PDM's scoped exception. Existing management frontends must serve trusted DNS-01 certificates, dashboard access must be restricted to verified admin sources, and fleet-agent replicas/tolerations must agree with its PDB. |
+| G4 `[ ]` Terraform And Inventory Safety | Infrastructure plan/apply or guest import/change | Fix the five invalid LXC NIC blocks; formatting/validation pass. Reconcile live Talos version, sizing, guest placement and MAC evidence without silently upgrading, downgrading or moving guests. Protect/backup state; import existing guests before applying their scaffolds; review plans for unintended power, destroy/recreate or passthrough changes. |
+| G5 `[ ]` End-To-End VLAN Readiness | Moving clients or changing management subnets in Phase 1 | Restore/identify the AP uplink and inspect SSID bridges; replace disabled-port-5 membership with the reviewed real port/PVID/trunk map. Establish matching router interfaces/rules and Technitium NICs, resolver IPs and DHCP authority with no competing server. Prove lease, DNS, isolation and recovery behavior on a real client before each batch; management VLAN last. |
+| G6 `[ ]` Power And Stateful Storage Safety | NFS activation and production stateful/HA rollout | Verify UPS monitoring and staged shutdown rather than trusting an enable flag. Restrict intended NFS exports and exclude `system` before enabling NFS. Then prove PVC data survives rescheduling and shared Proxmox storage supports the intended failover before moving application state. |
+
+**Working order:** G1, then DNS (G2), GitOps/TLS/resilience (G3), and IaC safety
+(G4), followed by the existing Phase 0/1 work with G5's cutover checks. Offline
+Terraform fixes and inventory corrections can run alongside the access work.
+G6 is required for shared-storage/stateful rollout, not for read-only planning.
+Do not enable Technitium's disabled VLAN 10 scope blindly while the current DHCP
+authority is still unverified. No disk repair is implied by the empty parity2
+slot recorded in the audit.
+
+**Not blanket prerequisites:** full PBS deployment remains Phase 8; off-cluster
+certificate distribution remains Phase 6; physical diagrams, mail, cloud-file
+migration and optional GNSS time hardware can wait. NTP consolidation (16.1) can
+run in parallel after verifying the LAN NTP service; a synchronized host is not
+blocked merely because its source is still public. NAS Tailscale is already
+running, but that does not complete Phase 3's remote-management/split-DNS work.
 
 **Recently completed (2026-06-18; driven by the "IaC-everything" principle, not phase-numbered):**
 - **Unraid (`nas.owl.red`) settings IaC** — API-settable settings are declarative in `terraform/unraid/` (Terraform-GraphQL); flash-file + drift/recapture via the `unraid_settings` Ansible role; array/users/secrets stay manual. NTP→`10.0.10.1` applied + verified (closes §16.1 for the NAS). ADR 021; guides `unraid-making-changes.md`, `unraid-iac.md`.
@@ -20,6 +55,10 @@ OPNsense config is brought under IaC before VLAN work, so rules/aliases/override
 
 **Survey finding (2026-06-19):** a read-only survey via the dedicated `terraform` API user found the router **near-default** — WAN `igc0`, LAN `ixl1` on a single **flat `10.0.10.1/16`** (no VLAN interfaces yet), and **0** custom aliases / automation filter rules / NAT / Unbound overrides (only built-in defaults + 1 auto-generated Unbound forward). So there is **nothing custom to import**; firewall aliases/rules get **created during the VLAN transition (§1)**, authored as Terraform — not imported. Forward-looking `/24` drafts are parked in `terraform/opnsense/planned/`.
 
+This is a historical baseline, not the current firewall survey. Authenticated
+OPNsense inspection was blocked in the 2026-10-14 audit. Close G1 and re-survey
+before relying on the June assumption that nothing needs importing.
+
 **Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0) owns firewall rules, NAT, aliases, VLAN/VIP, Unbound DNS, Kea DHCP, VPN, certs, routes. A **manual floor** stays in the WebUI (no safe API in any tool): base interface assignment + IP/WAN, gateways, system general settings incl. **NTP (§16.1)**, captive portal, traffic shaper, IDS/IPS.
 
 > Scope note: this phase is the OPNsense **config** via `terraform/opnsense/`. The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is separate, scaffolded under `terraform/proxmox/opnsense-vm/` (§13). `opnsense_firewall_filter` rules live under Firewall → **Automation** → Filter (separate from classic per-interface rules) — see the module README for the safe "delete classic rules" procedure.
@@ -29,9 +68,14 @@ OPNsense config is brought under IaC before VLAN work, so rules/aliases/override
 - `[x]` API key+secret stored in Bitwarden `OPNsense — terraform` item NOTES
 - `[x]` `scripts/opnsense-terraform-run.sh` injects key/secret as `TF_VAR_opnsense_api_*` (no secrets in code)
 - `[x]` `terraform -chdir=terraform/opnsense init` verified; provider `browningluke/opnsense` v0.24.0 (lock committed)
-- `[!]` **Revoke the old root API key in the OPNsense WebUI** — removed from bw, but still valid on the router until revoked (System → Access → Users → root → API keys)
+- `[!]` **Verify/revoke the old root API key in the OPNsense WebUI** — revocation was recorded pending in June; current validity was not verified in the October audit (System → Access → Users → root → API keys)
+- `[ ]` Re-establish the reusable Password Manager session and verify dedicated API access for the current audit; do not request an unlock per command
 
 ### 0.2 Import Existing Config
+- `[ ]` Refresh the authenticated interface, alias, filter, NAT, DNS/DHCP and portal survey; document the active DHCP authority before changing scopes
+- `[ ]` Import any existing API-managed objects found by that survey, or freshly verify that the empty module is a no-op
+
+Historical checks below were completed on 2026-06-19, not revalidated in October:
 - `[x]` Surveyed live config (read-only): router is near-default — **nothing custom to import**
 - `[x]` 0 custom aliases / filter rules / NAT / overrides; the 1 auto-generated Unbound forward (Dnsmasq) is left unmanaged
 - `[x]` Active module declares no resources; `plan` shows no changes (clean baseline)
@@ -53,7 +97,7 @@ OPNsense config is brought under IaC before VLAN work, so rules/aliases/override
 - `[ ]` Test each VLAN segment for correct connectivity
 
 ### 0.5 Ongoing
-- `[ ]` All future OPNsense changes go through `terraform/opnsense/` — no manual edits
+- `[ ]` API-backed OPNsense changes go through `terraform/opnsense/`; the ADR 016 manual floor remains WebUI-managed and documented, with no overlapping ownership
 - `[ ]` Add OPNsense to `scripts/terraform-run.sh` workflow documentation
 
 ---
@@ -61,9 +105,12 @@ OPNsense config is brought under IaC before VLAN work, so rules/aliases/override
 ## 1. Network Foundation
 
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
+Close G1-G4 before disruptive deployment; G5's exit checks are completed as part
+of this phase, not a requirement to have already migrated every VLAN.
 
 ### 1.1 VLAN Steering on WAP (`ap.owl.red`)
 - `[x]` Complete the known-client target allocation registry (2026-10-14): workstation, LG phone, Shield and WUUK cameras have reservations/DNS; tablet is pending target-SSID MAC; work laptop remains dynamic. No live VLAN cutover performed.
+- `[!]` Restore/identify the AP uplink before SSID inspection: port 18 had no link and `10.0.10.40` was unreachable in the 2026-10-14 audit
 - `[ ]` Log into OpenWrt on `10.0.10.40`
 - `[ ]` Confirm SSID → VLAN bridge mappings:
   - `owl.red` → VLAN 20 (`private-net`)
@@ -76,8 +123,8 @@ These must be complete before anything that depends on VLAN isolation or correct
   - Bedside tablet → planned `10.0.20.12`; verify target-SSID MAC before confirming reservation/DNS
   - Work laptop `KAM1WL102916` → dynamic DHCP, no fixed lease
 - `[ ]` Move IoT devices to correct SSID once steering is confirmed:
-  - `ecobee.owl.red` → VLAN 50 (currently on VLAN 10)
-  - `printer.owl.red` (Canon) → VLAN 40 (currently on VLAN 10)
+  - `ecobee.owl.red` → VLAN 50 (last recorded on the flat management network)
+  - `printer.owl.red` (Canon) → VLAN 40 (last recorded on the flat management network)
   - `bambu.owl.red` → VLAN 40 (needs to join network)
   - `shield.owl.red` → VLAN 50, `10.0.50.11`; explicitly allow required local-media access
   - `wuuk-ptz-foyer.owl.red` → VLAN 40, `10.0.40.12`
@@ -85,6 +132,7 @@ These must be complete before anything that depends on VLAN isolation or correct
   - Inspect and explicitly remove any legacy VLAN 10 camera reservations during the approved migration; test local operation without internet
 
 ### 1.2 VLAN Access Rules on Switch (`switch.owl.red`)
+- Audit baseline: all ports were Optional/PVID 1 and every VLAN listed only disabled port 5. Port names alone do not establish working trunks or access VLANs.
 - `[ ]` Audit `ansible/switch_configs/css326.yml` — confirm all ports have correct PVID and tagged VLAN membership
 - `[ ]` Apply any missing port VLAN config via `swos-apply-config.yml`
 - `[ ]` Confirm VLAN 40 and VLAN 50 traffic from WAP trunk (SW18) reaches correct OPNsense subinterfaces
@@ -98,13 +146,16 @@ These must be complete before anything that depends on VLAN isolation or correct
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-Currently some hosts and DHCP scopes reference `255.255.0.0` (`/16`) instead of `255.255.255.0` (`/24`). The target is one clean `/24` per VLAN with no overlap.
+The October audit found /16 addresses on PVE hosts, Talos and the NAS, while
+Technitium's scope definitions already use /24. Its LXC has only one NIC, its
+VLAN 10 scope is disabled, and no leases were present. The target remains one
+clean /24 per VLAN, but scope data alone does not establish live DHCP authority.
 
 - `[ ]` **Audit**: identify every place a `/16` mask appears
   - OPNsense interface/subnet config
   - Technitium DHCP scope `subnetMask` fields (`gitops/technitium/dhcp/scopes.json`)
   - Static IPs on any host (Talos configs in `talos/`, Terraform, etc.)
-  - Ansible inventory `ansible_host` entries
+  - Ansible inventory current/target addressing metadata
 - `[ ]` **Plan cutover order** — VLAN 10 is highest risk (all infra); do IoT VLANs first to practice
 - `[ ]` IoT VLANs (40, 50): change OPNsense subinterface mask → `/24`; update Technitium scopes; verify DHCP still hands out correct range
 - `[ ]` Guest VLAN 30: same as IoT
@@ -112,10 +163,10 @@ Currently some hosts and DHCP scopes reference `255.255.0.0` (`/16`) instead of 
 - `[ ]` Infra VLAN 10: schedule maintenance window
   - Change OPNsense VLAN 10 interface mask to `/24`
   - Confirm all static IPs in `10.0.10.0/24` range (they are — no change needed to addresses)
-  - Update Technitium scope `subnetMask` to `255.255.255.0`
+  - Verify the already-/24 Technitium scope against the new interface and confirm it is the intended sole DHCP authority before enabling it
   - Rerun `deploy-technitium-lxc.yml` or trigger sync
   - Verify all hosts still reachable
-- `[ ]` Update `gitops/technitium/dhcp/scopes.json` with correct `/24` masks for all scopes
+- `[ ]` Reconcile the existing /24 scope data, enabled state and VLAN-local DNS with each live VLAN cutover; do not introduce competing DHCP offers
 - `[ ]` Remove any remaining `/16` references across repo
 
 ### 1.6 Captive Portal (`captive.owl.red`)
@@ -141,6 +192,9 @@ Currently some hosts and DHCP scopes reference `255.255.0.0` (`/16`) instead of 
 
 ## 3. Remote Access — Tailscale
 
+Audit baseline: Tailscale is online on the NAS, but MagicDNS is disabled. This
+does not prove management-subnet routing, split-DNS, or an exit-node design.
+
 - `[ ]` Choose exit node placement (OPNsense plugin vs. dedicated LXC vs. k8s pod)
 - `[ ]` Deploy Tailscale on chosen host
 - `[ ]` Confirm `owl.red` split-DNS via Tailscale MagicDNS or override to Technitium
@@ -156,8 +210,9 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 [`docs/guides/shared-storage.md`](docs/guides/shared-storage.md); decision: [ADR 018](docs/decisions/018-storage-backend.md).**
 
 - `[x]` Decide storage backend → **NFS from `nas.owl.red`, reusing existing shares** (NFS for HA/infra: k8s/Proxmox/LXC;
-  SMB for personal). Longhorn medium-term (post Unraid→VM migration) to remove the NAS SPOF. (Ceph rejected: too heavy for 4 small nodes.)
-- `[ ]` Lock NFS exports (`shareSecurityNFS=private` + `shareHostListNFS`=VLAN 10; fix `media`'s `public`) — Ansible file-lane (`--check` first)
+  SMB for personal). Longhorn remains medium-term after capacity/storage evaluation; Unraid's VM migration is already complete. (Ceph rejected: too heavy for 4 small nodes.)
+- `[ ]` Close G6 power/export safety checks before NFS activation; the Ansible file lane is still a scaffold and must be implemented/validated before using it for writes
+- `[ ]` Lock intended NFS exports (`shareSecurityNFS=private` + reviewed host allowlists); fix public defaults on all intended shares and exclude `system` — Ansible file-lane (`--check` first)
 - `[ ]` Enable NFS globally on Unraid (`shareNFSEnabled=yes`) — array untouched
 - `[ ]` k8s: deploy NFS CSI (`nfs-subdir-external-provisioner`/`democratic-csi`) via Fleet → `StorageClass` → smoke-test a PVC (write + survive reschedule)
 - `[ ]` Proxmox: `pvesm add nfs` (images/rootdir/iso/backup) on each node → verify CT HA failover (unblocks PDM HA, §11/§13)
@@ -167,12 +222,12 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 
 ## 5. Home Assistant
 
-- **Requires:** 4 (shared storage), 1.1 (correct VLAN for IoT discovery)
+- **Requires:** G1-G4, G6, 4 (proven shared storage), 1.1 (correct VLAN for IoT discovery)
 - `[ ]` Create `gitops/home-assistant/` Fleet app directory
 - `[ ]` Deploy via Helm chart (`home-assistant` from `pajikos` or raw manifests)
-- `[ ]` 3-replica `StatefulSet` with `podAntiAffinity` spread across all 3 control-plane nodes
+- `[ ]` Validate the proposed 3-replica/anti-affinity design against Home Assistant's supported state/database model before choosing a workload topology; NFS alone does not make an application multi-writer safe
 - `[ ]` Persistent volume via NFS StorageClass (10 GiB minimum for config + DB)
-- `[ ]` Add `home.owl.red` DNS A record → `10.0.10.201` (already in zone — verify)
+- `[ ]` Choose an unused Home Assistant hostname before adding its DNS/ingress; `home.owl.red` already serves Homepage and must not be silently reassigned
 - `[ ]` TLS via cert-manager + Traefik IngressRoute (matches existing pattern)
 - `[ ]` Home Assistant `homeassistant.http.use_x_forwarded_for` + trusted proxy set to Traefik pod CIDR
 - `[ ]` IoT device discovery: HA needs mDNS/multicast access to VLAN 40/50
@@ -185,6 +240,10 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 ## 6. Certificate Manager — Single Authority for Everything
 
 Currently cert-manager runs on k8s only. LXC workloads (Technitium) and any off-cluster services get no automated certs.
+
+Repairing current management frontend certificates and runtime TLS policy is G3
+work now. The wider off-cluster certificate distribution below is a later
+milestone, not a prerequisite for using existing cert-manager DNS-01 issuance.
 
 - `[ ]` Decide scope:
   - Option A: Keep cert-manager on k8s only; LXC services use wildcard cert distributed by Ansible
@@ -202,12 +261,12 @@ Currently cert-manager runs on k8s only. LXC workloads (Technitium) and any off-
 
 Move remaining self-hosted apps from wherever they are now onto the Talos cluster.
 
-- **Requires:** 4 (storage), 6 (certs), cluster stable
+- **Requires:** G1-G4, applicable certificate policy and a stable cluster; production stateful migrations also require G6 and Phase 4's storage tests
 - `[ ]` Inventory all currently running apps and their current hosts
 - `[ ]` Prioritize migration order (stateless first, stateful after storage is proven)
 - `[ ]` Create `gitops/<app>/` Fleet directories per app, matching existing conventions
 - `[ ]` Apps known to need migration (from README workload table):
-  - `[ ]` Plex (GPU passthrough needed — may stay on Unraid until VM migration complete)
+  - `[ ]` Plex (already on the Unraid VM; migration still requires proven GPU scheduling, persistent state and identity preservation)
   - `[ ]` Arr stack (Radarr, Sonarr, etc.)
   - `[ ]` qBittorrent
   - `[ ]` slskd
@@ -216,13 +275,18 @@ Move remaining self-hosted apps from wherever they are now onto the Talos cluste
   - `[ ]` Reclaimerr
   - `[ ]` speedtest-tracker
   - `[ ]` Librespeed
-  - `[ ]` Homepage (may already be on cluster — verify)
+  - `[x]` Homepage is already on Kubernetes via Fleet at `home.owl.red` (verified 2026-10-14); not an outstanding migration
   - `[ ]` flaresolver
 - `[ ]` For each app: IngressRoute + TLS cert + PVC + resource limits
 
 ---
 
 ## 8. Proxmox Backup Server (`pbs.owl.red`)
+
+No PBS guest, PVE backup/replication jobs or registered local backup objects were
+found in the October audit. G1 requires a minimal verified recovery path before
+disruptive changes; it does not require completing this full backup platform
+first. Any existing manual/off-platform backups still need verification.
 
 - `[ ]` Provision PBS VM on `storage.pve.owl.red`
 - `[ ]` Assign MAC, update `dhcp-reservations.json` (currently TBD at `10.0.10.33`)
@@ -235,6 +299,7 @@ Move remaining self-hosted apps from wherever they are now onto the Talos cluste
 
 For services that should be reachable from the internet without opening inbound ports. Complements Tailscale (which handles personal/admin access) — tunnel handles public-facing services like a self-hosted wiki, status page, or anything else intentionally public.
 
+- **Requires:** G2/G3 and a fresh authenticated firewall exposure review. The public unproxied wildcard A record was still present in the audit; inventory dependencies/DDNS ownership before removing it under ADR 012.
 - `[ ]` Decide which services get public exposure (start with zero — add deliberately)
 - `[ ]` Create Cloudflare Tunnel in Cloudflare dashboard; save tunnel token to Bitwarden
 - `[ ]` Deploy `cloudflared` connector:
@@ -316,9 +381,10 @@ Hosted mail for `owl.red` users. Also a dependency for any service that needs to
 Every Proxmox workload must be reproducible from `terraform/proxmox/`. Manual `qm`/`pct` create commands are not acceptable after this milestone is complete.
 
 ### 13.1 Audit Current State
-- `[ ]` List all VMs and LXCs across all nodes: `pvesh get /cluster/resources --type vm`
-- `[ ]` Cross-reference against `terraform/proxmox/` — identify anything not in Terraform state
-- `[ ]` For each unmanaged resource: decide import vs. recreate
+- `[x]` List all VMs and LXCs across all nodes: 8 running guests on 6 PVE hosts, verified 2026-10-14 via `pvesh get /cluster/resources --type vm`
+- `[x]` Cross-reference local Terraform state metadata: Technitium, 4 Talos VMs and NAS are present; router/PDM scaffold roots have no local state file (verified 2026-10-14)
+- `[ ]` Complete the protected guest imports with no-op plans; do not recreate the live router, NAS or PDM to bypass an import
+- `[ ]` Fix G4's cluster-module parse error before relying on Terraform validation or plans
 
 ### 13.2 Import / Codify Existing Workloads
 Known workloads — add `.tf` file per workload, import into state:
@@ -345,7 +411,7 @@ Known workloads — add `.tf` file per workload, import into state:
   - `talos/patches/` — patch files applied per node/role
   - How configs are applied: `talosctl apply-config`
   - How upgrades work: `talosctl upgrade`
-- `[ ]` Pin Talos version in `talos/config/` (if not already)
+- `[ ]` Reconcile the live Talos/installer `1.8.1` with the source/ISO pin `1.7.5`; pin the approved baseline in source and document any upgrade separately, without regenerating PKI just to correct documentation
 - `[ ]` Document the full bootstrap sequence: Terraform (VM) → Talos config apply → `talosctl bootstrap` → kubeconfig
 - `[ ]` Confirm `terraform/proxmox/technitium/` Talos provider resources match current cluster state
 - `[ ]` If not already: add `talosctl health` check to post-deploy validation
@@ -420,8 +486,9 @@ appliance (resilience / hobby). Nothing in the stack *requires* high-precision t
 (etcd/TLS/logs tolerate ordinary NTP), so 16.1 is the real win and 16.2 is optional.
 
 ### 16.1 Point everything at OPNsense as the LAN NTP server (free, do first)
-Today hosts sync inconsistently: Unraid points at public `*.pool.ntp.org`, others at
-pool/mixed sources. **Decision: OPNsense (`10.0.10.1`) is the single internal NTP
+Audit baseline: Unraid already points at `10.0.10.1`; PVE hosts use public chrony
+sources, and Talos reports synchronized time without an explicit LAN server.
+**Decision: OPNsense (`10.0.10.1`) is the single internal NTP
 authority for the LAN.** Every host points at it; OPNsense itself uses the public
 pool as upstream. (If/when the GNSS appliance in 16.2 exists, it feeds OPNsense as an
 additional source.)
@@ -429,8 +496,8 @@ additional source.)
 - `[ ]` Confirm OPNsense NTP service is enabled and serving on `10.0.10.1`
   (Services → Network Time → General); restrict to LAN VLANs
 - `[ ]` Point all hosts at `10.0.10.1` (manage via IaC where possible):
-  - `[x]` Unraid — NTP set to `10.0.10.1` via the `unraid_settings` role (GraphQL
-    `updateSystemTime`); verified `NTP_SERVER1=10.0.10.1` (2–4 cleared) in `ident.cfg`. (2026-06-18)
+  - `[x]` Unraid — NTP set to `10.0.10.1`; now owned by `terraform/unraid/` (GraphQL
+    `updateSystemTime`). `NTP_SERVER1=10.0.10.1` and empty 2-4 reverified 2026-10-14.
   - `[ ]` Proxmox hosts — chrony/systemd-timesyncd → `10.0.10.1` via Ansible
   - `[ ]` Talos nodes — `machine.time.servers: [10.0.10.1]` in machine config, reapply
   - `[ ]` Technitium LXC — NixOS `services.timesyncd`/chrony → `10.0.10.1`
@@ -475,9 +542,9 @@ Functionally identical stratum-1; trades ~$45 for soldering/wiring + less tidy.
 ## Notes
 
 - **VLAN 40 vs. VLAN 50 for IoT**: devices that only need LAN access (printers, 3D printers, local sensors) go to 40. Devices that need cloud APIs (Ecobee, Bambu cloud, voice assistants) go to 50.
-- **Unraid → VM migration**: deferred until storage strategy is decided. Plex with GPU passthrough is the main blocker.
+- **Unraid VM placement**: already VM 101 on storage.pve with GPU/HBA/NIC passthrough. Shared-storage rollout and any later Plex migration are separate work, not a pending conversion from bare metal.
 - **Tailscale before captive portal**: Tailscale gives a reliable admin path if the captive portal breaks VLAN 30 routing during testing.
 - **Home Assistant mDNS**: this is the hardest part. IoT device auto-discovery requires multicast to reach HA across VLANs. Plan this before deploying HA.
 - **Mail inbound delivery**: port 25 inbound is blocked by most residential ISPs. Use Cloudflare Email Routing to receive and relay to self-hosted SMTP, or use a VPS SMTP relay with `cloudflared` for the web UI.
 - **draw.io vs. Visio**: draw.io is free, cross-platform, exports editable XML committed to git. Prefer it over Visio unless you already have a license.
-- **Terraform import order**: always import before writing new resources. Terraform will refuse to create a resource that already exists by ID.
+- **Terraform import order**: author matching resource configuration, import the existing guest, then reconcile to a no-op plan before apply. Only genuinely new guests use the create path; never recreate a protected production guest to sidestep import.
