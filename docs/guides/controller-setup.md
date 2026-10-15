@@ -106,6 +106,9 @@ bypass this requirement. If the daemon is absent or stopped, inspect the local
 Nix installation/service before building. A parsed module is only a syntax
 check; package evaluation/build needs the intended Nixpkgs source and successful
 substitution/build access. `system.stateVersion` does not pin that source.
+Nixpkgs is a source/package collection, not an Ubuntu package named `nixpkgs`.
+The project check fetches its pinned official archive; no `apt install nixpkgs`
+or global channel update is required for that validation.
 
 ### Ansible And Local Python Tools
 
@@ -148,7 +151,7 @@ RouterOS/NETCONF collection. The requirements are:
 | Local SwOS modules | `mikrotik-swos==1.3.2` is the tested library; module documentation also specifies `requests>=2.25.0` | Install into the interpreter that executes the local module, with CSS326 workarounds supplied by the repository's modules. |
 | Local YAML validation | PyYAML (`yaml`) | Install in the selected controller venv if running the documented YAML parser checks. Pre-commit also manages its own hook environments. |
 | Unraid drift/recapture | SSH; Python 3 for Ansible `fetch` recapture | Core `raw` reads do not need NAS Python. Do not install packages or change NAS services merely to perform a network survey. |
-| Technitium Ansible configuration | Target Python 3; Nix commands on the NixOS LXC | The Nix module provides Python for Ansible. Its install role updates channels and runs `nixos-rebuild switch`, so it is not a build-only check. |
+| Technitium Ansible configuration | Target Python 3; Nix commands on the NixOS LXC | The Nix module provides Python for Ansible. Its install role runs `nixos-rebuild switch`, so it is not a build-only check. Channel updates require explicit `technitium_update_nix_channels=true`; the default is false. |
 
 For the venv path, install optional controller libraries only when needed:
 
@@ -281,6 +284,41 @@ script to a different serial or assume its recorded address is current.
   private local artifacts. Having tools and credentials does not authorize
   imports, applies, restarts, firmware changes or a DNS/DHCP handoff.
 
+## DHCP Packet Acceptance Requirements
+
+This is a bounded live-traffic check, not an offline test or a DHCP handoff.
+Use the existing discovery implementation rather than constructing DHCP by
+hand, and verify its installed behavior before sending traffic.
+
+The reusable controller is
+[scripts/capture-dhcp-authority.mjs](../../scripts/capture-dhcp-authority.mjs).
+Its [offline tests](../../scripts/capture-dhcp-authority.test.mjs) run with
+`node --test scripts/capture-dhcp-authority.test.mjs`, also in the existing
+credential-free DHCP CI job. `--help` lists all required arguments; the live
+helper refuses an existing output directory and never accepts incomplete PCAP
+headers as evidence. An evidence-ready result still requires packet review.
+
+- Controller: strict-host-key SSH with the existing deployment key; Node.js 24
+  (matching the CI pin),
+  built-in process/file APIs for capture orchestration and Python 3's standard
+  XML parser for Nmap's structured results. No additional package is required.
+- Probe: a physical LAN-connected Linux host with root access, Nmap and its
+  `broadcast-dhcp-discover` NSE script/library, plus tcpdump. Nmap `7.95` is
+  available on `cp1`. Reuse one synthetic locally administered client MAC;
+  send DISCOVER only, never REQUEST, RELEASE or a lease-changing client command.
+- Observer: root on `edge.pve`, host tcpdump, util-linux `nsenter`, and LXC
+  `lxc-info` to resolve the running container PID. Enter only the LXC network
+  namespace to observe its existing `eth0`; do not install capture tools in
+  NixOS, attach NICs, or change interface configuration. Use tcpdump `-p`
+  (non-promiscuous) and restrict captures to DHCP UDP ports 67/68.
+- Evidence: retain packet captures outside Git in an owner-only directory
+  (`0700`, files `0600`). Match the probe identity/transaction at the observer
+  and require an OPNsense offer as a positive control. Missing probe visibility
+  or no offer from any server is inconclusive, not a no-offer pass.
+- Scope: only the tested current untagged LAN is covered. Unattached VLANs,
+  client renewal/handoff, and DNS-daemon/LXC restart behavior remain separate
+  checks; this procedure does not authorize those changes.
+
 ## Non-Mutating Validation
 
 ```bash
@@ -303,10 +341,20 @@ The [check expression](../../nix/hosts/technitium/check.nix) evaluates the real
 NixOS module, asserts disabled scope intent and the host activation lock during
 preparation, and builds the packaged sync (`sync`) or complete LXC system closure
 (`system`). Its default input is the immutable official NixOS release
-`25.11.12484.b6018f87da91`, revision
-`b6018f87da91d19d0ab4cf979885689b469cdd41`, with a fixed unpacked SHA256. It
+`25.11.10830.d7a713c0b7e4`, revision
+`d7a713c0b7e47c908258e71cba7a2d77cc8d71d5`, with a fixed unpacked SHA256. It
 requires no global `<nixpkgs>` channel. Preparation assertions must be reviewed
 explicitly when a future approved handoff changes the activation policy.
+
+The validation input now matches the read-only observed LXC input, rather than
+the newer 25.11 revision used for the initial build check. The target still uses
+its existing channel: the Ansible opt-out prevents updating it during this role,
+but does not pin it against changes by another operator. Recheck the target
+revision before any approved rollout. The `technitium_nixos` task tag isolates
+Nix-host update tasks from credential bootstrap and the explicit sync stage;
+connected `--check` previews skip the asynchronous rebuild. Without check mode,
+execution activates the host, and any nonzero rebuild result, including exit
+code 4, fails the role.
 
 Verified locally on 2026-10-14: Nix `2.18.1` module parsing, packaged sync build
 (including Nix's ShellCheck `0.11.0` gate), full LXC system build, standalone
@@ -316,3 +364,18 @@ rollout, compare the validation input and resulting package/unit changes with
 the running host; a successful local build does not authorize an implicit OS or
 Technitium upgrade. Installed-version API and no-offer packet checks remain
 required.
+
+The subsequent approved guard-only rollout on 2026-10-15 used the same input
+and activated that reviewed system generation. Installed API version 14.0,
+runtime lock false and all five disabled scope states were verified; DNS stayed
+healthy without restarting its process, and addresses/routes were unchanged.
+This API-only check did not replace packet acceptance or authorize a DNS/DHCP
+handoff. See the dated evidence in the [rollout guide](../../gitops/technitium/README.md#guarded-rollout).
+
+Subsequent native-LAN captures passed before and after a sync-unit restart on
+2026-10-15 using Nmap `7.95`, tcpdump `4.99.5` / libpcap `1.10.5`, util-linux
+`nsenter` `2.41`, existing LXC tooling, Node.js 24 and Python's standard XML
+parser. Both captures per phase saw the same DISCOVER and OPNsense offer, with
+zero drops and no Technitium offer. The helper has seven passing offline cases;
+no package or capture-tool installation was needed. This does not certify a
+DNS-daemon/LXC restart, IPv6 policy, future VLANs or real client renewal.

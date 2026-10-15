@@ -41,3 +41,8 @@ jobs:
         run: bash -n nix/hosts/technitium/sync.sh nix/hosts/technitium/sync.test.sh
       - name: Exercise offline DHCP lifecycle reconciliation
         run: bash nix/hosts/technitium/sync.test.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Exercise offline packet-capture coordination
+        run: node --test scripts/capture-dhcp-authority.test.mjs
