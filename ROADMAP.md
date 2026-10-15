@@ -79,7 +79,10 @@ The guarded script checks serving state on unchanged SHAs and refuses missing
 scopes because upstream creation defaults to enabled. Native-LAN packet checks
 passed on 2026-10-15 before and after a sync-unit restart: the probe reached
 Technitium, only OPNsense offered, and all captures had zero drops. This is not
-DNS-daemon/LXC restart persistence or acceptance of unattached target VLANs.
+whole-container boot or acceptance of unattached target VLANs. A separately
+approved daemon restart also passed: all five saved scope files and startup
+states stayed disabled before any reconciliation, and another native-LAN
+capture saw only OPNsense offers. DNS is healthy and the timer is restored.
 A new Git SHA still triggers a full pass, even for docs-only
 changes. Pausing a timer or setting the activation lock false does not itself
 stop already-serving DHCP.
@@ -242,7 +245,8 @@ hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
   - `[x]` Privately retain the affected Nix files, current generation, DHCP configuration/state and exact code/source rollback instructions (2026-10-15). Verify saved hashes and owner-only permissions, unchanged live input, retained generation and independent Proxmox execution path; no token/private key copied. Recovery access is tested, not an actual rollback or router/switch recovery rehearsal.
   - `[x]` Obtain explicit guard-only approval, recheck the baseline, then apply only the Nix-host update with disabled intent and activation locked (2026-10-15). The reviewed generation is running; approved reconciliation returned success/0 and all five scopes read back disabled. DNS process/health, scope properties, addresses and routes are unchanged; timer active, zero leases, no channel update or client handoff.
   - `[x]` Prove bounded native-LAN no-offer behavior from physical `cp1`, before and after a guarded sync-unit restart (2026-10-15). Two DISCOVER-only probes with one synthetic identity reached existing Technitium `eth0`; only OPNsense offered. All four captures contain matching transactions and zero kernel drops. Five scopes remain disabled, DNS PID unchanged, client addressing unchanged; no lease was accepted or released.
-  - `[ ]` Verify disabled-state persistence across an explicitly approved DNS-daemon/LXC restart, and repeat path-specific API/packet acceptance for staged target VLANs before claiming them safe. The native-LAN test did not restart DNS or attach interfaces; coordinate timer/in-flight sync and preserve the existing client authority during further checks.
+  - `[x]` Verify disabled-state persistence across an explicitly approved DNS-daemon restart (2026-10-15). Pause the idle sync timer; verify saved version-9 scope flags, authenticated startup API state and unchanged file hashes before reconciliation. The new daemon is healthy with no UDP 67 listener; the post-restart wired probe sees only OPNsense offers with zero drops. Timer restored, DNS healthy, no network/client-authority change.
+  - `[ ]` Repeat path-specific API/packet acceptance for staged target VLANs before claiming them safe. Whole-container boot, IPv6/RA and real-client renewal/handoff are not covered by the daemon-only test; separately approve any reboot included in a later change. Coordinate timer/in-flight sync and preserve the existing client authority.
   - `[ ]` Review only the affected IaC resources/state and stage the approved port/bridge/router/AP definitions. Do not deploy the full five-NIC LXC target or run bootstrap/sync as a substitute for a migration procedure.
 3. **Contract the legacy network before activating contained routed subnets.**
   - `[ ]` For the in-place strategy, plan OPNsense pool/prefix and client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.

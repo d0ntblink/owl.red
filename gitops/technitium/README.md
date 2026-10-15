@@ -21,8 +21,10 @@ leases and `DHCP_ENABLE_ALLOWED=false`. DNS remains healthy without a process
 restart; addresses and routes are unchanged. Client DNS/DHCP stays on OPNsense.
 Native-LAN no-offer checks passed before and after a sync-unit restart on
 2026-10-15: the wired probe reached Technitium and only OPNsense offered.
-DNS-daemon/LXC restart persistence and unattached-VLAN acceptance are still open;
-this is not VLAN or handoff readiness, and no new NICs or trunks were attached.
+An approved daemon restart subsequently preserved all five disabled scopes
+before reconciliation and passed the same native-LAN check. Whole-container
+boot, IPv6 and unattached-VLAN acceptance remain unverified; this is not VLAN or
+handoff readiness, and no new NICs or trunks were attached.
 
 ## Quick Reference
 
@@ -181,6 +183,52 @@ routine Git push. This rollout did not publish Git, update channels, rotate
 credentials, change client DNS/DHCP authority, or touch NICs, VLANs, masks or NAS
 settings.
 
+### Daemon-Restart Persistence Check
+
+This is a separately approved service-interruption test, not a container reboot
+or a configuration deployment. Direct Technitium DNS/API consumers can see a
+brief interruption even while OPNsense remains the client authority.
+
+1. Verify the current generation, disabled API state, on-disk scope flags and
+  DNS health. Privately retain the existing scope files and their hashes;
+  exclude authentication files and API tokens. Version 14.0.0 loads the enabled
+  flag from each saved scope, so API state alone is not persistence evidence.
+2. After approval, pause the sync timer and verify the oneshot is idle. Recheck
+  the baseline immediately before restarting only
+  `technitium-dns-server.service` through the independent Proxmox access path.
+3. Read back startup scope state before running any reconciliation. A guard run
+  must not hide a persistence failure. Verify DNS/API health, unchanged network
+  state and a new healthy daemon PID, then repeat the bounded native-LAN packet
+  check with the retained synthetic client identity.
+4. Restore the timer after acceptance. On failure, inspect actual service and
+  scope state before recovery; keep disabled intent and use only the freshly
+  saved disabled-state files if a restore is justified. Never restore the older
+  enabled-scope baseline, reset credentials, rebuild the host or reboot the LXC
+  as an automatic recovery step.
+
+**Observed (2026-10-15T05:06:44Z through 05:15:32Z):** all five actual version-9
+scope files had explicit disabled flags and were captured privately with
+verified hashes before approval. Recent direct DNS use included `10.0.10.174`;
+the user approved the daemon-only interruption after that impact was disclosed.
+The reviewed system generation was unchanged. Git had advanced normally to
+`faa2b41f9ce62ac0bb012a7631a24ed4000e8439`; it matched checkout/last-success and
+was rechecked before the isolated test.
+
+After restart, the new daemon PID `548888` was healthy and the existing API
+token still worked. All five scopes loaded disabled, all five file hashes
+were unchanged, zero leases and no UDP 67 listener were observed. The timer
+remained paused and the sync invocation/start time were unchanged throughout
+startup and packet acceptance, so no reconciliation masked persistence.
+
+The post-daemon native-LAN probe at 05:13:44-05:14:01Z reached both capture
+points with transaction `0x1e995223`. Each capture contains one DISCOVER and
+one OPNsense offer, with zero kernel drops and no Technitium offer. Native
+scope policy permits dynamic and locally administered clients, so those filters
+did not explain the negative result. DNS/API, system generation and client/LXC
+networking passed final checks; the timer was restored. No rollback, settings
+change, credential rotation, package update or LXC reboot was needed. This
+does not certify container boot, future VLAN paths, IPv6 or client handoff.
+
 ## Bootstrap Secrets
 
 Secrets stay out of Git. The admin password and a least-privilege automation API
@@ -283,8 +331,8 @@ zero leases. The matching
 documents the separate scope lifecycle calls. The approved guarded run disabled
 VLANs 20-50 and retained VLAN 10 disabled, verified by API read-back. DNS process,
 scope properties, addresses and routes were preserved. The subsequent native-LAN
-packet checks below passed; restart persistence and future-VLAN acceptance must
-not be inferred from them.
+packet checks below passed; daemon persistence was separately verified above.
+Future-VLAN or whole-container boot acceptance must not be inferred from either.
 
 ### Native-LAN Packet Acceptance
 
@@ -330,6 +378,10 @@ disabled scopes, zero Technitium leases, the original DNS PID, healthy DNS and
 unchanged client/LXC addressing. Private PCAP/XML, decoded traces and hashes are
 retained outside Git. DNS-daemon/LXC restart, DHCPv6/RA, target VLANs and real
 client renewal/handoff were not tested.
+
+The later [daemon-restart check](#daemon-restart-persistence-check) adds isolated
+startup persistence and another native-LAN packet result. It does not extend
+the result to container boot or unattached target VLANs.
 
 VLAN-local DNS and enabled scopes below are final-state checks, not preparation
 requirements. During preparation verify expected disabled state and no offers.
