@@ -467,6 +467,30 @@ validated. No client DNS/DHCP authority, NIC, VLAN, mask, NAS or package change
 was made; the only service operation was the explicitly described sync-unit
 restart. Keep those remaining checks separate from this native-LAN result.
 
+## Follow-Up: Approved Daemon-Restart Persistence
+
+**Observed:** 2026-10-15T05:06:44Z through 05:15:32Z. Recent direct Technitium
+DNS use included `10.0.10.174`; the user explicitly approved a daemon-only
+restart after the DNS/API interruption risk was disclosed. No container reboot
+or configuration deployment was authorized or performed.
+
+| Surface | Evidence / Result |
+|---------|-------------------|
+| Saved scope preflight | All five actual version-9 scope files have explicit disabled flags matching the upstream 14.0.0 header/name/enabled layout. Scope-only snapshot and hashes saved privately; no authentication file or token copied. |
+| Baseline | Reviewed `mh6gmm695f46k9xbharpsmpm7qshax4h` system unchanged; normal timer activity had advanced Git to `faa2b41f9ce62ac0bb012a7631a24ed4000e8439`, matching upstream/checkout/last-success before isolation. |
+| Isolation | Idle sync timer paused at 05:10:47Z. Sync invocation `d4bfa638726446948a04fa363d0f9ada` and its 05:04:00Z start time remained unchanged through startup and packet acceptance. No manual reconciliation was run. |
+| Daemon restart | Only `technitium-dns-server.service` restarted through Proxmox. API-port wait completed; startup API read-back at 05:13:14Z authenticated with the existing token. Old PID `297` replaced by healthy PID `548888`; no automatic crash restart. |
+| Persistence | All five scopes loaded disabled before any reconciliation; all five scope files byte-identical, zero leases and no UDP 67 listener. Native scope policy permits dynamic and locally administered clients, excluding those filters as the reason for silence. |
+| Packet acceptance | UTC 05:13:44-05:14:01, transaction `0x1e995223`: matching DISCOVER and only OPNsense offer at `cp1/vmbr0` and LXC `eth0`. Each PCAP is 751 bytes, two captured packets, zero kernel drops. No Technitium offer. Same synthetic identity reused; no REQUEST, ACK or RELEASE. |
+| Final state | At 05:15:32Z timer restored active, activation locked, five disabled scopes, healthy DNS/API and unchanged reviewed system. Technitium internal/external and OPNsense external DNS checks pass; client/LXC addressing and routes unchanged. |
+| Recovery/evidence | Private scope snapshot, startup/timer metadata, PCAP/XML, decoded traces and integrity hashes retained outside Git with owner-only permissions. No recovery restore, credential rotation, package/channel update or Git publish was performed. |
+
+This verifies actual daemon-startup persistence and bounded IPv4 native-LAN
+non-serving behavior without the sync guard masking a failure. It does not
+claim a measured zero-interruption restart, whole-LXC boot, unattached target
+VLANs, IPv6/RA policy or client renewal/handoff. No NIC, VLAN, mask or NAS change
+was made. The existing router/cluster DNS findings remain separate.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the

@@ -379,3 +379,13 @@ parser. Both captures per phase saw the same DISCOVER and OPNsense offer, with
 zero drops and no Technitium offer. The helper has seven passing offline cases;
 no package or capture-tool installation was needed. This does not certify a
 DNS-daemon/LXC restart, IPv6 policy, future VLANs or real client renewal.
+
+A separately approved daemon-only restart then passed on 2026-10-15. The
+additional preflight used Node's built-in byte/hash APIs to verify the saved
+version-9 scope header/name/disabled flag against the upstream 14.0.0 format;
+this was a narrow prefix check, not a general scope parser. Existing iproute2
+`ss` verified no UDP 67 listener. No new dependency or target installation was
+needed. With the sync timer paused, startup API flags and file hashes remained
+disabled/unchanged before reconciliation; the native-LAN capture again saw only
+OPNsense offers. DNS/API recovered and the timer was restored. Whole-container
+boot, future VLANs, IPv6/RA and real-client handoff remain outside that result.
