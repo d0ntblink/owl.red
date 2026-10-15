@@ -1,6 +1,6 @@
 # Security Policy
 
-Last updated: 2026-06-16
+Last updated: 2026-10-14
 
 ## Scope
 
@@ -51,6 +51,12 @@ Before every commit:
 
 These enforce the baseline above so it does not depend on memory:
 
+Source definitions do not prove runtime enforcement. The 2026-10-14
+[live audit](docs/issues/008-live-state-vs-repository.md) found that Fleet had not
+fully converged and Traefik still skipped backend TLS verification globally.
+Close the applicable [roadmap gates](ROADMAP.md#stabilization-gates) before
+depending on the declared controls for further deployment.
+
 | Control | What it does | Where |
 |---------|--------------|-------|
 | gitleaks (CI) | Scans every push/PR (full history) for secrets | `.github/workflows/security.yml` |
@@ -58,7 +64,7 @@ These enforce the baseline above so it does not depend on memory:
 | gitleaks config | Allowlists UUID *references* (Bitwarden IDs) and lockfiles to cut false positives | `.gitleaks.toml` |
 | BitwardenSecret placeholder guard | Fails CI/commit if a committed `bwSecretId` is empty, a placeholder, or non-UUID (the issue-007 empty-secret trap) | `scripts/check-bitwarden-placeholders.sh` |
 | Secret-file ignores | Keeps tfstate / Talos config / keys / kubeconfig / sessions out of git | `.gitignore` |
-| Scoped backend TLS | `insecureSkipVerify` is no longer cluster-wide; only the PDM self-signed backend skips verification | `gitops/pdm/pdm-serverstransport.yaml` |
+| Scoped backend TLS (runtime gap open) | Source permits only the PDM self-signed exception; audit still found the global runtime flag, requiring Fleet reconciliation and verification | `gitops/pdm/pdm-serverstransport.yaml`; roadmap G3 |
 
 Contributor setup:
 
@@ -78,10 +84,12 @@ pre-commit run --all-files
   is intentionally broad — it reproduces Rancher's stock Fleet-agent role. Fleet is the GitOps
   applier and must apply arbitrary resource kinds, so least-privilege scoping is not feasible
   without breaking reconciliation (see ADR 014; follow-up is to relocate it to Rancher Fleet values).
-- Backend TLS verification is on by default. The only exception is the PDM self-signed backend,
-  scoped via `gitops/pdm/pdm-serverstransport.yaml`.
-- The Traefik dashboard/API (`traefik.owl.red`) is read-only (`api@internal`) and LAN-only; it can
-  display routing topology but cannot mutate config — treated as acceptable info-disclosure on the LAN.
+- Required policy: verify backend TLS by default. The only approved exception is the PDM
+  self-signed backend, scoped via `gitops/pdm/pdm-serverstransport.yaml`. The audit's global
+  runtime exception violates that policy; a source edit alone does not close the gap.
+- The Traefik dashboard/API (`traefik.owl.red`, `api@internal`) exposes read-only routing
+  information, but must still be restricted to verified management sources. No IP-allowlist
+  middleware was found; private addressing alone is not proof of access restriction.
 
 2. Network Security
 - Preserve VLAN segmentation and least-privilege inter-VLAN policy.
@@ -93,6 +101,10 @@ pre-commit run --all-files
 3. Backups and Artifacts
 - Backup exports must be encrypted at rest when stored outside trusted systems.
 - Validation artifacts may be committed only when they do not include secrets.
+- Before disruptive maintenance, verify off-node recovery material and an isolated restore
+  or rollback procedure for the affected systems. Full PBS deployment can remain a later
+  milestone; an unchecked recovery path cannot. Do not infer a failed data disk or authorize
+  array repair from the empty parity2 slot recorded by the audit.
 
 ## Incident Response (Repository Scope)
 
