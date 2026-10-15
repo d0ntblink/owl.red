@@ -71,16 +71,18 @@ routes and additional renumbering; it is not automatically safer. Do not rely on
 proxy ARP, a broad legacy bridge or temporary routes without an explicit design.
 
 **DHCP control is a real prerequisite:** the audit found VLAN 10 disabled and
-the other Technitium scopes enabled, with zero leases. The prepared IaC now sets
-all five source scopes disabled and implements explicit lifecycle/read-back
-control plus a Nix-owned activation lock defaulting false. Twenty offline
-regression cases pass; none of this is deployed. The guarded script also checks
-serving state on unchanged SHAs and refuses missing scopes because upstream
-creation defaults to enabled. Verify installed-version behavior, deploy the
-reviewed Nix update with disabled intent, and prove no offers before NIC
-attachment. The old running script remains the audited baseline. A new Git SHA
-still triggers its full pass, even for docs-only changes. Pausing a timer or
-setting the new activation lock false does not itself stop already-serving DHCP.
+the other Technitium scopes enabled, with zero leases. The approved guard-only
+IaC rollout completed on 2026-10-15 using the existing NixOS input. All five
+scopes now read back disabled, the Nix-owned activation lock is false, and DNS
+is healthy without a process restart. Twenty offline regression cases pass.
+The guarded script checks serving state on unchanged SHAs and refuses missing
+scopes because upstream creation defaults to enabled. Native-LAN packet checks
+passed on 2026-10-15 before and after a sync-unit restart: the probe reached
+Technitium, only OPNsense offered, and all captures had zero drops. This is not
+DNS-daemon/LXC restart persistence or acceptance of unattached target VLANs.
+A new Git SHA still triggers a full pass, even for docs-only
+changes. Pausing a timer or setting the activation lock false does not itself
+stop already-serving DHCP.
 
 **Not blanket prerequisites:** NAS-data backups, NAS VM/passthrough/disk/array/
 boot/power changes, full PBS, all Fleet/TLS repairs, full cabinet documentation,
@@ -228,15 +230,19 @@ Do not route those targets onto separate L2 domains while relying on legacy
 hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
 
 1. **Inventory and choose the intermediate states.**
-  - `[ ]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings; identify every static or leased client outside `10.0.10.0/24` before narrowing anything
+  - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings; authenticated API evidence exists and native-LAN offers confirm `/16`, gateway/DNS `.1` and a 24-hour lease. Still identify every static or leased client outside `10.0.10.0/24` before narrowing anything.
   - `[ ]` Record masks, gateways and L2 attachment for the operator, PVE/corosync, Talos/etcd, API VIP `.20`, ingress VIP `.201`, NAS, BMC, PDU, AP and Technitium; include any storage/application dependency using the legacy range
   - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
-  - `[x]` Validate the actual Nix module, packaged sync/ShellCheck and full LXC system closure locally without activation (2026-10-14), using the pinned NixOS `25.11.12484.b6018f87da91` input in `nix/hosts/technitium/check.nix`. No remote copy, channel update or host switch was performed.
-  - `[ ]` Verify the installed Technitium API version and apply the reviewed Nix-host update with disabled intent and activation locked; read back all five scopes after reconciliation/restart. The source change is not a live DHCP shutdown, and the old running script does not gain new behavior from a Git pull alone.
-  - `[ ]` Before attaching reachable NICs, explicitly verify non-serving Technitium scope state and absence of offers. Coordinate the timer and any in-flight sync so a new revision cannot undo the guard; preserve existing DNS service.
+  - `[x]` Validate the actual Nix module, packaged sync/ShellCheck and full LXC system closure locally without activation (2026-10-14). After read-only target comparison, pin `nix/hosts/technitium/check.nix` to the live NixOS `25.11.10830.d7a713c0b7e4` revision and rebuild successfully; no remote copy, channel update or host switch was performed.
+  - `[x]` Compare the live/candidate closures and module hashes: only sync executable/unit and aggregate wrappers change; DNS package, .NET runtime and DNS unit are identical. Verify live Technitium 14.0, token DHCP View/Modify and existing scope/lease state through GET calls; no lifecycle mutation test performed.
+  - `[x]` Prepare the narrower `technitium_nixos` Ansible task selection, default-false channel updates and fatal nonzero rebuild handling; syntax/task-list and connected strict-host-key `--check` previews pass. The asynchronous rebuild explicitly skips in check mode; no activation was performed.
+  - `[x]` Privately retain the affected Nix files, current generation, DHCP configuration/state and exact code/source rollback instructions (2026-10-15). Verify saved hashes and owner-only permissions, unchanged live input, retained generation and independent Proxmox execution path; no token/private key copied. Recovery access is tested, not an actual rollback or router/switch recovery rehearsal.
+  - `[x]` Obtain explicit guard-only approval, recheck the baseline, then apply only the Nix-host update with disabled intent and activation locked (2026-10-15). The reviewed generation is running; approved reconciliation returned success/0 and all five scopes read back disabled. DNS process/health, scope properties, addresses and routes are unchanged; timer active, zero leases, no channel update or client handoff.
+  - `[x]` Prove bounded native-LAN no-offer behavior from physical `cp1`, before and after a guarded sync-unit restart (2026-10-15). Two DISCOVER-only probes with one synthetic identity reached existing Technitium `eth0`; only OPNsense offered. All four captures contain matching transactions and zero kernel drops. Five scopes remain disabled, DNS PID unchanged, client addressing unchanged; no lease was accepted or released.
+  - `[ ]` Verify disabled-state persistence across an explicitly approved DNS-daemon/LXC restart, and repeat path-specific API/packet acceptance for staged target VLANs before claiming them safe. The native-LAN test did not restart DNS or attach interfaces; coordinate timer/in-flight sync and preserve the existing client authority during further checks.
   - `[ ]` Review only the affected IaC resources/state and stage the approved port/bridge/router/AP definitions. Do not deploy the full five-NIC LXC target or run bootstrap/sync as a substitute for a migration procedure.
 3. **Contract the legacy network before activating contained routed subnets.**
   - `[ ]` For the in-place strategy, plan OPNsense pool/prefix and client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.

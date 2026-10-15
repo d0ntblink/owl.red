@@ -41,6 +41,7 @@
   register: _nixos_rebuild
   async: 600
   poll: 15
+  when: not ansible_check_mode
 
 - name: Wait for Technitium API to be ready
   ansible.builtin.wait_for:

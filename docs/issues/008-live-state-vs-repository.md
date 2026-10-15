@@ -341,6 +341,132 @@ credential is recorded here.
   settings, current root-key status, real-client DHCP options and actual AP
   cabling/bridges. No Terraform import, plan or apply was run.
 
+## Follow-Up: Technitium Guard Candidate Comparison
+
+**Observed:** 2026-10-14 America/Edmonton; read-only probes through
+2026-10-15T03:58:39Z. Existing key-based SSH to `edge.pve` and `pct exec 200`
+provided the inspection path without a vault prompt. No target file, service,
+channel, API setting, scope or network was changed.
+
+| Surface | Evidence |
+|---------|----------|
+| Running input | NixOS `25.11.10830.d7a713c0b7e4`, revision `d7a713c0b7e47c908258e71cba7a2d77cc8d71d5`; root's existing 25.11 channel source has the same revision. |
+| Running software/units | Technitium API `14.0`, package `14.0.0`, .NET runtime `9.0.15`; `technitium-dns-server.service` active, sync service idle and timer active. `dns.service` does not exist; that earlier service label was inaccurate. |
+| Current data versus runtime | Checkout and last-success SHA both `4259cec79c1d2e6d4e22f21e7ffbc9dfa22cb53d`; all five checked-out scopes have disabled intent. API still reports VLAN 10 disabled, VLANs 20-50 enabled with interface address `0.0.0.0`, and zero leases. The old packaged script only sets scope properties and skips unchanged SHAs. |
+| Permissions/API contract | GET checks confirm DHCP, Settings and Zones View/Modify permission. The exact upstream `v14.0.0` documentation exposes the separate enable/disable/list calls; no mutating API call was used to test them. |
+| Module drift | Removing only `environment.DHCP_ENABLE_ALLOWED = "false";` from the local module reproduces the live module's SHA256 exactly. No other host-module change is needed for this candidate. |
+| Local candidate | Validation was repinned from the initial newer 25.11 input to the exact live revision and both packaged-sync and full-system builds passed. Candidate: `/nix/store/mh6gmm695f46k9xbharpsmpm7qshax4h-nixos-system-unnamed-lxc-proxmox-25.11.10830.d7a713c0b7e4`. |
+| Closure delta | Live and candidate each reference 582 store paths. Exactly five are replaced: sync executable, sync unit, system-units, etc aggregate and system wrapper. All other paths match, including the DNS package, .NET runtime and DNS unit; this candidate does not include a DNS/OS package upgrade. |
+
+The existing deployment role unconditionally updated channels and accepted
+`nixos-rebuild` exit code 4. Local corrections now make channel updates explicit
+opt-in, fail on any nonzero rebuild result, and expose the `technitium_nixos`
+tag to isolate Nix-host tasks from credential bootstrap and explicit sync.
+Syntax/task-selection checks pass; none of those tasks was executed remotely.
+The original channel remains a mutable source unless independently pinned, so
+opting out of updates does not remove the need to recheck its revision.
+
+The previous running system generation and a working Proxmox inspection path
+are identified, but affected-file/state capture and actual rollback rehearsal
+were not performed. A build is not activation, and activation is not proof of
+disabled scopes or absent offers. The guarded rollout and its acceptance gates
+remain in the [Technitium guide](../../gitops/technitium/README.md#guarded-rollout)
+and [roadmap](../../ROADMAP.md#15-subnet-migration-16--24-per-vlan).
+
+## Follow-Up: Affected-State Capture And Check-Mode Preflight
+
+**Observed:** 2026-10-15T04:13:10Z, refreshed at 04:17:01Z. Only read-only target
+queries and a connected Ansible check-mode preview were performed. No source
+file, system generation, channel, timer, DNS setting or DHCP scope was changed
+by these operations.
+
+- A private controller directory outside Git retains the two affected Nix source
+  files, system/profile/input metadata and DHCP scope/lease state. Directory
+  mode is `0700`, files `0600`; saved source hashes match the live originals.
+  API tokens and private keys are excluded.
+- The previous generation remains linked from a retained system profile, and its
+  `switch-to-configuration` executable is present. Strict-host-key SSH to
+  `edge.pve` and `pct exec 200` work without the LXC's network or DNS. The private
+  recovery instructions name the exact generation and source-file restore
+  commands; restoring previously enabled scopes is explicitly excluded. These
+  are checked recovery prerequisites, not an executed rollback rehearsal or
+  proof of independent router/switch recovery.
+- The old running timer advanced the checkout/last-success SHA during
+  preparation. At the refresh, upstream, checkout and last-success all equal
+  `b03ca9baecf619e1518f6884de2710bccf517607`. Input and affected source hashes
+  remain unchanged. All five source scopes are disabled; the API still reports
+  VLAN 10 disabled and VLANs 20-50 enabled, with zero leases. The DNS process
+  remains active with the original PID.
+- The first connected `--check` preview exposed Ansible's refusal to combine
+  check mode with an asynchronous task. The rebuild now explicitly skips when
+  `ansible_check_mode` is true. The same preview then passed: only the two source
+  copies reported would-change results; channel update, rebuild and API wait
+  skipped. No target copy or activation was performed.
+
+The next change needs explicit approval for the guard-only Nix-host activation
+and disabled-intent reconciliation. Recheck this mutable baseline immediately
+before applying. Client DNS/DHCP remains on OPNsense; NICs, VLANs, masks and NAS
+settings remain outside that approval. Five-scope read-back and real-client
+no-offer acceptance remain pending.
+
+## Follow-Up: Approved Guard-Only Rollout
+
+**Observed:** 2026-10-15T04:21:28Z through 04:25:44Z. The user explicitly
+approved the Nix-host guard update and disabled-intent reconciliation, not a
+client DNS/DHCP handoff or a NIC/VLAN/mask/NAS change.
+
+| Surface | Result |
+|---------|--------|
+| Immediate preflight | Running generation, input, source hashes, serving state and upstream/applied SHA matched the approved baseline. Ansible resolves the existing Nixpkgs source correctly. The idle sync timer was paused before deployment. |
+| Owning deployment | `technitium_nixos`-only Ansible update passed: `ok=6`, `changed=3`, `failed=0`, `skipped=1`. Channel update explicitly false; credential bootstrap and explicit sync stage excluded. |
+| Activated system | Exact reviewed `/nix/store/mh6gmm695f46k9xbharpsmpm7qshax4h-nixos-system-unnamed-lxc-proxmox-25.11.10830.d7a713c0b7e4`; deployed source hashes match local files. Same `d7a713c0b7e47c908258e71cba7a2d77cc8d71d5` input and API 14.0. |
+| Runtime guard | Unit uses the reviewed `/nix/store/r2s09mvma21y0v6w9yfx3685ahnlz2va-technitium-sync` package and `DHCP_ENABLE_ALLOWED=false`. Activation alone did not run the guard; scopes still showed the old state at that intermediate read-back. |
+| Approved reconciliation | Started at 04:24:14Z; `Result=success`, `ExecMainStatus=0`. Checkout/last-success SHA remains `b03ca9baecf619e1518f6884de2710bccf517607`, so the unchanged-SHA lifecycle path was exercised. |
+| Scope acceptance | At 04:25:44Z all five existing scopes read back disabled, leases remain zero, and scope-property/reservation responses are unchanged from preflight. |
+| Preservation checks | DNS active with unchanged PID `297`; Technitium internal `rancher.owl.red -> 10.0.10.201` and external `example.com` queries pass. OPNsense external DNS query passes. LXC addresses and routes unchanged; timer active. |
+| Recovery/evidence | Previous generation and owner-only affected-state artifacts retained outside Git. Private activation/reconciliation/acceptance evidence excludes API tokens and private keys. No rollback was needed or rehearsed. |
+
+This completes the approved guard deployment and API serving-state check only.
+No Git publish, channel update, credential rotation, client resolver change,
+OPNsense authority change, NIC attachment, VLAN/mask change or NAS operation was
+performed. Real-client no-offer acceptance, including after sync/restart, is
+still required before exposing new interfaces. Existing router/cluster DNS and
+other audit findings are not declared repaired by these scoped health checks.
+
+## Follow-Up: Native-LAN DHCP Packet Acceptance
+
+**Observed:** 2026-10-15T04:46:42Z through 04:51:04Z. Probes originated on
+physical wired `cp1` (`10.0.10.11/16`, `vmbr0`), not WSL. Host tcpdump inside
+LXC 200's existing network namespace observed `eth0` without adding interfaces
+or installing anything in NixOS. Both capture points were ready before each
+Nmap DISCOVER-only probe; one synthetic locally administered MAC was reused.
+
+| Phase | UTC Window | Correlation / Result |
+|-------|------------|----------------------|
+| Existing guarded state | 04:46:42-04:46:58 | Transaction `0x611dc3df` visible at client and Technitium; one DISCOVER and one OPNsense offer at each point, zero drops, no Technitium offer. |
+| After sync-unit restart | 04:49:13-04:49:26 | Transaction `0x3a257587` visible at both points with the same result. Only `technitium-sync.service` was restarted; unchanged SHA, success/0 verified at 04:48:51Z. |
+| Wire DHCP options | Both phases | Server `10.0.10.1`, mask `255.255.0.0`, gateway/DNS `10.0.10.1`, lease `86400` seconds; offered `10.0.10.172` was never requested or accepted. DISCOVER can still create a temporary offer hold. |
+| Preserved runtime | 04:51:04Z | All five scopes disabled, zero Technitium leases, activation locked, timer active; DNS PID `297` unchanged. Technitium internal/external and OPNsense external DNS probes pass. Client remains `.11/16` via `.1`; LXC addresses/routes and system generation unchanged. |
+| Private evidence | Retained outside Git | Four complete PCAPs, each 751 bytes / two captured packets / zero kernel drops, plus XML, decoded matching traces, runtime evidence and integrity hashes; owner-only directories/files. |
+
+An initial shared-terminal capture attempt produced only PCAP headers and no
+completed probe result; it was rejected as inconclusive, not counted as a pass.
+The reusable [controller](../../scripts/capture-dhcp-authority.mjs) now owns
+readiness and bounded process cleanup in one process. Its
+[seven offline cases](../../scripts/capture-dhcp-authority.test.mjs) cover unsafe
+inputs, positive-control requirements, forbidden/unknown authorities, readiness
+failure and header-only captures. The existing credential-free CI job runs
+these cases with Node 24; all tool requirements are in the
+[controller guide](../guides/controller-setup.md#dhcp-packet-acceptance-requirements).
+
+**Acceptance boundary:** no Technitium offer was observed on the current
+untagged IPv4 LAN in either bounded window, including after the sync-unit
+restart. No REQUEST, ACK, RELEASE or real-device renewal/handoff was performed.
+DNS-daemon/LXC restart persistence, DHCPv6/RA and unattached target VLANs are not
+validated. No client DNS/DHCP authority, NIC, VLAN, mask, NAS or package change
+was made; the only service operation was the explicitly described sync-unit
+restart. Keep those remaining checks separate from this native-LAN result.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
