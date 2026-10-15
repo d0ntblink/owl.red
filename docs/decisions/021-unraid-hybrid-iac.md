@@ -26,24 +26,27 @@ codified. Constraints shaped the approach:
 
 ## Decision
 
-Manage Unraid **settings** through the `unraid_settings` role using **three lanes**, choosing the
-lane by capability and risk:
+Manage Unraid **settings** through **three lanes**, choosing by capability and
+risk. The opening revision governs ownership; this is not an instruction to
+re-enable the former Ansible API writer.
 
-1. **API lane** — `unraid-api` GraphQL, executed **on the controller** (`delegate_to: localhost`) over
-   HTTPS with an `x-api-key`. Used for settings that have a mutation (NTP first; SSH/identity/plugins/UPS later).
-   Pattern: **introspect → read → compare → write only on drift → verify**; never a blind mutation.
+1. **API lane** — Terraform-GraphQL in `terraform/unraid/`, via
+  `scripts/unraid-terraform-run.sh`. Inspect the installed schema, read/plan,
+  approve only safe intended setting mutations, apply and verify. Ansible does
+  not own these writes; destructive/operational API mutations stay excluded.
 2. **File lane** — Ansible manages an **allow-listed** set of `/boot/config` keys, then reloads (scaffolded; Phase 2).
 3. **Manual lane** — lockout/data-layer/secret settings (`network.cfg`, array, license, users, WG/SSL) are
    **never auto-written**; the role only **drift-reports** them and the committed flash snapshot mirrors live.
 
 Supporting choices:
-- **Secrets via env injection** (`UNRAID_API_KEY` exported from Bitwarden `bw`), mirroring how
-  `scripts/ansible-run.sh` injects the Proxmox password — consistent with [ADR 003](003-secrets-bitwarden.md).
+- **Secrets via env injection** from Bitwarden through the current Terraform
+  runner, using `TF_VAR_unraid_api_key`; no key values in Git or tool output.
 - **SSH key auth** with `id_ed25519_owl_ansible` (key stored in `bw`).
 - **No NAS Python required for the core paths** — NAS reads use `raw`; GraphQL/Bitwarden run on the controller.
   `python3` was installed on the NAS via `un-get` (persists in `/boot/extra`) only to enable `fetch`-based recapture.
-- **Writes are feature-flagged off by default** (`api_enabled`/`file_lane_enabled`), plus `when: not ansible_check_mode`;
-  hard preflight guard prevents any secret/lockout file entering a managed list.
+- **Ansible file writes remain off by default** (`file_lane_enabled`); the legacy
+  `api_enabled` writer must remain unused. Preflight guards exclude secret/lockout
+  files; Terraform API writes need their own reviewed plan and verification.
 
 ## Alternatives rejected
 
@@ -59,11 +62,18 @@ Supporting choices:
 
 - Clear, auditable lane ownership; drift detection for manual settings; reproducible, idempotent API writes.
 - `network.cfg` / array / secrets stay **manual** (documented); **DNS is kept DHCP-provided by decision** —
-  authority for `owl.red` resolution belongs at the Technitium DHCP scope, not pinned on the NAS.
+  the active DHCP authority advertises the resolver, not a NAS-local static pin.
+  Preserve the OPNsense client path during network preparation; the Technitium
+  target becomes authoritative for client DHCP only at approved handoff.
 - The flash snapshot stays in sync via recapture (requires NAS `python3`, now installed).
 - Adding a setting follows a fixed decision: API mutation → file allow-list → else manual.
 - **Risk:** the GraphQL schema can change across `unraid-api` versions — mitigated by introspecting the live
   schema (`__type`) before any write.
+
+This settings decision is not a network prerequisite or permission for unrelated
+NAS VM/passthrough/disk/array/boot/power/service changes. The user has local NAS
+keyboard/monitor access for networking recovery; data protection/storage work
+needs its own approved scope.
 
 See: [`docs/guides/unraid-making-changes.md`](../guides/unraid-making-changes.md),
 [`unraid-iac.md`](../guides/unraid-iac.md), [`unraid-iac-plan.md`](../guides/unraid-iac-plan.md),

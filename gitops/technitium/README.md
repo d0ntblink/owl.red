@@ -1,11 +1,19 @@
 # Technitium DNS + DHCP (LXC, GitOps-synced)
 
-Technitium is the single DNS and DHCP authority for all five VLANs. It runs as a
-NixOS LXC on `edge.pve` (not on Kubernetes) and reconciles its configuration from
-this directory via a systemd timer. See [ADR 013](../../docs/decisions/013-technitium-single-resolver-all-vlans.md)
-for the rationale (DHCP must not depend on cluster health) and
+Technitium runs as a NixOS LXC on `edge.pve` and is authoritative for `owl.red`.
+Sole client DNS/DHCP service across five VLANs is the **post-cutover target**,
+not the observed deployment. Keep client DNS/DHCP on OPNsense until supporting
+VLAN paths and Technitium interfaces are ready and a coordinated handoff is
+approved. See the [execution order](../../ROADMAP.md#execution-order),
+[ADR 013](../../docs/decisions/013-technitium-single-resolver-all-vlans.md)
+for the selected target and revisitable trade-offs, and
 [ADR 010](../../docs/decisions/010-technitium-fleet-git-managed-dns.md) for the
 Git-managed DNS model.
+
+**Audit baseline (2026-10-14):** one untagged `10.0.10.30/24` NIC; VLAN 10 scope
+disabled, scopes 20-50 enabled, zero leases, and every scope reporting DNS
+`10.0.10.30`. Current OPNsense settings/lease authority were not authenticated.
+Do not infer cutover readiness from reservations or the target table below.
 
 ## Quick Reference
 
@@ -13,18 +21,20 @@ Git-managed DNS model.
 |------|-------|
 | Placement | NixOS LXC (VMID 200) on `edge.pve` (`10.0.10.3`) |
 | Hostname | `ns1.owl.red` |
-| DNS authority | All VLANs; VLAN-local IP pushed per scope (`10.0.x.30`) |
+| DNS authority | `owl.red` authoritative zone now; target client DNS uses VLAN-local `10.0.x.30` after handoff |
 | Management / VLAN 10 IP | `10.0.10.30` |
 | Web UI | `https://dns.owl.red` (Traefik ingress → `10.0.10.201`) |
-| DHCP authority | All VLANs (OPNsense serves no DHCP) |
+| DHCP authority | Target: all VLANs after approved handoff; preserve OPNsense during preparation |
 | DHCP ranges | `10.0.x.100–199` per VLAN |
 | Sync engine | `technitium-sync.service` + `.timer` (boot+3min, then every 15min) |
 | Sync source of truth | this directory (`gitops/technitium/`) |
 
 ## Desired-State Files
 
-The sync script applies each file on every run. All four are authoritative; manual
-edits in the Technitium web UI are drift and get overwritten on the next sync.
+On a changed repository SHA the script applies all four file types, even if the
+commit only changes documentation. An unchanged SHA skips reconciliation, so UI
+drift is not necessarily corrected at the next timer tick. Settings and imported
+record sets are reapplied; reservation removal is not declarative pruning.
 
 | File | Applied via | Purpose |
 |------|-------------|---------|
@@ -52,13 +62,38 @@ NixOS config.
 4. Record the new SHA on success.
 
 Reservations are upserted (existing lease for a MAC is removed first, then re-added),
-so IP/hostname changes converge without manual cleanup.
+but entries absent from the registry are not pruned. Some reservation failures
+are warnings and can still result in a recorded SHA. Check the journal and
+actual reservation/record state rather than equating SHA equality with complete
+convergence. Zone import need not set the live SOA serial equal to the source
+serial; compare intended records and inspect the live serial separately.
+
+### Transition Safety
+
+- All five source scopes currently include `enabled: true`. The script passes
+  those fields to `scopes/set` but does not call `scopes/enable` or
+  `scopes/disable`, which are separate operations in the upstream API. Do not
+  treat the JSON field as verified serving-state control.
+- Before attaching reachable VLAN interfaces, verify the installed API version
+  and implement/test explicit disabled-state reconciliation. Read back scope
+  state and use a real-client packet check to prove no offers before handoff,
+  including after sync/restart. Preserve existing DNS service while doing so.
+- Pausing the timer neither disables already-enabled scopes nor cancels an
+  in-flight service. New commits, manual sync and bootstrap are change actions;
+  coordinate them with the serving-state guard rather than using them as tests.
+- Resolve legacy `/16` overlap before routing the contained target `/24`s.
+  Prepare L2/L3 paths before transferring client resolver/DHCP authority. Disable
+  the old DHCP server for the affected domain before enabling its replacement,
+  and account for outstanding leases in both handoff and rollback.
+- Verify actual VLAN-local DNS options on renewed clients. Do not introduce
+  early CoreDNS/Talos resolver overrides or DNS interception to hide an
+  unfinished network transition.
 
 ## Lifecycle Ownership
 
 | Layer | Owner |
 |-------|-------|
-| LXC creation (5-NIC, one per VLAN) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
+| LXC lifecycle (target five NICs; observed one) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
 | OS + Technitium + sync service | NixOS — `nix/hosts/technitium/configuration.nix` |
 | Admin account, API token, first sync trigger | Ansible — `ansible/roles/technitium_lxc/`, played by `ansible/playbooks/deploy-technitium-lxc.yml` |
 | DNS / DHCP desired state | This directory |
@@ -70,6 +105,9 @@ token are provisioned from Bitwarden Secrets Manager by the Ansible role
 (`bootstrap.yml`); the token is written to `/etc/technitium/sync.token` inside the
 LXC. The sync service skips silently until that token exists.
 
+The bootstrap command below is an operational reference, not a subnet/VLAN
+migration procedure or permission to replace the running LXC configuration.
+
 ```bash
 # Provision LXC config + secrets (requires BWS_ACCESS_TOKEN in the environment)
 scripts/ansible-run.sh ansible-playbook \
@@ -79,7 +117,7 @@ scripts/ansible-run.sh ansible-playbook \
 
 ## Operating Notes
 
-- Trigger a sync manually inside the LXC: `systemctl start technitium-sync.service`.
+- Trigger an approved sync inside the LXC: `systemctl start technitium-sync.service`; coordinate the transition guard first.
 - Inspect a run: `journalctl -u technitium-sync.service --no-pager -n 200`.
 - Confirm the timer: `systemctl list-timers technitium-sync.timer`.
 - Update the SOA serial in `zones/owl.red.zone` whenever the zone changes.
@@ -99,7 +137,8 @@ scripts/ansible-run.sh ansible-playbook \
   establish the matching switch-port/SSID VLAN, gateway, firewall rules, and a
   working management path. Validate camera local operation without internet and
   explicitly permit any Shield access to local media services.
-- Deploy desired-state changes only after approval and commit/push. Check the
+- Publish desired-state changes only after approval; even a documentation-only
+  push can trigger full live reconciliation. Check the
   sync result, actual reserved leases, DNS answers, and client lease renewal.
   Neither editing this repository nor adding a reservation moves a live client.
 - The camera records previously listed VLAN 10 addresses. The sync only upserts
@@ -114,13 +153,16 @@ live VLAN cutover was performed. No cutover is performed by this documentation.
 
 ## Validation
 
+VLAN-local DNS and enabled scopes below are final-state checks, not preparation
+requirements. During preparation verify expected disabled state and no offers.
+
 | Check | Command | Expected |
 |------|---------|----------|
 | DNS (VLAN 10) | `dig @10.0.10.30 rancher.owl.red +short` | `10.0.10.201` |
 | DNS (VLAN 20 local) | `dig @10.0.20.30 rancher.owl.red +short` | `10.0.10.201` |
-| Authoritative flag | `dig @10.0.10.30 owl.red SOA` | `aa` flag set, serial matches zone file |
-| DHCP scopes present | Technitium UI → DHCP → Scopes | Five scopes, all enabled |
-| Sync healthy | `systemctl status technitium-sync.service` | Last run succeeded, no auth/import error |
+| Authoritative flag | `dig @10.0.10.30 owl.red SOA` | `aa` set; inspect live serial and verify intended records, not literal source-serial equality |
+| DHCP serving state | Technitium UI → DHCP → Scopes, plus real-client capture | Only approved migrated domains enabled; no competing offers; all five only after full handoff |
+| Sync healthy | `systemctl status technitium-sync.service` and journal | Inspect warnings and verify actual settings/scopes/reservations; success alone is insufficient |
 
 ## Not Used Anymore
 

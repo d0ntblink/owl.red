@@ -3,18 +3,24 @@
 Audit of every guest on the Proxmox cluster vs. Terraform, the exact passthrough
 commands, how to add a VM/LXC (incl. **adding a Talos node**), and inconsistencies to know.
 
-Live inventory verified 2026-06-18 via the PVE API (`/cluster/resources`).
+The coverage baseline below was recorded 2026-06-18. The
+[2026-10-14 audit](../issues/008-live-state-vs-repository.md) confirms eight
+running guests, but not a safe whole-root apply: Technitium has one untagged NIC
+versus five tagged target NICs, and live Talos is 1.8.1 versus the 1.7.5 source/
+ISO pins. Follow [G4](../../ROADMAP.md#stabilization-gates) for the touched root.
+Network work does not authorize NAS VM/passthrough/disk/boot/power changes.
 
 ## How Terraform is run here
 
-Three **independent** root modules (separate state each); run via the wrapper that injects
+Use **independent** root modules with separate state; the examples below are not
+an exhaustive module inventory. The wrapper injects
 `root@pam` from Bitwarden (password auth — API tokens can't set privileged/passthrough config, see
 [issue 003](../issues/003-proxmox-api-token-passthrough-restriction.md)):
 
 ```bash
 scripts/terraform-run.sh -chdir=terraform/proxmox/technitium  plan   # Talos cluster + Technitium LXC
 scripts/terraform-run.sh -chdir=terraform/proxmox/nas         plan   # Unraid NAS VM
-scripts/terraform-run.sh -chdir=terraform/opnsense            plan   # OPNsense config (not yet init-ed)
+scripts/terraform-run.sh -chdir=terraform/opnsense            plan   # OPNsense config; initialized in June, re-survey before planning changes
 ```
 Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ignored ([ADR 015](../decisions/015-terraform-remote-state-deferred.md)).
 
@@ -34,9 +40,12 @@ Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ig
 Every guest is now represented in code. `100`/`231` are **scaffolds** — they must be
 `terraform import`-ed and shown to produce **no plan diff** before any `apply` (see each file's header).
 
-## Hardware / USB passthrough (run as root on the owning node after apply)
+## Hardware / USB Passthrough Reference
 
-bpg can't manage `hostpci`/`usb` cleanly, so passthrough is applied out-of-band and documented in code.
+The following commands record existing hardware assignments. They are not
+routine post-apply steps and must not be rerun for network work. Any proposed
+passthrough change requires separate approval, live hardware verification and a
+guest-specific recovery plan. Existing assignments are not being changed here.
 
 **NAS (101), on `storage`:**
 ```bash
@@ -51,13 +60,18 @@ qm set 101 -usb0     'host=24a9:205a,usb3=1'         # virtual USB license gadge
 qm set 100 -hostpci0 '0000:01:00,pcie=1'             # passthrough NIC (WAN/LAN)
 qm set 100 -hostpci1 '0000:04:00,pcie=1'             # passthrough NIC
 ```
-> `edge.owl.red` is **pinned** to `edge` (PCIe NIC passthrough) — do not migrate. Any OPNsense `.tf`
-> must use `started=false` + `protection=true` so Terraform can never bounce or recreate the router.
+> `edge.owl.red` is **pinned** to `edge` (PCIe NIC passthrough); do not migrate it.
+> `started=false` and `protection=true` are configuration values, not a guarantee
+> that Terraform cannot stop or recreate a guest. Verify installed-provider
+> semantics, lifecycle rules and the exact plan before any apply. Reject
+> unintended power, replacement or hardware actions instead of relying on flags.
 
 ## Add a new Talos node (the easy path)
 
-The cluster is a `for_each` over maps in `terraform/proxmox/technitium/main.tf`, so adding a node is
-one map entry + apply. Convention: VMID `60X`, IP `10.0.10.2X/16`, MAC `02:00:00:00:00:2X`.
+The cluster uses `for_each` maps in `terraform/proxmox/technitium/main.tf`.
+The example below reflects the legacy `/16`, not an approved migration action.
+Match the currently approved subnet/version plan and first prove that a reviewed
+plan adds only the new node; existing cluster/LXC drift must not be applied with it.
 
 1. **Hardware/PVE:** install Proxmox on the new mini-PC, join it to the cluster (e.g. node `worker2`),
    and put the Talos ISO on its `local:iso/` (`ansible/playbooks/04-prep-talos-iso.yml` or `pveam`/`wget`).
@@ -73,11 +87,13 @@ one map entry + apply. Convention: VMID `60X`, IP `10.0.10.2X/16`, MAC `02:00:00
    - `gitops/technitium/zones/owl.red.zone` — `worker2.k8s A 10.0.10.25` + **bump SOA serial**
    - `gitops/technitium/dhcp-reservations.json` — MAC reservation
    - `talos/patches/worker2.yaml` — standalone patch (mirror of the `main.tf` inline patch)
-4. **Apply:** `scripts/terraform-run.sh -chdir=terraform/proxmox/technitium apply`
+4. **Review, then apply the approved plan only:** reject changes to existing guests, NICs, versions, passthrough or power which are not part of adding this node
 5. **Verify:** `kubectl get nodes` (and `talosctl health`) shows the new node Ready.
 
-Adding a new **non-Talos** VM/LXC: create `terraform/proxmox/<name>/` (copy `nas/` for a VM with
-passthrough, or `pdm/` for an LXC), `init`, `plan`, `apply`; add passthrough via `qm set` post-apply.
+For a new **non-Talos** VM/LXC use a suitable existing root as a reference, then
+review resource identity, state, storage, network and power behavior. Do not copy
+NAS/router hardware assignments or execute their passthrough reference commands
+as boilerplate.
 
 ## Inconsistencies / take note
 
@@ -89,12 +105,14 @@ passthrough, or `pdm/` for an LXC), `init`, `plan`, `apply`; add passthrough via
    claims `hostpci0=0000:02:00` and that `hostpci2/3` were "REMOVED (I350 reclaimed)", and calls the 10G NIC an
    "I350". Reality + `nas.tf` say `hostpci0=01:00` with all four present and the 10G NIC is the **82599ES**
    (the I350 is onboard host-mgmt, not passed). `nas.tf` is correct; the live description should be corrected.
-4. **`started` policy differs by design:** Talos VMs `started=true` (Terraform manages power); the NAS and the
-   OPNsense scaffold use `started=false` (+`protection=true`) so Terraform never starts/stops/recreates a
-   stateful or pinned guest. Keep this for any router/storage guest.
+4. **Power flags are not lifecycle guarantees:** the source uses different `started`
+   values for Talos and NAS/router guests. Reconcile actual provider/state behavior
+   and review the plan; do not infer "never starts/stops/recreates" from those flags.
 5. **Passthrough is intentionally manual:** even though `terraform-run.sh` uses `root@pam` (which *can* set
    `hostpci`), passthrough stays as post-apply `qm set` (hardware-specific, set once). Don't add `hostpci` to a `.tf`.
 6. **Talos uses `/16` IPs** (`10.0.10.21/16`) pending the flat-`/16` → per-VLAN-`/24` migration (ROADMAP 1.5).
-7. **Talos ISO `v1.7.5` is pinned in two places** — `main.tf` (`cdrom.file_id`) and `04-prep-talos-iso.yml`.
-   Bump both together when upgrading Talos.
+7. **Talos source/ISO pin is not the live version:** 1.7.5 is recorded in `main.tf`
+   and `04-prep-talos-iso.yml`, while the October audit found 1.8.1 running. Reconcile
+   boot media, machine configuration, state and live versions before an explicit
+   upgrade plan; do not silently upgrade or downgrade during network work.
 8. **K8s control-plane VIP `10.0.10.20`** (`cluster_endpoint`) is real and now documented in the README service-VIP table.

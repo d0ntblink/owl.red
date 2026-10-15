@@ -2,7 +2,7 @@
 
 > **This repo is the single source of truth for the `owl.red` network.**  
 > All changes network, infrastructure, k8s, config : are made here first, then applied.  
-> No configuration is managed outside this repo except for initial hardware bootstrap.
+> Supported declarative configuration is managed here; documented manual floors and bootstrap steps have explicit ownership and rollback notes.
 
 ## Observed State (2026-10-14)
 
@@ -14,10 +14,17 @@ had no link, and Technitium had one NIC with its VLAN 10 DHCP scope disabled.
 Gateway/pod DNS, Fleet convergence and management TLS still need correction;
 there was no shared-storage/PVC setup or registered PVE backup coverage.
 
-Follow the [roadmap stabilization gates](ROADMAP.md#stabilization-gates) before
-disruptive Phase 0/1 deployment. Read-only/offline work can continue; full PBS,
-off-cluster certificate distribution and optional GNSS hardware are not blanket
-prerequisites. No remediation was performed by the audit or this doc update.
+Follow the [roadmap execution order](ROADMAP.md#execution-order) and its
+change-scoped [acceptance gates](ROADMAP.md#stabilization-gates). Keep client
+DNS/DHCP on OPNsense while preparing the network; handoff waits for supporting
+VLAN paths and Technitium interfaces plus an approved coordinated change. Resolve
+legacy `/16` overlap before routing the contained target `/24`s; management-mask
+contraction and management VLAN tagging are different steps.
+
+Full NAS-data backups, PBS, unrelated Fleet/TLS repairs, storage and NAS VM/
+passthrough/disk changes are not network entry criteria. Preserve the working
+NAS and save only affected configuration/state with practical rollback access
+for network work. No live remediation is implied by this documentation update.
 
 ## Quick Reference
 
@@ -308,13 +315,21 @@ No live network assignment was changed by this allocation update.
 | `40` | Technitium | `10.0.40.100-199` | `10.0.40.1` | `10.0.40.30` | IoT local-only policy |
 | `50` | Technitium | `10.0.50.100-199` | `10.0.50.1` | `10.0.50.30` | IoT with internet, no lateral movement |
 
-Technitium is authoritative for `owl.red` on `10.0.10.30`; five native VLAN
+Technitium is authoritative for `owl.red` on `10.0.10.30`; five VLAN-local
 interfaces are the target, not the audited live configuration. Its systemd timer
 pulls Git every 15 minutes and skips unchanged commits. All confirmed target
 reservations matched live, but there were no leases and VLAN 10's scope was
-disabled. Direct gateway queries returned NXDOMAIN for internal ingress names,
-and an existing pod received public answers or ENOTFOUND. Repair the resolver
-path under roadmap G2; do not blindly enable another DHCP server.
+disabled while the other scopes were enabled. Direct gateway queries returned
+NXDOMAIN for internal ingress names, and an existing pod received public answers
+or ENOTFOUND. Preserve the OPNsense client path during preparation; final resolver
+handoff and enforcement are roadmap G2 work after network readiness, not before.
+Any interim resolver repair needs separate justification and rollback.
+
+Before attaching new Technitium NICs, prove explicit DHCP serving-state control;
+`enabled` in the current source JSON is not demonstrated enable/disable
+reconciliation. Even a documentation-only push can trigger the timer's full
+settings/zone/scope/reservation pass on a new SHA. Review publishing as an
+operational action; see the [Technitium guide](gitops/technitium/README.md).
 
 ### Traefik and TLS
 
@@ -328,7 +343,7 @@ path under roadmap G2; do not blindly enable another DHCP server.
 
 - If `curl https://dns.owl.red` or `curl https://rancher.owl.red` fails, check name resolution first. These hostnames should resolve to `10.0.10.201` for LAN clients.
 - If `nslookup` or `Resolve-DnsName` returns a public IP instead of `10.0.10.201`, the client is not using healthy internal Technitium answers for `owl.red`.
-- `10.0.10.30` is the DNS service VIP, not the Traefik web VIP. `ping` and HTTP checks against `10.0.10.30` are not valid tests for `dns.owl.red`.
+- `10.0.10.30` is the LXC's DNS service address, not a floating DNS VIP or the Traefik web VIP. `ping` and HTTP checks against `10.0.10.30` are not valid tests for `dns.owl.red`.
 - Direct DNS checks should be done against Technitium, for example: `Resolve-DnsName dns.owl.red -Server 10.0.10.30` and `Resolve-DnsName rancher.owl.red -Server 10.0.10.30`.
 - If Technitium answers with a public IP for internal names, fix the authoritative zone path first; ingress hostnames behind Traefik will not work until internal DNS returns the correct VIP.
 
@@ -346,14 +361,19 @@ audit could not authenticate to OPNsense and `captive.owl.red` was NXDOMAIN.
 | DHCP Option 114 | `https://captive.owl.red:8000/api/captiveportal/access/api` | RFC 8910 captive portal API |
 | Fallback endpoint | `https://10.0.30.1:8000/api/captiveportal/access/api` | Direct IP path if DNS is down |
 
+The portal policy below is a target to validate against the installed OPNsense
+version, not an audited rule set. During preparation, guest DNS remains on
+OPNsense. At the approved final handoff, permit the VLAN-local Technitium DNS
+endpoint instead; do not enable final DNS blocking before testing the new path.
+
 Firewall behavior for the guest VLAN should remain ordered as follows:
-1. Allow DNS to OPNsense.
+1. Allow DNS to the current approved resolver (OPNsense during preparation; Technitium `10.0.30.30` after handoff).
 2. Redirect guest HTTP and HTTPS to the captive portal.
 3. Maintain the authenticated captive portal alias.
 4. Allow authenticated guests to reach the internet.
 5. Deny unauthenticated guest traffic.
 
-Guest isolation rules should explicitly block access from VLAN 30 to VLANs 10, 20, 40, and 50, block direct access to OPNsense except DNS and portal functions, and block multicast discovery traffic (`224.0.0.0/4`).
+Guest isolation rules should explicitly block access from VLAN 30 to VLANs 10, 20, 40, and 50, block direct access to OPNsense except approved portal functions and transitional DNS, and block multicast discovery traffic (`224.0.0.0/4`).
 
 ### Power and Recovery
 

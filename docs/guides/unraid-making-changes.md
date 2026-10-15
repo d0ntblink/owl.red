@@ -4,6 +4,11 @@ How Unraid configuration is managed and **which of the 3 methods** to use for an
 The VM shell (CPU/RAM/disk/passthrough) is Terraform ([`terraform/proxmox/nas/nas.tf`](../../terraform/proxmox/nas/nas.tf));
 this guide is about settings **inside** Unraid.
 
+These are reference lanes, not approval to change the NAS for network work.
+Keep disks/array/passthrough/boot/power and unrelated services unchanged. A manual
+network mask/IP change needs its own bounded procedure and available local
+keyboard/monitor recovery; do not run a general settings apply as its preflight.
+
 ## Decision rule
 
 > **Is there a safe GraphQL mutation for it?** → **Terraform** (`terraform/unraid/`).
@@ -31,7 +36,7 @@ this guide is about settings **inside** Unraid.
 | Change **docker service** settings (image path, networks) | Ansible file-lane (Phase 2) | `docker.cfg` |
 | Add/remove a **docker container** | compose-in-git on Unraid **or** k8s/Fleet (per ADR 002) | not this role |
 | Change the **NAS IP** / bridge | **Manual** (lockout) | Unraid UI (stop Docker first); `network.cfg` snapshot is reference-only |
-| Change the **DNS** the NAS uses | **Manual** — left DHCP-provided; authority is the Technitium scope | `gitops/technitium/dhcp/scopes.json` (not the NAS) |
+| Change the **DNS** the NAS uses | **Manual network policy; keep DHCP-provided DNS** | The active DHCP authority advertises DNS; preserve the OPNsense client path during preparation and transfer to Technitium only at the approved handoff. Do not pin `.30` early. |
 | Add/change the **array**, a **disk**, a **pool**, **parity** | **Manual** ⛔ DRIVE PROTECTION | Unraid UI only — never IaC |
 | Add a **user** | **Manual** ⛔ (secrets) | Unraid UI |
 | Install/remove a **plugin** | **Manual** (future TF plugin-set) | Unraid UI |

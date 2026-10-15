@@ -14,10 +14,11 @@ Definition, **VIP** = Virtual IP.
 ### GitOps
 An operating model where Git is the single source of truth for infrastructure and
 a controller continuously reconciles the cluster to match what's committed. In
-`owl.red`, you change a file under `gitops/`, push to `main`, and Fleet applies it —
-you do not `kubectl apply` by hand (except documented break-glass). Consequence we
-hit repeatedly this project: **a change has no effect until it is pushed to
-`origin/main`**, because the reconciler reads the remote, not your working tree.
+`owl.red`, Fleet applies Kubernetes paths from `origin/main`; the Technitium LXC
+uses a separate systemd Git sync, not Fleet. Neither reads local working-tree
+edits. Terraform/Ansible use their own reviewed execution lanes. Publishing a
+new repository SHA can trigger a full Technitium sync even when only docs changed,
+so push is an operational action, not a harmless final editing step.
 
 ### Rancher
 A Kubernetes management platform (runs in the `cattle-system` namespace, reachable
@@ -159,19 +160,27 @@ committed (SECURITY.md); the Talos-generated ones are git-ignored.
 
 ### VLAN (802.1Q)
 Layer-2 network segmentation over one physical link using tagged frames. `owl.red`
-runs five: 10 infra, 20 private, 30 guest, 40 IoT-local, 50 IoT-internet (see
+targets five: 10 infra, 20 private, 30 guest, 40 IoT-local, 50 IoT-internet (see
 [`README.md`](../README.md)). A **trunk** port carries multiple tagged VLANs; an
-**access** port carries one untagged VLAN.
+**access** port carries one untagged VLAN. The 2026-10-14 audit found a flat
+network; target IP reservations do not assign switch-port or Wi-Fi VLAN membership.
 
 ### Subnet / CIDR / gateway
-An IP range (e.g. `10.0.10.0/24`) and its router address (`10.0.10.1`). The project
-is mid-migration from a flat `/16` to per-VLAN `/24` (ROADMAP 1.5); `/16` references
-in `talos/` and inventory are expected until then.
+An IP range (e.g. `10.0.10.0/24`) and its router address (`10.0.10.1`). The planned
+migration is from live `10.0.0.0/16` to per-VLAN `/24`; every target is contained
+in that legacy network. Old `/16` clients can ARP for a migrated destination
+instead of routing to it. Resolve masks/return paths before separating those
+targets, per [roadmap 1.5](../ROADMAP.md#15-subnet-migration-16--24-per-vlan).
+Changing a mask is not the same operation as tagging a management interface.
 
 ### DHCP
-Hands out IP leases. In `owl.red`, **Technitium** is the sole DHCP authority for all
-VLANs (ADR 013); ranges are `10.0.x.100–199`, with MAC **reservations** for known
-hosts in [`gitops/technitium/dhcp-reservations.json`](../gitops/technitium/dhcp-reservations.json).
+Hands out IP leases. **Technitium** is the selected post-cutover authority, with
+target ranges `10.0.x.100-199` and known-host MAC **reservations** in
+[`gitops/technitium/dhcp-reservations.json`](../gitops/technitium/dhcp-reservations.json).
+Keep client DNS/DHCP on OPNsense until supporting paths/interfaces are ready and
+handoff is approved; current router settings still require authenticated survey.
+Only one authority may serve a given domain at handoff. A scope definition or
+`enabled` field alone does not prove actual serving state or VLAN membership.
 
 ### DNS / authoritative / recursive / forwarder
 Name resolution. **Authoritative** = owns a zone's records (Technitium owns
@@ -199,14 +208,17 @@ The guest-WiFi splash/auth flow on VLAN 30 at `captive.owl.red`, signaled to cli
 via DHCP Option 114. Enforced by OPNsense.
 
 ### Break-glass path
-A reserved, always-reachable management route (a VLAN 10 recovery port) used to
-recover from a lockout during switch/firewall changes. A hard rule throughout
-[`setup.md`](../setup.md).
+A tested management/recovery path independent of the component being changed.
+A spare port or reachable BMC is not automatically such a path. The user has
+physical switch-port access and a NAS keyboard/monitor; router and CSS326
+recovery must be verified separately (CSS326 has no serial console). See
+[change-scoped G1](../ROADMAP.md#stabilization-gates).
 
 ### WAN / LAN / NAT
-**WAN** = internet-facing uplink (OPNsense `igb0`); **LAN** = internal networks;
+**WAN** = internet-facing uplink; **LAN** = internal networks;
 **NAT** = address translation between them. Note: the operator works from **WSL**,
-which is itself NAT'd behind Windows — hence the ProxyJump patterns in Ansible.
+which is itself NAT'd behind Windows. It cannot establish DHCP broadcast or
+VLAN isolation behavior by itself; use a real LAN client for those checks.
 
 ---
 
@@ -243,9 +255,10 @@ storage). **PDM** = Proxmox Datacenter Manager (`pdm.owl.red`, multi-cluster mgm
 **PBS** = Proxmox Backup Server (`pbs.owl.red`, planned).
 
 ### Unraid / NAS
-The storage server (`nas.owl.red`), currently bare-metal, serving NFS/SMB and Plex;
-planned migration to a PVE VM (ROADMAP/Phase 9). Target shared storage for cluster
-PVCs.
+The storage server (`nas.owl.red`), already VM 101 on `storage.pve`, serving SMB
+and Plex. NFS was disabled in the 2026-10-14 audit; shared NFS/PVC storage is a
+later milestone, not a network prerequisite. Its existing disks and passthrough
+are outside network work.
 
 ### IPMI / BMC
 Out-of-band server management (power/console) independent of the OS — the

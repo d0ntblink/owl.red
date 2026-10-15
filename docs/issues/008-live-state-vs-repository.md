@@ -278,12 +278,31 @@ passed-through GTX 1060 is visible with NVIDIA driver `580.178.04`.
 
 ## Suggested Next Work
 
-The current acceptance criteria and phase-specific prerequisites are maintained
-once in the [roadmap stabilization gates](../../ROADMAP.md#stabilization-gates),
-not as a second deployment checklist here. G1-G4 qualify disruptive Phase 0/1
-work; G5 is proved during the VLAN cutover, and G6 gates NFS/stateful rollout.
-Read-only/offline work can continue, and full PBS, off-cluster certificate
-distribution and optional GNSS hardware are not blanket prerequisites.
+Current sequencing and acceptance criteria live in the
+[roadmap execution order](../../ROADMAP.md#execution-order) and
+[scoped gates](../../ROADMAP.md#stabilization-gates), not a second checklist here.
+The earlier blanket G1-G4 prerequisite was revised: current firewall/service
+survey and change-scoped recovery come first, then overlap-safe subnet/VLAN
+preparation while OPNsense remains the client DNS/DHCP path. Final handoff and
+DNS enforcement follow supporting path/interface readiness. Fleet/TLS repairs
+are independent unless the specific operation depends on them; G6 gates later
+NFS/stateful work, not network preparation.
+
+**Post-audit design review:** the legacy `10.0.0.0/16` contains every target
+`/24`, so management-mask contraction and management VLAN tagging cannot be
+collapsed into an unconditional "IoT first, management last" instruction.
+Technitium's audited enabled scopes need explicit lifecycle control before new
+NICs become reachable; `sync.sh` only sets scope properties, while the upstream
+API documents separate enable/disable operations. A new repository SHA can
+trigger a full sync even for a documentation-only commit. These are transition
+risks, not proof that the observed zero-lease scopes are actively serving clients.
+
+The user subsequently confirmed no backups exist and that physical switch-port
+access plus NAS keyboard/monitor recovery are available. A full NAS-data backup
+is not a prerequisite for network-only changes. Save affected configuration/
+state and verify recovery for the affected link; do not infer independent router/
+switch recovery from NAS console access. NAS passthrough/disks/array/boot/power
+and unrelated service changes are outside this work.
 
 The observations above remain the dated audit baseline. Linking remediation
 gates does not mark any live fault fixed or authorize infrastructure changes.

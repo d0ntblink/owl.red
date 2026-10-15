@@ -2,8 +2,12 @@
 
 ## Status
 
-Accepted and implemented. Resolves the Fleet bundle install failures surfaced on
-2026-06-15 after the Technitium k8s→LXC migration (ADR 013).
+Accepted ownership policy. The June implementation history below is not proof
+of current convergence: the 2026-10-14 audit found `platform-resilience` blocked
+by Fleet Bundle ownership, and its agent replica/toleration override unapplied.
+Follow the existing owning-release direction below and verify runtime state
+under [G3](../../ROADMAP.md#stabilization-gates); this is not a blanket prerequisite
+for network preparation.
 
 ## Quick Summary
 
@@ -11,7 +15,7 @@ Accepted and implemented. Resolves the Fleet bundle install failures surfaced on
 |------|----------|
 | Chart-owned workloads | Never redefined in a separate Fleet/Helm bundle; tuned in the owning chart's values |
 | Out-of-band resources | Adopted into their Fleet/Helm release with `helm.takeOwnership: true` |
-| `platform-resilience` scope | PDBs + the `fleet-agent-local` Bundle override only — no Deployment overrides |
+| `platform-resilience` scope | Legitimate unowned PDBs; the legacy Bundle override is pending relocation to the owning Rancher/Fleet release, not enforced HA |
 | Stale k8s Technitium objects | Removed (Technitium is now an LXC, ADR 013) |
 | GitRepo path for Technitium ingress | `gitops/technitium-ingress` (the bundle with manifests), not `gitops/technitium` (data only) |
 
@@ -65,10 +69,13 @@ Establish a clear ownership boundary for Fleet bundles:
    and recreating them. Applied to `bitwarden-secrets`, `pdm`, and
    `platform-resilience`.
 
-3. **`platform-resilience` keeps only primitives that no other release owns:**
-   PodDisruptionBudgets and the `fleet-agent-local` Bundle override (which patches
-   the Fleet-generated Bundle — the correct mechanism for fleet-agent HA, not a
-   competing Helm release). `critical-deployments.yaml` is removed.
+3. **`platform-resilience` must keep only primitives it legitimately owns.**
+   `critical-deployments.yaml` was removed. The remaining `fleet-agent-local`
+   Bundle override is a historical workaround, not an ownership-safe exception:
+   October evidence shows it still conflicts with Fleet's objectset controller.
+   Move tuning into the owning Rancher/Fleet release and retire the workaround
+   through a reviewed transition; verify Deployment/PDB state rather than
+   assuming `helm.takeOwnership` resolves competing controllers.
 
 4. **GitRepo paths reference bundles that contain manifests.** `gitops/technitium`
    (LXC data) is replaced by `gitops/technitium-ingress` in both
@@ -95,11 +102,11 @@ Establish a clear ownership boundary for Fleet bundles:
 
 | Type | Outcome |
 |------|---------|
-| Positive | All `owl-red-gitops-*` bundles can install; ingress for `dns.owl.red` is actually deployed |
-| Positive | No ongoing ownership tug-of-war between bundles and upstream charts on chart upgrades |
+| Intended | Bundles converge without cross-release ownership conflicts; Technitium ingress is deployed, but the resilience Bundle conflict remains open |
+| Intended | Owning-chart tuning survives upgrades without competing controllers; runtime evidence is required |
 | Positive | Single, documented rule for where resilience config lives |
 | Trade-off | `takeOwnership` makes Helm adopt and subsequently manage/prune the matching pre-existing resources — acceptable because each had no prior Helm owner |
-| Trade-off | fleet-agent HA now relies on the Bundle override (and ideally Rancher Fleet values) rather than a Deployment patch |
+| Trade-off | The Bundle override did not establish fleet-agent HA; replicas/tolerations/PDB need owning-release reconciliation |
 | Follow-up | Move `fleet-agent` replica/toleration config into Rancher's Fleet values so the `fleet-agent-local-bundle-override.yaml` workaround can eventually be retired |
 
 ## Risks And Mitigations
@@ -107,7 +114,7 @@ Establish a clear ownership boundary for Fleet bundles:
 | Risk | Mitigation |
 |------|------------|
 | `takeOwnership` adopts an unintended pre-existing object | Bundles are scoped to specific namespaces/resources; each adopted resource was verified on-cluster before enabling |
-| `fleet-agent-local` Bundle is also claimed by Fleet's objectset controller | `takeOwnership` lets the bundle install; if it stays noisy, relocate fleet-agent HA to Rancher Fleet values (see follow-up) |
+| `fleet-agent-local` Bundle is also claimed by Fleet's objectset controller | This remains an observed blocker, not harmless noise. Relocate tuning to the owning release and verify convergence before dependent maintenance. |
 | Resilience tuning lost by deleting `critical-deployments.yaml` | None at current state — rancher/metallb already run HA from their charts; remaining tuning is relocated to chart values |
 | Changes do not take effect | Fleet reconciles from `origin/main`; changes must be committed and pushed, then optionally force-synced |
 

@@ -92,8 +92,21 @@ pre-commit run --all-files
   middleware was found; private addressing alone is not proof of access restriction.
 
 2. Network Security
-- Preserve VLAN segmentation and least-privilege inter-VLAN policy.
-- Keep a break-glass management path available for recovery operations.
+- Implement the target segmentation and least-privilege policy through the
+  [roadmap execution order](ROADMAP.md#execution-order); the audited live network
+  is flat, not already isolated. Resolve legacy `/16` overlap before routing its
+  contained target `/24`s.
+- Preserve client DNS/DHCP on OPNsense during preparation. Attach Technitium VLAN
+  interfaces only after proving the replacement scopes cannot issue competing
+  offers; transfer authority in an approved coordinated handoff. Final DNS
+  enforcement follows successful path, renewal and rollback checks.
+- Keep a tested recovery path for each affected management link. A reachable
+  BMC/PDU or a console reached through the same failed path is not proof of
+  independent recovery. CSS326 has no serial console; verify a physical access
+  port and saved switch configuration before management-VLAN changes.
+- Publishing is an operational action: a new Git revision, even documentation
+  only, can trigger the Technitium timer's full settings/zone/scope sync. Review
+  that effect and coordinate its serving-state guard before a push.
 - Terraform reaches Proxmox/OPNsense over their self-signed management TLS
   (`PROXMOX_VE_INSECURE=true`, OPNsense `allow_unverified`) — acceptable for LAN-only admin APIs;
   pin a CA if these are ever reached off-LAN.
@@ -101,10 +114,14 @@ pre-commit run --all-files
 3. Backups and Artifacts
 - Backup exports must be encrypted at rest when stored outside trusted systems.
 - Validation artifacts may be committed only when they do not include secrets.
-- Before disruptive maintenance, verify off-node recovery material and an isolated restore
-  or rollback procedure for the affected systems. Full PBS deployment can remain a later
-  milestone; an unchecked recovery path cannot. Do not infer a failed data disk or authorize
-  array repair from the empty parity2 slot recorded by the audit.
+- Before a live network change, retain the affected configuration and any state
+  being changed outside the affected system, with its exact rollback and tested
+  access method. This does not require a full NAS-data backup or completion of
+  PBS. The user confirmed no backups exist; that separate protection gap remains.
+- NAS keyboard/monitor access is available for network recovery. Network work
+  does not authorize changes to NAS VM passthrough, disks, array, boot, power or
+  unrelated services. Storage/destructive maintenance requires its own approved
+  protection plan; the audit's empty parity2 slot does not imply disk repair.
 
 ## Incident Response (Repository Scope)
 

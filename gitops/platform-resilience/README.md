@@ -1,16 +1,25 @@
 # Platform Resilience
 
 This bundle holds resilience primitives for critical platform workloads that are
-**not owned by another Helm release** — currently PodDisruptionBudgets and the
-fleet-agent HA override.
+intended not to compete with another release. The source currently includes
+PodDisruptionBudgets and a legacy Fleet-agent Bundle override; that override is
+not a successfully enforced HA configuration.
+
+**Observed 2026-10-14:** the bundle was blocked by a Bundle ownership conflict.
+The live Fleet agent had one replica and no control-plane toleration, while its
+PDB required two available replicas. Reconcile tuning through the owning Rancher/
+Fleet release and verify live Deployment/PDB behavior before dependent node
+maintenance. See [G3](../../ROADMAP.md#stabilization-gates) and the
+[audit](../../docs/issues/008-live-state-vs-repository.md). This work is independent
+of VLAN preparation unless a specific operation depends on it.
 
 ## Scope
 
 | File | Purpose |
 |------|---------|
 | `pdbs.yaml` | PodDisruptionBudgets for `cattle-system/rancher`, `cattle-fleet-local-system/fleet-agent`, `metallb-system/metallb-controller` |
-| `fleet-agent-local-bundle-override.yaml` | Patches the Fleet-managed `fleet-local/fleet-agent-local` Bundle to run `fleet-agent` at 3 replicas with control-plane tolerations |
-| `fleet.yaml` | `helm.takeOwnership: true` so the bundle adopts the pre-existing PDBs and Bundle in place |
+| `fleet-agent-local-bundle-override.yaml` | Desired three-replica/toleration workaround; conflicts with Fleet's ownership and remains pending relocation to the owning release |
+| `fleet.yaml` | Requests `helm.takeOwnership: true`; source intent does not prove adoption or resolve cross-controller ownership |
 
 ## Why no Deployment overrides here
 
@@ -33,11 +42,13 @@ values**, where it survives upgrades and does not fight Helm ownership:
 | MetalLB | MetalLB Helm values |
 | cert-manager | cert-manager Helm values |
 
-## What This Bundle Still Enforces
+## Intended Enforcement And Remaining Work
 
-- PodDisruptionBudgets for the critical deployments above (voluntary-disruption safety).
-- `fleet-agent` replica/toleration HA via the owning Bundle override (the correct
-  mechanism — it patches the Fleet-generated Bundle, not a competing Helm release).
+- Reconcile legitimate PodDisruptionBudget ownership and verify live desired/
+  current availability. A PDB does not create replicas or prove failover.
+- Put Fleet-agent replicas/tolerations in the owning release, then retire the
+  conflicting workaround after a reviewed ownership transition. Do not claim HA
+  from the override file or `takeOwnership` flag alone.
 
 ## Notes
 

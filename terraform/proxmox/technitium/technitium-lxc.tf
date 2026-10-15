@@ -15,10 +15,10 @@
 # ---------------------------------------------------------------------------
 
 resource "proxmox_virtual_environment_container" "technitium" {
-  node_name    = "edge"
-  vm_id        = 200
-  description  = "Technitium DNS+DHCP — single node Phase 1. Managed by Terraform."
-  tags         = ["lxc", "terraform", "dns", "dhcp", "technitium"]
+  node_name   = "edge"
+  vm_id       = 200
+  description = "Technitium DNS+DHCP — single node Phase 1. Managed by Terraform."
+  tags        = ["lxc", "terraform", "dns", "dhcp", "technitium"]
 
   started       = true
   start_on_boot = true
@@ -40,22 +40,22 @@ resource "proxmox_virtual_environment_container" "technitium" {
         gateway = "10.0.10.1"
       }
     }
-    
+
     # eth1 — VLAN 20 (Private)
     ip_config {
       ipv4 { address = "10.0.20.30/24" }
     }
-    
+
     # eth2 — VLAN 30 (Guest)
     ip_config {
       ipv4 { address = "10.0.30.30/24" }
     }
-    
+
     # eth3 — VLAN 40 (IoT No-Inter)
     ip_config {
       ipv4 { address = "10.0.40.30/24" }
     }
-    
+
     # eth4 — VLAN 50 (IoT With-Inter)
     ip_config {
       ipv4 { address = "10.0.50.30/24" }
@@ -78,11 +78,31 @@ resource "proxmox_virtual_environment_container" "technitium" {
   }
 
   # Native VLAN bridging — LXC sits directly on all subnets
-  network_interface { name = "eth0", bridge = "vmbr0", vlan_id = 10 }
-  network_interface { name = "eth1", bridge = "vmbr0", vlan_id = 20 }
-  network_interface { name = "eth2", bridge = "vmbr0", vlan_id = 30 }
-  network_interface { name = "eth3", bridge = "vmbr0", vlan_id = 40 }
-  network_interface { name = "eth4", bridge = "vmbr0", vlan_id = 50 }
+  network_interface {
+    name    = "eth0"
+    bridge  = "vmbr0"
+    vlan_id = 10
+  }
+  network_interface {
+    name    = "eth1"
+    bridge  = "vmbr0"
+    vlan_id = 20
+  }
+  network_interface {
+    name    = "eth2"
+    bridge  = "vmbr0"
+    vlan_id = 30
+  }
+  network_interface {
+    name    = "eth3"
+    bridge  = "vmbr0"
+    vlan_id = 40
+  }
+  network_interface {
+    name    = "eth4"
+    bridge  = "vmbr0"
+    vlan_id = 50
+  }
 
   operating_system {
     # Downloaded from: https://hydra.nixos.org/build/328082540/download/1/nixos-image-lxc-proxmox-25.11pre-git-x86_64-linux.tar.xz
