@@ -65,6 +65,7 @@ in
     wants = [ "network-online.target" ];
     # Skip silently until Ansible bootstrap writes the API token
     unitConfig.ConditionPathExists = "/etc/technitium/sync.token";
+    environment.DHCP_ENABLE_ALLOWED = "false";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${syncScript}/bin/technitium-sync";

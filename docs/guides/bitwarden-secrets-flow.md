@@ -33,13 +33,40 @@ NUT passwords, OPNsense API key, WiFi PSK, SSH material, etc. (full list in
 ### How it authenticates
 
 `bw` is account-based. You log in once (API key), then **unlock** to get a
-short-lived `BW_SESSION` token that every subsequent `bw` call uses:
+`BW_SESSION` decryption key that subsequent vault reads use. It is scoped to the
+CLI profile and local process environment, not a fixed short-duration API token;
+reuse it while valid and end it with `bw lock` or `bw logout` when finished.
 
 ```bash
 bw login --apikey          # one-time; needs BW_CLIENTID / BW_CLIENTSECRET
-export BW_SESSION="$(bw unlock --raw)"   # per shell; prompts for master password
-bw get password proxmox-root-password    # uses BW_SESSION implicitly
+BW_SESSION="$(bw unlock --raw)" && export BW_SESSION
+bw status | jq -r '.status'
+bw get item 6c8c8a36-c16e-4e02-8d8e-b46e00685e7f --nointeraction | jq '{id, name}'
 ```
+
+The final command verifies an actual read of the dedicated router item without
+printing its credentials. A successful unlock message or plausible-looking
+session key is not sufficient evidence. Never put a master password in command
+arguments, paste it into chat, or print the returned session. For automation use
+`--passwordenv` with the configured variable name and capture `--raw` output;
+the audit's local password variable was `BW_SECRET`, not `BW_PASSWORD`.
+
+### Known CLI Session Regression
+
+The 2026-10-14 audit reproduced
+[Bitwarden issue 20703](https://github.com/bitwarden/clients/issues/20703) on
+`2026.4.1`: correct password, successful unlock and exported/explicit session,
+but subsequent commands still report a locked vault. Repeating unlock/export,
+adding TOTP to unlock, or attempting to extend the session does not address that
+failure. TOTP applies to login, not this demonstrated unlock regression.
+
+The official `2026.7.0` Linux binary, verified against its published SHA256
+digest, passed separate-process status and dedicated-item reads using an
+owner-only copied profile. The original binary/profile were left unchanged.
+Before testing another CLI version, protect/copy its profile: profile migrations
+can be one-way, so a downgrade against the only existing profile is not a safe
+experiment. Validate a real vault read after any change; do not blindly retry
+password prompts or infer a missing vault item from suppressed lock errors.
 
 ### How owl.red wraps it: `scripts/ansible-run.sh`
 

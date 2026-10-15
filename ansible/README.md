@@ -1,5 +1,11 @@
 # Ansible Phase 1 Scaffold
 
+Controller tools, Python libraries, collections, credentials and SSH/TLS setup
+are project prerequisites, not implicit local state. Follow
+[Controller Setup And Tool Requirements](../docs/guides/controller-setup.md)
+before the lane-specific commands below; the bootstrap script is not a complete
+toolchain installer. The historical run order is not permission to upgrade hosts.
+
 This directory contains Phase 1 automation scaffold only. No topology changes are performed by these files.
 
 ## Contents

@@ -4,6 +4,12 @@
 > All changes network, infrastructure, k8s, config : are made here first, then applied.  
 > Supported declarative configuration is managed here; documented manual floors and bootstrap steps have explicit ownership and rollback notes.
 
+## Controller Requirements
+
+Before running IaC or scripts, follow the [controller setup and tool requirements](docs/guides/controller-setup.md).
+It covers tools, installation, Nix group/session access, Python/Ansible environments,
+credentials and validation. Tool installation does not authorize infrastructure changes.
+
 ## Observed State (2026-10-14)
 
 The [live audit](docs/issues/008-live-state-vs-repository.md) distinguishes
@@ -326,8 +332,10 @@ handoff and enforcement are roadmap G2 work after network readiness, not before.
 Any interim resolver repair needs separate justification and rollback.
 
 Before attaching new Technitium NICs, prove explicit DHCP serving-state control;
-`enabled` in the current source JSON is not demonstrated enable/disable
-reconciliation. Even a documentation-only push can trigger the timer's full
+the prepared source now disables all scopes and adds verified lifecycle calls
+plus a default-locked Nix activation gate, but it has not been deployed. The
+old running script does not gain that behavior from a Git pull alone. Even a
+documentation-only push can trigger the timer's full
 settings/zone/scope/reservation pass on a new SHA. Review publishing as an
 operational action; see the [Technitium guide](gitops/technitium/README.md).
 

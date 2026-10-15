@@ -31,3 +31,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Reject placeholder/invalid bwSecretId (see docs/issues/007)
         run: bash scripts/check-bitwarden-placeholders.sh
+
+  technitium-sync:
+    name: Technitium DHCP lifecycle guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check sync script syntax
+        run: bash -n nix/hosts/technitium/sync.sh nix/hosts/technitium/sync.test.sh
+      - name: Exercise offline DHCP lifecycle reconciliation
+        run: bash nix/hosts/technitium/sync.test.sh

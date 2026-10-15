@@ -2,7 +2,7 @@
 # Technitium full-sync — applies ALL GitOps config from the owl.red repo.
 # Covers: server settings, DNS zones, DHCP scopes, DHCP reservations.
 #
-# Idempotent: skips run entirely if git SHA has not changed since last sync.
+# DHCP serving state is checked even when the Git SHA has not changed.
 # Triggered by: systemd timer (every 15 min) + manual: systemctl start technitium-sync
 #
 # Requires: /etc/technitium/sync.token (API token written by Ansible bootstrap).
@@ -10,9 +10,10 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/d0ntblink/owl.red.git}"
-REPO_DIR="/opt/owl.red"
-STATE_DIR="/var/lib/technitium-sync"
-TOKEN_FILE="/etc/technitium/sync.token"
+REPO_DIR="${REPO_DIR:-/opt/owl.red}"
+STATE_DIR="${STATE_DIR:-/var/lib/technitium-sync}"
+TOKEN_FILE="${TOKEN_FILE:-/etc/technitium/sync.token}"
+DHCP_ENABLE_ALLOWED="${DHCP_ENABLE_ALLOWED:-false}"
 API_BASE="http://localhost:5380/api"
 GITOPS_DIR="${REPO_DIR}/gitops/technitium"
 
@@ -23,7 +24,7 @@ die()  { log "ERROR: $*" >&2; exit 1; }
 
 # POST to Technitium API with form data. Token is injected automatically.
 # Additional curl args (--data-urlencode key=val, -d key=val) via "$@".
-api() {
+api_json() {
   local endpoint="$1"; shift
   local resp
   resp=$(curl -sf -X POST "${API_BASE}/${endpoint}" -d "token=${TOKEN}" "$@") \
@@ -32,6 +33,11 @@ api() {
   status=$(printf '%s' "${resp}" | jq -r '.status // "error"')
   msg=$(printf '%s' "${resp}" | jq -r '.errorMessage // ""')
   [[ "${status}" == "ok" ]] || die "${endpoint} — ${msg}"
+  printf '%s\n' "${resp}"
+}
+
+api() {
+  api_json "$@" > /dev/null
 }
 
 # Zone import: zone data is the raw POST body so token must be in the query string.
@@ -48,20 +54,27 @@ api_zone_import() {
   [[ "${status}" == "ok" ]] || die "zones/import (${zone}) — ${msg}"
 }
 
-# Soft API call: logs a warning on error instead of aborting the whole sync.
-# Used for reservations where an existing entry is not a fatal condition.
-api_soft() {
-  local label="$1" endpoint="$2"; shift 2
-  local resp
-  resp=$(curl -sf -X POST "${API_BASE}/${endpoint}" -d "token=${TOKEN}" "$@") || {
-    log "  WARN: HTTP error for ${label}" >&2
-    return 0
-  }
-  local status msg
-  status=$(printf '%s' "${resp}" | jq -r '.status // "error"')
-  msg=$(printf '%s' "${resp}" | jq -r '.errorMessage // ""')
-  if [[ "${status}" != "ok" ]]; then
-    log "  WARN: ${label} — ${msg}" >&2
+read_scope_states() {
+  SCOPE_STATES=$(api_json "dhcp/scopes/list")
+  printf '%s' "${SCOPE_STATES}" | jq -e '
+    .response.scopes | type == "array" and
+    all(.[]; (.name | type == "string") and (.enabled | type == "boolean"))
+  ' > /dev/null || die "Invalid DHCP scope-state response"
+}
+
+scope_state_matches() {
+  printf '%s' "${SCOPE_STATES}" | jq -e --arg name "$1" --argjson enabled "$2" '
+    any(.response.scopes[]; .name == $name and .enabled == $enabled)
+  ' > /dev/null
+}
+
+disable_scope() {
+  local name="$1"
+  if scope_state_matches "${name}" true; then
+    api "dhcp/scopes/disable" --data-urlencode "name=${name}"
+    read_scope_states
+    scope_state_matches "${name}" false || die "DHCP scope did not disable: ${name}"
+    log "  Disabled DHCP: ${name}"
   fi
 }
 
@@ -95,12 +108,70 @@ fi
 CURRENT_SHA=$(git -C "${REPO_DIR}" rev-parse HEAD)
 LAST_SHA=$(cat "${STATE_DIR}/last-sha" 2>/dev/null || echo "")
 
-if [[ "${CURRENT_SHA}" == "${LAST_SHA}" ]]; then
-  log "No changes since ${CURRENT_SHA:0:8} — skipping sync."
+[[ -f "${GITOPS_DIR}/dhcp/scopes.json" ]] || die "DHCP scope manifest is missing"
+SCOPES_JSON=$(jq -ce '
+  if type == "array" and length > 0 and
+     all(.[]; (.name | type == "string" and length > 0) and
+              (.enabled | type == "boolean")) and
+     ([.[].name] | length == (unique | length))
+  then . else error("Expected unique named DHCP scopes with boolean enabled values") end
+' "${GITOPS_DIR}/dhcp/scopes.json") || die "Invalid DHCP scope manifest"
+
+[[ "${DHCP_ENABLE_ALLOWED}" == "true" || "${DHCP_ENABLE_ALLOWED}" == "false" ]] \
+  || die "DHCP_ENABLE_ALLOWED must be true or false"
+if [[ "${DHCP_ENABLE_ALLOWED}" != "true" ]] && \
+    printf '%s' "${SCOPES_JSON}" | jq -e 'any(.[]; .enabled)' > /dev/null; then
+  die "DHCP activation is locked by host configuration"
+fi
+
+read_scope_states
+printf '%s' "${SCOPE_STATES}" | jq -e --argjson desired "${SCOPES_JSON}" '
+  .response.scopes as $live |
+  all($desired[]; .name as $name | any($live[]; .name == $name))
+' > /dev/null || die "A declared DHCP scope is missing; isolated bootstrap is required before attaching clients"
+printf '%s' "${SCOPE_STATES}" | jq -e --argjson desired "${SCOPES_JSON}" '
+  all(.response.scopes[];
+    . as $live | (.enabled | not) or any($desired[]; .name == $live.name))
+' > /dev/null || die "An unmanaged DHCP scope is enabled; review ownership before proceeding"
+
+while IFS= read -r name; do
+  disable_scope "${name}"
+done < <(printf '%s' "${SCOPES_JSON}" | jq -r '.[] | select(.enabled == false) | .name')
+
+if [[ "${CURRENT_SHA}" == "${LAST_SHA}" ]] && \
+    printf '%s' "${SCOPE_STATES}" | jq -e --argjson desired "${SCOPES_JSON}" '
+      .response.scopes as $live |
+      all($desired[]; . as $scope |
+        any($live[]; .name == $scope.name and .enabled == $scope.enabled))
+    ' > /dev/null; then
+  log "DHCP state verified; no changes since ${CURRENT_SHA:0:8} — skipping full sync."
   exit 0
 fi
 
 log "Syncing ${LAST_SHA:0:8} → ${CURRENT_SHA:0:8}"
+
+while IFS= read -r name; do
+  disable_scope "${name}"
+done < <(printf '%s' "${SCOPES_JSON}" | jq -r '.[].name')
+
+RESERVATIONS_JSON='[]'
+if [[ -f "${GITOPS_DIR}/dhcp-reservations.json" ]]; then
+  RESERVATIONS_JSON=$(jq -ce '[
+    .scopes | to_entries[] |
+    (.key | gsub("_"; "-")) as $scope |
+    .value.reservations[] |
+    select(.hardwareAddress != "TBD" and .status == "confirmed") |
+    {
+      scope: $scope,
+      hardwareAddress: .hardwareAddress,
+      ipAddress: .ipAddress,
+      hostName: .hostName,
+      comments: (.comments // "")
+    }
+  ]' "${GITOPS_DIR}/dhcp-reservations.json") || die "Invalid DHCP reservation manifest"
+elif printf '%s' "${SCOPES_JSON}" | jq -e 'any(.[]; .enabled)' > /dev/null; then
+  die "DHCP reservation manifest is required before activation"
+fi
 
 # ── Server settings ───────────────────────────────────────────────────────────
 # gitops/technitium/settings.json — keys map 1:1 to /api/settings/set params.
@@ -135,16 +206,21 @@ done
 
 # ── DHCP scopes ───────────────────────────────────────────────────────────────
 # gitops/technitium/dhcp/scopes.json — array of scope objects.
-# /api/dhcp/scopes/set is idempotent: creates if new, updates if exists by name.
+# Existing scopes are updated while disabled; lifecycle uses separate API calls.
 
 if [[ -f "${GITOPS_DIR}/dhcp/scopes.json" ]]; then
   log "→ DHCP scopes"
   while IFS= read -r scope_json; do
     name=$(printf '%s' "${scope_json}" | jq -r '.name')
-    readarray -d '' form_args < <(json_to_form_args "${scope_json}")
+    readarray -d '' form_args < <(json_to_form_args "$(printf '%s' "${scope_json}" | jq 'del(.enabled)')")
     api "dhcp/scopes/set" "${form_args[@]}"
+    read_scope_states
+    if ! scope_state_matches "${name}" false; then
+      disable_scope "${name}"
+      die "DHCP scope was not disabled after settings update: ${name}"
+    fi
     log "  ${name}"
-  done < <(jq -c '.[]' "${GITOPS_DIR}/dhcp/scopes.json")
+  done < <(printf '%s' "${SCOPES_JSON}" | jq -c '.[]')
 fi
 
 # ── DHCP reservations ─────────────────────────────────────────────────────────
@@ -166,28 +242,29 @@ if [[ -f "${GITOPS_DIR}/dhcp-reservations.json" ]]; then
     curl -sf -X POST "${API_BASE}/dhcp/scopes/removeReservedLease" \
       -d "token=${TOKEN}" -d "name=${scope}" \
       --data-urlencode "hardwareAddress=${hw}" > /dev/null 2>&1 || true
-    api_soft "${hostname}" "dhcp/scopes/addReservedLease" \
+    api "dhcp/scopes/addReservedLease" \
       -d "name=${scope}" \
       --data-urlencode "hardwareAddress=${hw}" \
       --data-urlencode "ipAddress=${ip}" \
       --data-urlencode "hostName=${hostname}" \
       --data-urlencode "comments=${comments}"
     log "  ${hostname} → ${ip}"
-  done < <(jq -c '
-    .scopes | to_entries[] |
-    .key as $key |
-    ($key | gsub("_"; "-")) as $scope |
-    .value.reservations[] |
-    select(.hardwareAddress != "TBD" and .status == "confirmed") |
-    {
-      scope:           $scope,
-      hardwareAddress: .hardwareAddress,
-      ipAddress:       .ipAddress,
-      hostName:        .hostName,
-      comments:        (.comments // "")
-    }
-  ' "${GITOPS_DIR}/dhcp-reservations.json")
+  done < <(printf '%s' "${RESERVATIONS_JSON}" | jq -c '.[]')
 fi
+
+while IFS= read -r name; do
+  api "dhcp/scopes/enable" --data-urlencode "name=${name}"
+  read_scope_states
+  scope_state_matches "${name}" true || die "DHCP scope did not enable: ${name}"
+  log "  Enabled DHCP: ${name}"
+done < <(printf '%s' "${SCOPES_JSON}" | jq -r '.[] | select(.enabled) | .name')
+
+read_scope_states
+printf '%s' "${SCOPE_STATES}" | jq -e --argjson desired "${SCOPES_JSON}" '
+  .response.scopes as $live |
+  all($desired[]; . as $scope |
+    any($live[]; .name == $scope.name and .enabled == $scope.enabled))
+' > /dev/null || die "DHCP serving state does not match the manifest"
 
 # ── Save state ────────────────────────────────────────────────────────────────
 

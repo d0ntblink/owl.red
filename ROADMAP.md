@@ -4,6 +4,12 @@ Dependency-led execution plan followed by the existing milestone backlog. Phase 
 
 Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
+Controller and script dependencies are project requirements documented in
+[Controller Setup And Tool Requirements](docs/guides/controller-setup.md).
+Install tools for the owning lane and verify access, interpreter/library paths
+and versions before running commands; package installation is not build success
+or permission to deploy.
+
 **Current focus: prepare a reversible network transition, then prove one small change at a time.**
 The 2026-10-14 audit found a working flat network and Kubernetes control plane,
 not an operational five-VLAN deployment. Internal DNS, Fleet and TLS have known
@@ -65,14 +71,16 @@ routes and additional renumbering; it is not automatically safer. Do not rely on
 proxy ARP, a broad legacy bridge or temporary routes without an explicit design.
 
 **DHCP control is a real prerequisite:** the audit found VLAN 10 disabled and
-the other Technitium scopes enabled, with zero leases. All five source scopes
-contain `enabled: true`, but `sync.sh` only calls `scopes/set`; the upstream API
-documents separate `scopes/enable` and `scopes/disable` operations. Treat the source
-field as unproven lifecycle control. Verify behavior against the installed
-version and implement/test explicit transition-safe reconciliation before NIC
-attachment. A timer run on a new Git SHA reapplies settings, zones, scopes and
-reservations, even when the commit changes only documentation. Pausing a timer
-does not disable an already-enabled DHCP scope or stop an in-flight service.
+the other Technitium scopes enabled, with zero leases. The prepared IaC now sets
+all five source scopes disabled and implements explicit lifecycle/read-back
+control plus a Nix-owned activation lock defaulting false. Twenty offline
+regression cases pass; none of this is deployed. The guarded script also checks
+serving state on unchanged SHAs and refuses missing scopes because upstream
+creation defaults to enabled. Verify installed-version behavior, deploy the
+reviewed Nix update with disabled intent, and prove no offers before NIC
+attachment. The old running script remains the audited baseline. A new Git SHA
+still triggers its full pass, even for docs-only changes. Pausing a timer or
+setting the new activation lock false does not itself stop already-serving DHCP.
 
 **Not blanket prerequisites:** NAS-data backups, NAS VM/passthrough/disk/array/
 boot/power changes, full PBS, all Fleet/TLS repairs, full cabinet documentation,
@@ -106,8 +114,12 @@ Bring the OPNsense objects needed for each network batch under reproducible owne
 **Survey finding (2026-06-19):** a read-only survey via the dedicated `terraform` API user found the router **near-default** — WAN `igc0`, LAN `ixl1` on a single **flat `10.0.10.1/16`** (no VLAN interfaces yet), and **0** custom aliases / automation filter rules / NAT / Unbound overrides (only built-in defaults + 1 auto-generated Unbound forward). So there is **nothing custom to import**; firewall aliases/rules get **created during the VLAN transition (§1)**, authored as Terraform — not imported. Forward-looking `/24` drafts are parked in `terraform/opnsense/planned/`.
 
 This is a historical baseline, not the current firewall survey. Authenticated
-OPNsense inspection was blocked in the 2026-10-14 audit. Close G1 and re-survey
-before relying on the June assumption that nothing needs importing.
+OPNsense inspection was initially blocked in the 2026-10-14 audit and succeeded
+in the [authenticated follow-up](docs/issues/008-live-state-vs-repository.md#follow-up-authenticated-router-survey).
+The router is `26.1.9`, still flat `/16`, with Dnsmasq DHCP, an Unbound-to-Dnsmasq
+`owl.red` forward, and an enabled Plex WAN port-forward. The seven alias results
+are built-ins. Do not rely on the June blanket "nothing to import" assumption;
+review supported existing objects and the remaining manual-floor evidence first.
 
 **Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0 in the lockfile) is the selected lane for supported API-backed objects. The documented WebUI floor includes base interface assignment/IP/WAN, gateways, system settings including **NTP (§16.1)**, captive portal, shaper and IDS/IPS. Check the installed OPNsense version, active DHCP engine and actual provider resources before relying on historical coverage claims. Revise the ownership matrix explicitly if current support changes it; do not manage the same object through two writers.
 
@@ -119,10 +131,12 @@ before relying on the June assumption that nothing needs importing.
 - `[x]` `scripts/opnsense-terraform-run.sh` injects key/secret as `TF_VAR_opnsense_api_*` (no secrets in code)
 - `[x]` `terraform -chdir=terraform/opnsense init` verified; provider `browningluke/opnsense` v0.24.0 (lock committed)
 - `[!]` **Verify/revoke the old root API key in the OPNsense WebUI** — revocation was recorded pending in June; current validity was not verified in the October audit (System → Access → Users → root → API keys)
-- `[ ]` Re-establish the reusable Password Manager session and verify dedicated API access for the current audit; do not request an unlock per command
+- `[x]` Re-establish reusable Password Manager access and verify dedicated API reads (2026-10-14): installed `bw 2026.4.1` has the upstream session regression; checksum-verified `2026.7.0` with an isolated profile passes actual vault reads. No per-command password prompts or global CLI/profile replacement.
 
 ### 0.2 Import Existing Config
-- `[ ]` Refresh the authenticated interface, alias, filter, NAT, DNS/DHCP and portal survey; document the active DHCP authority before changing scopes
+- `[~]` Authenticated API survey completed for interfaces/routes, DHCP/DNS, aliases, automation filter search, NAT and portal (2026-10-14). Dnsmasq is the live LAN DHCP authority; full classic filter semantics, automatic outbound-NAT mode and IPv6 advertisement/client behavior remain unverified.
+- `[ ]` Carry the existing Plex WAN TCP `32400` -> NAS `32400` rule into the ownership/exposure review; do not silently remove it or assume ADR 012 is already enforced
+- `[ ]` Reconcile the live DHCP pool ending at `.200` with MetalLB's `.200-.250` pool before address allocation/migration; capture current reservations and actual operator/device NIC identities for rollback
 - `[ ]` Export the affected configuration privately; verify the restore method, real operator path and independent router recovery before a disruptive router change
 - `[ ]` Import any existing API-managed objects found by that survey, or freshly verify that the empty module is a no-op
 
@@ -219,7 +233,8 @@ hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
   - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
 2. **Prepare the serving-state guard and non-disruptive configuration.**
-  - `[ ]` Verify scope enable/disable behavior against the installed Technitium version and implement/test explicit lifecycle reconciliation, including disabled state after scope creation/update and service restart. Merely changing `enabled` in JSON is not demonstrated control.
+  - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
+  - `[ ]` Verify the installed Technitium API version and apply the reviewed Nix-host update with disabled intent and activation locked; read back all five scopes after reconciliation/restart. The source change is not a live DHCP shutdown, and the old running script does not gain new behavior from a Git pull alone.
   - `[ ]` Before attaching reachable NICs, explicitly verify non-serving Technitium scope state and absence of offers. Coordinate the timer and any in-flight sync so a new revision cannot undo the guard; preserve existing DNS service.
   - `[ ]` Review only the affected IaC resources/state and stage the approved port/bridge/router/AP definitions. Do not deploy the full five-NIC LXC target or run bootstrap/sync as a substitute for a migration procedure.
 3. **Contract the legacy network before activating contained routed subnets.**

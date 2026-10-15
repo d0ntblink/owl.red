@@ -12,8 +12,10 @@ Git-managed DNS model.
 
 **Audit baseline (2026-10-14):** one untagged `10.0.10.30/24` NIC; VLAN 10 scope
 disabled, scopes 20-50 enabled, zero leases, and every scope reporting DNS
-`10.0.10.30`. Current OPNsense settings/lease authority were not authenticated.
-Do not infer cutover readiness from reservations or the target table below.
+`10.0.10.30`. The authenticated follow-up verified OPNsense Dnsmasq as the live
+LAN DHCP authority. The source below now prepares all Technitium scopes disabled
+and a host activation lock; neither has been deployed or verified live. Do not
+infer cutover readiness from reservations, source files or the target table.
 
 ## Quick Reference
 
@@ -31,16 +33,17 @@ Do not infer cutover readiness from reservations or the target table below.
 
 ## Desired-State Files
 
-On a changed repository SHA the script applies all four file types, even if the
-commit only changes documentation. An unchanged SHA skips reconciliation, so UI
-drift is not necessarily corrected at the next timer tick. Settings and imported
-record sets are reapplied; reservation removal is not declarative pruning.
+The checked-in reconciler verifies DHCP serving state on every run. On a changed
+repository SHA it also reapplies all four file types, even for documentation-only
+commits. An unchanged SHA with matching serving state skips that full pass, not
+the DHCP check. The previously audited binary skipped unchanged SHAs entirely;
+it remains the live baseline until the Nix-host update is deployed.
 
 | File | Applied via | Purpose |
 |------|-------------|---------|
 | `settings.json` | `/api/settings/set` | Server settings (forwarders, recursion, DNSSEC, TTL) |
 | `zones/owl.red.zone` | `/api/zones/import` | Authoritative `owl.red` zone (BIND format) |
-| `dhcp/scopes.json` | `/api/dhcp/scopes/set` | One DHCP scope per VLAN |
+| `dhcp/scopes.json` | Scope settings plus `/api/dhcp/scopes/disable`, `/enable`, `/list` | Explicit desired serving state; current transition intent is disabled for all five |
 | `dhcp-reservations.json` | `/api/dhcp/scopes/addReservedLease` | MAC registry → static leases (only `status: confirmed`, non-`TBD`) |
 
 `dynamicClients` in the registry is metadata for known devices that must remain
@@ -57,26 +60,38 @@ store by `nix/hosts/technitium/configuration.nix`. The timer is declared in the 
 NixOS config.
 
 1. `git fetch` + `reset --hard origin/main` into `/opt/owl.red`.
-2. Skip the run entirely if the commit SHA is unchanged (`/var/lib/technitium-sync/last-sha`).
-3. Apply settings → zones → DHCP scopes → DHCP reservations.
-4. Record the new SHA on success.
+2. Validate the scope manifest and Nix-owned `DHCP_ENABLE_ALLOWED` lock; reject enabled intent while the lock is false, missing scopes, or unmanaged enabled scopes.
+3. Disable scopes with disabled intent and verify API read-back, including on an unchanged Git SHA.
+4. Skip the full pass only when the SHA and desired serving state match. Otherwise, quiesce all managed DHCP scopes before updating settings, zones, scope properties and confirmed reservations.
+5. Enable only explicitly requested scopes, only with host activation allowed, and only after data application succeeds. Verify serving state before recording the SHA.
 
 Reservations are upserted (existing lease for a MAC is removed first, then re-added),
-but entries absent from the registry are not pruned. Some reservation failures
-are warnings and can still result in a recorded SHA. Check the journal and
-actual reservation/record state rather than equating SHA equality with complete
-convergence. Zone import need not set the live SOA serial equal to the source
-serial; compare intended records and inspect the live serial separately.
+but absent entries are not pruned. In the prepared revision, a reservation API
+failure aborts the sync before activation or SHA recording; the old running
+script could warn and still record success. A full pass deliberately quiesces
+managed DHCP, and a failure can leave it disabled: this is not a zero-downtime
+DHCP update mechanism. Review that maintenance behavior before lifting the lock.
+Zone import need not set the live SOA serial equal to the source serial; compare
+intended records and inspect the live serial separately.
 
 ### Transition Safety
 
-- All five source scopes currently include `enabled: true`. The script passes
-  those fields to `scopes/set` but does not call `scopes/enable` or
-  `scopes/disable`, which are separate operations in the upstream API. Do not
-  treat the JSON field as verified serving-state control.
-- Before attaching reachable VLAN interfaces, verify the installed API version
-  and implement/test explicit disabled-state reconciliation. Read back scope
-  state and use a real-client packet check to prove no offers before handoff,
+- All five checked-in scopes now have `enabled: false`. Lifecycle is separate
+  from `scopes/set`: disable/enable calls require a matching `/list` read-back.
+  Missing or non-boolean intent is rejected, not treated as an activation default.
+- Nix sets `DHCP_ENABLE_ALLOWED=false`. A future approved handoff needs both the
+  reviewed host lock lifted and explicit per-scope enabled intent in Git. The
+  lock rejects inconsistent enabled intent before API writes; it is not an
+  emergency stop for scopes already serving. To turn a managed scope off, set
+  its desired `enabled` state false and verify reconciliation.
+- Upstream scope creation defaults to enabled. The guarded sync therefore
+  refuses missing scopes instead of creating one and briefly serving before
+  disabling it. Fresh provisioning needs a separate IaC bootstrap with verified
+  client-network isolation before normal reconciliation; no manual UI shortcut
+  or automatic creation is implied.
+- Before attaching reachable VLAN interfaces, validate the installed API version,
+  deploy the prepared Nix sync with the activation lock false and disabled source
+  intent, then read back state and prove no offers from a real LAN client,
   including after sync/restart. Preserve existing DNS service while doing so.
 - Pausing the timer neither disables already-enabled scopes nor cancels an
   in-flight service. New commits, manual sync and bootstrap are change actions;
@@ -98,12 +113,30 @@ serial; compare intended records and inspect the live serial separately.
 | Admin account, API token, first sync trigger | Ansible — `ansible/roles/technitium_lxc/`, played by `ansible/playbooks/deploy-technitium-lxc.yml` |
 | DNS / DHCP desired state | This directory |
 
+### Guarded Rollout
+
+The script is embedded in the Nix store. Publishing `sync.sh` does not replace
+the running executable, and publishing disabled JSON alone does not fix the old
+binary's lifecycle behavior. Stage the reviewed disabled intent, deploy the
+Nix-host update with activation still locked, and verify the five existing
+scopes disabled before any NIC/trunk exposure. Publishing itself can trigger
+the old full sync and remains a reviewed operational action.
+
+Rollback must retain disabled source intent and verified disabled scope state;
+restoring the old script or setting the host lock false is not a DHCP shutdown.
+Any future activation is part of the coordinated OPNsense authority handoff,
+not a routine Git push. No publish, host rebuild, service start or live scope
+change is performed by the offline work recorded here.
+
 ## Bootstrap Secrets
 
 Secrets stay out of Git. The admin password and a least-privilege automation API
 token are provisioned from Bitwarden Secrets Manager by the Ansible role
 (`bootstrap.yml`); the token is written to `/etc/technitium/sync.token` inside the
 LXC. The sync service skips silently until that token exists.
+The token needs DHCP View and Modify permissions: lifecycle verification reads
+`scopes/list` as well as updating/disabling scopes. Verify this on the installed
+version before deployment; an API permission failure aborts the guarded sync.
 
 The bootstrap command below is an operational reference, not a subnet/VLAN
 migration procedure or permission to replace the running LXC configuration.
@@ -153,6 +186,27 @@ live VLAN cutover was performed. No cutover is performed by this documentation.
 
 ## Validation
 
+Install and verify the applicable tools using
+[Controller Setup And Tool Requirements](../../docs/guides/controller-setup.md),
+including Nix daemon group/session access and the selected Nixpkgs input.
+
+Run the network-free regression suite from the repository root:
+
+```bash
+bash nix/hosts/technitium/sync.test.sh
+```
+
+It uses fake Git/API commands and temporary state, not infrastructure credentials.
+It covers disabled-state drift, the host activation lock, API/read-back failures,
+activation ordering, missing scopes and idempotency. Offline tests do not prove
+installed-version behavior, real DHCP isolation, or deployment readiness.
+The [CI workflow](../../.github/workflows/security.yml) runs it as the
+`Technitium DHCP lifecycle guard` job. A Nix build, including the packaged
+script's ShellCheck gate, is still required before deploying the host update.
+Local ShellCheck `0.9.0` and all 20 offline cases now pass. Nix `2.18.1` is
+installed, but daemon-socket access remains blocked in the agent environment;
+neither module evaluation nor a package/system build has been verified there.
+
 VLAN-local DNS and enabled scopes below are final-state checks, not preparation
 requirements. During preparation verify expected disabled state and no offers.
 
@@ -162,7 +216,7 @@ requirements. During preparation verify expected disabled state and no offers.
 | DNS (VLAN 20 local) | `dig @10.0.20.30 rancher.owl.red +short` | `10.0.10.201` |
 | Authoritative flag | `dig @10.0.10.30 owl.red SOA` | `aa` set; inspect live serial and verify intended records, not literal source-serial equality |
 | DHCP serving state | Technitium UI → DHCP → Scopes, plus real-client capture | Only approved migrated domains enabled; no competing offers; all five only after full handoff |
-| Sync healthy | `systemctl status technitium-sync.service` and journal | Inspect warnings and verify actual settings/scopes/reservations; success alone is insufficient |
+| Sync healthy | `systemctl status technitium-sync.service` and journal | Inspect API/read-back errors and verify actual settings/scopes/reservations; success alone is insufficient |
 
 ## Not Used Anymore
 
