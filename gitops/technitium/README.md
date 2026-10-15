@@ -194,6 +194,8 @@ Run the network-free regression suite from the repository root:
 
 ```bash
 bash nix/hosts/technitium/sync.test.sh
+nix-build nix/hosts/technitium/check.nix -A sync --no-out-link
+nix-build nix/hosts/technitium/check.nix -A system --no-out-link --max-jobs 2 --cores 2
 ```
 
 It uses fake Git/API commands and temporary state, not infrastructure credentials.
@@ -202,10 +204,21 @@ activation ordering, missing scopes and idempotency. Offline tests do not prove
 installed-version behavior, real DHCP isolation, or deployment readiness.
 The [CI workflow](../../.github/workflows/security.yml) runs it as the
 `Technitium DHCP lifecycle guard` job. A Nix build, including the packaged
-script's ShellCheck gate, is still required before deploying the host update.
-Local ShellCheck `0.9.0` and all 20 offline cases now pass. Nix `2.18.1` is
-installed, but daemon-socket access remains blocked in the agent environment;
-neither module evaluation nor a package/system build has been verified there.
+script's ShellCheck gate, is a pre-deployment requirement. The
+[check expression](../../nix/hosts/technitium/check.nix) pins the validation input
+and evaluates the actual host module with preparation-state assertions. Its
+packaged sync and full LXC system targets passed locally with Nix `2.18.1` on
+2026-10-14, alongside both standalone and packaged ShellCheck and all 20 offline
+cases. For stale process group membership, use the documented single-command
+`nix-users` invocation in the controller guide.
+
+The full system closure was built at
+`/nix/store/bfcaawbhlk1gfn2jqgjxsvlahf9rj926-nixos-system-unnamed-lxc-proxmox-25.11.12484.b6018f87da91`.
+It was not activated or copied to a host. Compare the target's existing input,
+package versions and generated units before an approved IaC rollout; do not
+implicitly upgrade the OS/Technitium or invoke the install role's channel update
+just because the local build passed. Live API/read-back and real-client no-offer
+checks are still open.
 
 VLAN-local DNS and enabled scopes below are final-state checks, not preparation
 requirements. During preparation verify expected disabled state and no offers.

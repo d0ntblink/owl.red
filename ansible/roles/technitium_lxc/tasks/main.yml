@@ -10,6 +10,8 @@
 
 - name: Install packages and Technitium
   ansible.builtin.import_tasks: install.yml
+  tags:
+    - technitium_nixos
 
 - name: Bootstrap admin account and API token via BWS
   ansible.builtin.import_tasks: bootstrap.yml

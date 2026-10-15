@@ -90,6 +90,17 @@ nix --version
 nix-instantiate --parse nix/hosts/technitium/configuration.nix >/dev/null
 ```
 
+If membership is already configured but a long-running agent still has its old
+groups, a single local check can use that authorized group without sudo:
+
+```bash
+sg nix-users -c 'nix-build nix/hosts/technitium/check.nix -A sync --no-out-link'
+```
+
+This does not add group membership or change store/socket permissions. It only
+selects an already-authorized group for that command. The current controller
+verified this path after adding `n0rth` to `nix-users`.
+
 Do not make the socket/store world-writable or run project builds as root to
 bypass this requirement. If the daemon is absent or stopped, inspect the local
 Nix installation/service before building. A parsed module is only a syntax
@@ -164,7 +175,7 @@ or the complete collection set.
 | Talos in the cluster root | `siderolabs/talos` `0.6.1` | [Cluster root](../../terraform/proxmox/technitium/main.tf) and its lockfile. The source/ISO Talos `1.7.5` pin is not the audited live `1.8.1` version or a talosctl requirement. |
 | OPNsense configuration | `browningluke/opnsense`, constraint `~> 0.11`, locked `0.24.0` | [OPNsense root](../../terraform/opnsense/main.tf) and its lockfile. Check the installed router API/engine before assuming resource coverage. |
 | Unraid settings API | `sullivtr/graphql` `2.6.1` | [Unraid root](../../terraform/unraid/main.tf), lockfile and the installed GraphQL schema. Destructive/operational mutations are outside this lane. |
-| Technitium OS/sync | NixOS module, `writeShellApplication`, Git/curl/jq runtime inputs | [Nix configuration](../../nix/hosts/technitium/configuration.nix); review/pin the actual Nixpkgs input used to evaluate/build it. `stateVersion = "25.11"` is not a channel lock. |
+| Technitium OS/sync | NixOS module, `writeShellApplication`, Git/curl/jq runtime inputs | [Nix configuration](../../nix/hosts/technitium/configuration.nix); [local checks](../../nix/hosts/technitium/check.nix) pin an official NixOS 25.11 archive and unpacked SHA256 for validation. This does not update/pin the running host's channel; `stateVersion = "25.11"` is not a channel lock. |
 | Tablet controller tools | Nixpkgs `nixos-26.05`; `android-tools`, Bash, coreutils, curl, GnuPG, OpenSSH, jq | [Tablet flake](../../nix/android-tablet/flake.nix). Use `nix --extra-experimental-features 'nix-command flakes' develop ./nix/android-tablet`; review locking/fetches before accepting input changes. |
 | Kubernetes resources | Fleet GitRepo paths, each bundle's manifests and Helm chart/values | [Fleet sources](../../gitops/rancher/fleet/README.md). Check per-bundle versions; do not substitute a workstation Helm upgrade for GitOps reconciliation. |
 | Repository validation | Hook revisions, gitleaks configuration, workflow actions | [Pre-commit hooks](../../.pre-commit-config.yaml), [security workflow](../../.github/workflows/security.yml) and [gitleaks rules](../../.gitleaks.toml). |
@@ -277,6 +288,8 @@ shellcheck nix/hosts/technitium/sync.sh nix/hosts/technitium/sync.test.sh
 bash -n nix/hosts/technitium/sync.sh nix/hosts/technitium/sync.test.sh
 bash nix/hosts/technitium/sync.test.sh
 nix-instantiate --parse nix/hosts/technitium/configuration.nix >/dev/null
+nix-build nix/hosts/technitium/check.nix -A sync --no-out-link
+nix-build nix/hosts/technitium/check.nix -A system --no-out-link --max-jobs 2 --cores 2
 pre-commit run --all-files
 ```
 
@@ -286,7 +299,20 @@ builds must remain non-activating until a rollout is approved: `nixos-rebuild
 switch`, the Ansible install role and service starts are not validation-only
 commands. See [guarded rollout](../../gitops/technitium/README.md#guarded-rollout).
 
-At the last local tool check, ShellCheck `0.9.0` and all 20 offline tests passed.
-Nix `2.18.1` was installed but the agent process could not access its daemon
-socket; module evaluation/build remained unverified. Installation must therefore
-be followed by access and build checks, not recorded as build success.
+The [check expression](../../nix/hosts/technitium/check.nix) evaluates the real
+NixOS module, asserts disabled scope intent and the host activation lock during
+preparation, and builds the packaged sync (`sync`) or complete LXC system closure
+(`system`). Its default input is the immutable official NixOS release
+`25.11.12484.b6018f87da91`, revision
+`b6018f87da91d19d0ab4cf979885689b469cdd41`, with a fixed unpacked SHA256. It
+requires no global `<nixpkgs>` channel. Preparation assertions must be reviewed
+explicitly when a future approved handoff changes the activation policy.
+
+Verified locally on 2026-10-14: Nix `2.18.1` module parsing, packaged sync build
+(including Nix's ShellCheck `0.11.0` gate), full LXC system build, standalone
+ShellCheck `0.9.0` and all 20 offline tests passed. Builds only wrote the local
+Nix store: no activation, remote copy or channel update occurred. Before a
+rollout, compare the validation input and resulting package/unit changes with
+the running host; a successful local build does not authorize an implicit OS or
+Technitium upgrade. Installed-version API and no-offer packet checks remain
+required.
