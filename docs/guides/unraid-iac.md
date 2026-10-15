@@ -3,6 +3,11 @@
 Day-2 companion to [`unraid-iac-plan.md`](unraid-iac-plan.md) (the "what/why") for the
 `unraid_settings` Ansible role (the "how"). Target: `nas.owl.red` (`10.0.10.5`).
 
+**Scope:** this is a settings reference, not a network migration procedure.
+Preserve NAS disks, array, passthrough, boot, power and unrelated services during
+network work. The current API owner is Terraform; do not revive the historical
+Ansible API writer to resolve a network or DNS issue.
+
 ## Lanes
 
 - **API** — **Terraform-GraphQL** (`terraform/unraid/`, provider `sullivtr/graphql`) against `https://nas.owl.red/graphql`. Declarative source of truth for NTP/SSH/identity/Connect/UPS; run via `scripts/unraid-terraform-run.sh plan/apply`. (Was Ansible; moved to Terraform — ADR 021 revision.)
@@ -41,12 +46,15 @@ Always run `pre-commit run --files $(git diff --name-only unraid/flash-config/)`
 `debug` lines tagged `DRIFT [NTP, API lane]` and `DNS [MANUAL lane]` show the live
 state. NTP is managed by the API lane. **DNS is DHCP-provided by design** (decision
 2026-06-18) — the role only flags if it's been pinned Static; which resolver DHCP
-advertises is set at the Technitium DHCP scope, not the NAS.
+advertises is controlled by the active DHCP authority, not pinned on the NAS.
+Keep the OPNsense client path during preparation; Technitium becomes that
+authority only through the approved handoff in the
+[network sequence](../../ROADMAP.md#execution-order).
 A JSON summary is written to `ansible/artifacts/unraid/drift-report.json` (gitignored).
 
 ## Adding a new setting to IaC
 
-1. Is there a GraphQL mutation? → API lane (add to the role, introspect to confirm the mutation/args).
+1. Is there a safe GraphQL mutation? -> Terraform API lane (`terraform/unraid/`); introspect the installed schema, read/plan first, and do not add a second writer to the Ansible role.
 2. Else, is the key in an allow-listed `/boot/config` file? → File lane (Phase 2; add to `unraid_cfg_write_allowlist`).
 3. Else (network/array/secret/lockout) → **Manual**; document here and rely on drift detection.
 
@@ -56,7 +64,7 @@ A JSON summary is written to `ansible/artifacts/unraid/drift-report.json` (gitig
 |---------|-------------|
 | `Permission denied (publickey)` | SSH key not pulled from `bw` — run the bootstrap script (`BW_SESSION` must be set). |
 | GraphQL `401`/empty | Wrong/expired API key, or `unraid-api` down (`pgrep -f unraid-api` on the NAS). |
-| "No known NTP mutation found" | Schema differs; inspect the printed mutation list, update `unraid_ntp_mutation_candidates`. |
+| "No known NTP mutation found" | Historical Ansible API-lane error; that writer is retired. Verify the current Terraform lane and installed schema rather than re-enabling it. |
 | recapture skipped | NAS had no Python — **resolved**: `python3` installed via `un-get` (persists in `/boot/extra`). If it recurs, re-run `un-get install python3`. |
 | `bw`/`bws` TLS error | `NODE_EXTRA_CA_CERTS` must point at the Zscaler CA. |
 | `role 'unraid_settings' was not found` / `ansible.cfg` ignored | Repo is on a world-writable mount; set `export ANSIBLE_CONFIG=ansible/ansible.cfg` (repo root) or `ANSIBLE_CONFIG=./ansible.cfg` (from `ansible/`). |

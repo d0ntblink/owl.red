@@ -1,45 +1,95 @@
 # owl.red Infrastructure Roadmap
 
-Ordered list of outstanding work. Each item is either a prerequisite for something below it or a standalone milestone. Update status as work progresses.
+Dependency-led execution plan followed by the existing milestone backlog. Phase numbers are stable references, not a command to finish every lower-numbered milestone first. Update status only from observed results.
 
 Status: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
-**Current focus: close the stabilization gates below, then resume Phase 0/1.**
-The 2026-10-14 live audit found working hosts and Kubernetes control planes, but
-broken internal resolver paths, incomplete Fleet reconciliation/TLS, and an
-unparseable cluster Terraform root. Do not treat the target address plan as an
-operational VLAN deployment.
+**Current focus: prepare a reversible network transition, then prove one small change at a time.**
+The 2026-10-14 audit found a working flat network and Kubernetes control plane,
+not an operational five-VLAN deployment. Internal DNS, Fleet and TLS have known
+gaps. The Terraform NIC syntax failure has since been fixed offline; that does
+not make its five-NIC target safe to apply to the live one-NIC Technitium LXC.
+
+**Transition constraint:** keep client DNS/DHCP on OPNsense until the supporting
+VLAN paths and Technitium interfaces are ready and a coordinated handoff is
+approved. Do not force CoreDNS, Talos resolvers, client DNS or DNS interception
+to the final design early. A separately justified interim DNS repair must retain
+the OPNsense client path and have its own rollback; it is not a VLAN prerequisite.
 
 ## Stabilization Gates
 
 Evidence: [live state audit](docs/issues/008-live-state-vs-repository.md).
-These gates qualify the existing roadmap; phase numbers remain unchanged.
-Unchecked means not remediated or not yet verified, not permission to deploy.
-Read-only discovery, documentation and offline code validation can continue.
+These are scoped acceptance checks, not the old G1 -> G2 -> G3 -> G4 dependency
+chain. Unchecked means not completed or verified. Read-only discovery,
+documentation and offline validation can continue; publishing is a separate
+operation because a new Git revision can trigger live Technitium reconciliation.
 
 | Gate | Blocks | Required Exit Evidence |
 |------|--------|------------------------|
-| G1 `[ ]` Admin Access And Recovery | Disruptive router, switch, host or cluster changes | One accepted reusable Password Manager session; dedicated OPNsense API access and a fresh read-only survey; console/break-glass path; off-node critical configuration, guest/state and Talos recovery material with a checked restore/rollback procedure. Full PBS deployment is not required first. |
-| G2 `[ ]` Internal DNS And Public Namespace | Further service deployment and network cutover | LAN clients, gateway-dependent hosts and existing pods resolve internal service names to their intended private IPs, while external DNS still works. Review public wildcard/DDNS dependencies, then remove the conflicting wildcard under ADR 012; an arbitrary public subdomain must not resolve through it. |
-| G3 `[ ]` GitOps, TLS And Platform Resilience | Changes that depend on Fleet, ingress or node maintenance | All 9 owl.red bundles ready, desired/applied revisions agree, and Fleet-agent ownership resolved in its owning release. Verify secret retrieval freshness; remove runtime cluster-wide backend TLS skip-verify, retaining only PDM's scoped exception. Existing management frontends must serve trusted DNS-01 certificates, dashboard access must be restricted to verified admin sources, and fleet-agent replicas/tolerations must agree with its PDB. |
-| G4 `[ ]` Terraform And Inventory Safety | Infrastructure plan/apply or guest import/change | Fix the five invalid LXC NIC blocks; formatting/validation pass. Reconcile live Talos version, sizing, guest placement and MAC evidence without silently upgrading, downgrading or moving guests. Protect/backup state; import existing guests before applying their scaffolds; review plans for unintended power, destroy/recreate or passthrough changes. |
-| G5 `[ ]` End-To-End VLAN Readiness | Moving clients or changing management subnets in Phase 1 | Restore/identify the AP uplink and inspect SSID bridges; replace disabled-port-5 membership with the reviewed real port/PVID/trunk map. Establish matching router interfaces/rules and Technitium NICs, resolver IPs and DHCP authority with no competing server. Prove lease, DNS, isolation and recovery behavior on a real client before each batch; management VLAN last. |
+| G1 `[ ]` Change-Scoped Access And Rollback | Each live change to an affected component | Working administrative access; saved affected configuration and, if Terraform is used, protected state outside the affected system; exact inverse change and an independent recovery path for the affected management link. The user can connect to a switch port and has NAS keyboard/monitor access; neither proves router/switch recovery. A full NAS-data backup, guest backup programme or unrelated passthrough change is not a network prerequisite. |
+| G2 `[ ]` Final DNS And Public Namespace | Final resolver handoff/enforcement and services requiring correct internal DNS, not VLAN preparation | After G5's supporting paths/interfaces are ready and handoff is approved, LAN clients, gateway-dependent hosts and pods resolve internal names to private targets and external DNS still works. Review wildcard/DDNS consumers and authoritative/public records before ADR 012 cleanup. DNS interception or blocking follows successful renewal/cache/rollback tests, not interface preparation. |
+| G3 `[ ]` GitOps, TLS And Platform Resilience | Declaring platform convergence complete; dependent deployments/drains require the affected release, ingress and PDB checks, not unrelated repairs | Completion means all 9 owl.red bundles ready with matching desired/applied revisions; fleet-agent ownership, replicas, tolerations and PDB reconciled in the owning release. Verify secrets; remove the runtime global backend TLS bypass, retain only PDM's scoped exception, provide trusted management certificates and restrict the dashboard to verified admin sources. This is a separate workstream, not a blanket Phase 1 entry gate. |
+| G4 `[~]` Terraform And Inventory Safety | The specific infrastructure root being planned/applied or guest being imported/changed | NIC syntax/fmt/validation is fixed offline. Reconcile live/state/desired values for the touched resource without unapproved version, placement, sizing or power changes. Import only where needed; review a narrowly scoped plan and reject destroy/recreate, disk, passthrough or unrelated guest actions. Do not apply a whole cluster target to perform a network-only change. |
+| G5 `[ ]` End-To-End VLAN Readiness | Each subnet/L2 migration batch and the subsequent DNS/DHCP handoff | Fresh authenticated OPNsense service/interface/lease survey; resolved legacy `/16` overlap; reviewed router/bridge/switch/AP port map; protected operator path; verified Technitium DHCP lifecycle guard before attaching reachable NICs. Prove gateway, return routes, expected DHCP authority/options and policy from a real LAN client for each batch. Mask contraction and management VLAN tagging are separate changes; readiness is built during Phase 1, not required in full before starting it. |
 | G6 `[ ]` Power And Stateful Storage Safety | NFS activation and production stateful/HA rollout | Verify UPS monitoring and staged shutdown rather than trusting an enable flag. Restrict intended NFS exports and exclude `system` before enabling NFS. Then prove PVC data survives rescheduling and shared Proxmox storage supports the intended failover before moving application state. |
 
-**Working order:** G1, then DNS (G2), GitOps/TLS/resilience (G3), and IaC safety
-(G4), followed by the existing Phase 0/1 work with G5's cutover checks. Offline
-Terraform fixes and inventory corrections can run alongside the access work.
-G6 is required for shared-storage/stateful rollout, not for read-only planning.
-Do not enable Technitium's disabled VLAN 10 scope blindly while the current DHCP
-authority is still unverified. No disk repair is implied by the empty parity2
-slot recorded in the audit.
+**Offline progress (2026-10-14):** the five NIC block declarations now parse.
+The touched file passes `terraform fmt -check`; the cluster module passes
+`terraform validate -json` with zero errors. Validation reports one existing CLI
+development-override warning for `finomen/swos`; no switch operation was run.
+Quoted values, identifiers, numeric literals and delimiters were compared with
+the original and are unchanged. No plan, import, refresh or apply was run; G4
+remains open for its other requirements and G1 remains unverified.
 
-**Not blanket prerequisites:** full PBS deployment remains Phase 8; off-cluster
-certificate distribution remains Phase 6; physical diagrams, mail, cloud-file
-migration and optional GNSS time hardware can wait. NTP consolidation (16.1) can
-run in parallel after verifying the LAN NTP service; a synchronized host is not
-blocked merely because its source is still public. NAS Tailscale is already
-running, but that does not complete Phase 3's remote-management/split-DNS work.
+### Execution Order
+
+| Step | Work And Dependency | Acceptance Before Advancing |
+|------|---------------------|-----------------------------|
+| 1. Establish the actual baseline | Phase 0.1/0.2 and G1: regain reusable administrative access, read current OPNsense interfaces/routes, DNS, DHCP engine/scopes/leases, NAT, rules and portal; confirm the operator path and real switch/AP links. | Record current service authority and all addresses/masks, including clients outside `10.0.10.0/24`. Save affected configuration privately with its restore method; do not assume the June empty-firewall survey is current. |
+| 2. Approve the transition design | Phase 1.5: decide overlap handling, actual VLAN assignment, native/tagged boundaries and the management-link sequence. Revisit ADRs explicitly where needed. | A per-component before/after table and bounded rollback show that both outbound and return traffic work at each intermediate state. No device is moved just because its future reservation exists. |
+| 3. Prepare without transferring service | Phase 0's relevant IaC and Phase 1.1/1.2/1.3: review declarations, stage only changes proven not to interrupt legacy forwarding, and establish the Technitium DHCP guard before exposing new interfaces. | OPNsense remains the client DNS/DHCP path. A no-offer Technitium state is confirmed by read-back and a real-client packet check, not inferred from source JSON. The known legacy management path remains usable. |
+| 4. Resolve masks, then prove an isolated VLAN path | Execute the approved Phase 1.5 strategy. With in-place contraction, narrow the legacy connected network and relevant static/DHCP client masks on the existing L2 before routing contained target subnets. Management tagging is a later, separate operation. | PVE quorum, Talos/etcd/API VIP, ingress VIP, NAS access and operator reachability remain healthy; a test port/client proves gateway, return path and policy. No competing DHCP server and no premature final resolver enforcement. |
+| 5. Complete supporting paths, then hand off DNS/DHCP | Finish the required router/trunk/AP/LXC paths and approve a coordinated authority transfer. OPNsense can serve pilot/migrated VLAN clients during preparation where supported by its verified current engine. | Disable the old DHCP authority for the affected broadcast domain before enabling the new one; retain an address-conflict-safe lease/reservation rollback. Test renewals, scope-local DNS, external resolution and management from real clients and existing pods. Unmigrated domains keep their old authority. |
+| 6. Expand and enforce | Move small client batches, finish the separately planned management-tag migration, then close G2 and Phase 1.6. | Validate required application flows, guest authentication/isolation and IoT restrictions. Only then tighten DNS egress/redirects and retire temporary paths; never remove the final recovery path while it is still needed. |
+| 7. Stabilize platform and add stateful services | G3 and Phase 3 can proceed independently when their own access/dependencies are met. G6 -> Phase 4 storage tests -> production stateful workloads; Phase 8 provides the longer-term backup programme. | Network completion is not claimed from a green Fleet status, and storage safety is not claimed from working VLANs. Each workstream has its own evidence. |
+
+**Design recommendation, not an approved live runbook:** prefer contracting the
+legacy network to `10.0.10.0/24` on its current untagged L2 before introducing the
+other target routed subnets, if the current lease/static-address inventory makes
+that practical. Every target `/24` is contained in live `10.0.0.0/16`; a legacy
+host can ARP for a migrated destination instead of sending it to the router.
+"IoT first, management last" therefore cannot be the unconditional order.
+If significant clients cannot be safely contracted, compare a temporary,
+non-overlapping migration subnet instead. That alternative needs verified return
+routes and additional renumbering; it is not automatically safer. Do not rely on
+proxy ARP, a broad legacy bridge or temporary routes without an explicit design.
+
+**DHCP control is a real prerequisite:** the audit found VLAN 10 disabled and
+the other Technitium scopes enabled, with zero leases. All five source scopes
+contain `enabled: true`, but `sync.sh` only calls `scopes/set`; the upstream API
+documents separate `scopes/enable` and `scopes/disable` operations. Treat the source
+field as unproven lifecycle control. Verify behavior against the installed
+version and implement/test explicit transition-safe reconciliation before NIC
+attachment. A timer run on a new Git SHA reapplies settings, zones, scopes and
+reservations, even when the commit changes only documentation. Pausing a timer
+does not disable an already-enabled DHCP scope or stop an in-flight service.
+
+**Not blanket prerequisites:** NAS-data backups, NAS VM/passthrough/disk/array/
+boot/power changes, full PBS, all Fleet/TLS repairs, full cabinet documentation,
+mail, cloud-file migration and optional GNSS hardware are outside network entry
+criteria. Preserve the working NAS; local keyboard/monitor access is for network
+recovery, not permission for unrelated changes. Synchronized public-source NTP
+does not block networking. NAS Tailscale is already running, but that does not
+complete Phase 3's management routing/split-DNS work.
+
+**References for the transition review:**
+[OPNsense VLAN devices](https://docs.opnsense.org/manual/other-interfaces.html#vlan),
+[CSS326 family SwOS manual](https://help.mikrotik.com/docs/spaces/SWOS/pages/76415036/CRS3xx+and+CSS3xx+series+Manual),
+and [Technitium DHCP API](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md#dhcp-api-calls).
+The SwOS manual explicitly warns that changing management VLAN can remove
+management access; CSS326 has no serial console. These references explain
+mechanics, not the uninspected current OPNsense configuration or an approved
+site-specific cutover.
 
 **Recently completed (2026-06-18; driven by the "IaC-everything" principle, not phase-numbered):**
 - **Unraid (`nas.owl.red`) settings IaC** — API-settable settings are declarative in `terraform/unraid/` (Terraform-GraphQL); flash-file + drift/recapture via the `unraid_settings` Ansible role; array/users/secrets stay manual. NTP→`10.0.10.1` applied + verified (closes §16.1 for the NAS). ADR 021; guides `unraid-making-changes.md`, `unraid-iac.md`.
@@ -51,7 +101,7 @@ running, but that does not complete Phase 3's remote-management/split-DNS work.
 
 ## 0. OPNsense — Terraform IaC
 
-OPNsense config is brought under IaC before VLAN work, so rules/aliases/overrides are reproducible and survive a reinstall. **Decision: Terraform-primary + a documented manual floor** — see [ADR 016](docs/decisions/016-opnsense-terraform.md). Run via `scripts/opnsense-terraform-run.sh <plan|apply>`.
+Bring the OPNsense objects needed for each network batch under reproducible ownership before changing them; completing every firewall feature is not a prerequisite for VLAN preparation. **Decision: Terraform-primary + a documented manual floor** — see [ADR 016](docs/decisions/016-opnsense-terraform.md). The runner is `scripts/opnsense-terraform-run.sh <plan|apply>`; these are reference commands, not approval to apply.
 
 **Survey finding (2026-06-19):** a read-only survey via the dedicated `terraform` API user found the router **near-default** — WAN `igc0`, LAN `ixl1` on a single **flat `10.0.10.1/16`** (no VLAN interfaces yet), and **0** custom aliases / automation filter rules / NAT / Unbound overrides (only built-in defaults + 1 auto-generated Unbound forward). So there is **nothing custom to import**; firewall aliases/rules get **created during the VLAN transition (§1)**, authored as Terraform — not imported. Forward-looking `/24` drafts are parked in `terraform/opnsense/planned/`.
 
@@ -59,7 +109,7 @@ This is a historical baseline, not the current firewall survey. Authenticated
 OPNsense inspection was blocked in the 2026-10-14 audit. Close G1 and re-survey
 before relying on the June assumption that nothing needs importing.
 
-**Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0) owns firewall rules, NAT, aliases, VLAN/VIP, Unbound DNS, Kea DHCP, VPN, certs, routes. A **manual floor** stays in the WebUI (no safe API in any tool): base interface assignment + IP/WAN, gateways, system general settings incl. **NTP (§16.1)**, captive portal, traffic shaper, IDS/IPS.
+**Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0 in the lockfile) is the selected lane for supported API-backed objects. The documented WebUI floor includes base interface assignment/IP/WAN, gateways, system settings including **NTP (§16.1)**, captive portal, shaper and IDS/IPS. Check the installed OPNsense version, active DHCP engine and actual provider resources before relying on historical coverage claims. Revise the ownership matrix explicitly if current support changes it; do not manage the same object through two writers.
 
 > Scope note: this phase is the OPNsense **config** via `terraform/opnsense/`. The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is separate, scaffolded under `terraform/proxmox/opnsense-vm/` (§13). `opnsense_firewall_filter` rules live under Firewall → **Automation** → Filter (separate from classic per-interface rules) — see the module README for the safe "delete classic rules" procedure.
 
@@ -73,6 +123,7 @@ before relying on the June assumption that nothing needs importing.
 
 ### 0.2 Import Existing Config
 - `[ ]` Refresh the authenticated interface, alias, filter, NAT, DNS/DHCP and portal survey; document the active DHCP authority before changing scopes
+- `[ ]` Export the affected configuration privately; verify the restore method, real operator path and independent router recovery before a disruptive router change
 - `[ ]` Import any existing API-managed objects found by that survey, or freshly verify that the empty module is a no-op
 
 Historical checks below were completed on 2026-06-19, not revalidated in October:
@@ -105,8 +156,16 @@ Historical checks below were completed on 2026-06-19, not revalidated in October
 ## 1. Network Foundation
 
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
-Close G1-G4 before disruptive deployment; G5's exit checks are completed as part
-of this phase, not a requirement to have already migrated every VLAN.
+Follow the [execution order](#execution-order), not the numerical order of the
+subsections below. G1 applies per change; G4 applies to the root/resource being
+used. Build G5 readiness through this phase, keep OPNsense client DNS/DHCP during
+preparation, and transfer authority only after the supporting paths/interfaces
+are ready. Final G2 DNS and unrelated G3 repairs are not entry gates.
+
+An offline AP blocks wireless steering and wireless acceptance, not an otherwise
+safe wired pilot. Apply only the prerequisites for the actual batch; similarly,
+a Talos network operation needs its affected quorum/disruption checks, not
+completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.1 VLAN Steering on WAP (`ap.owl.red`)
 - `[x]` Complete the known-client target allocation registry (2026-10-14): workstation, LG phone, Shield and WUUK cameras have reservations/DNS; tablet is pending target-SSID MAC; work laptop remains dynamic. No live VLAN cutover performed.
@@ -115,14 +174,14 @@ of this phase, not a requirement to have already migrated every VLAN.
 - `[ ]` Confirm SSID → VLAN bridge mappings:
   - `owl.red` → VLAN 20 (`private-net`)
   - `silence of the lans` → VLAN 30 (`guest-net`)
-  - `owl.red-iot` → VLAN 40/50 (split by device; see below)
-- `[ ]` Decide: split IoT SSIDs (`owl.red-iot-local` VLAN 40, `owl.red-iot-cloud` VLAN 50) **or** keep single SSID and steer by MAC in OPNsense
-- `[ ]` Move known private clients to VLAN 20 after steering and management access are verified:
+  - IoT → explicit VLAN 40 or VLAN 50 membership decided below
+- `[ ]` Prefer separate IoT SSIDs (`owl.red-iot-local` VLAN 40, `owl.red-iot-cloud` VLAN 50) unless the actual OpenWrt/radio build proves a supported per-device/per-credential dynamic VLAN mechanism. A single SSID plus OPNsense MAC-based DHCP reservations does not assign Layer-2 VLAN membership. Record the chosen trade-off before changing SSIDs.
+- `[ ]` After Phase 1.5's overlap, path and service-authority checks, move known private clients in small batches:
   - `w1ngz.owl.red` → `10.0.20.10`
   - `paranoid-android.owl.red` → `10.0.20.11`
   - Bedside tablet → planned `10.0.20.12`; verify target-SSID MAC before confirming reservation/DNS
   - Work laptop `KAM1WL102916` → dynamic DHCP, no fixed lease
-- `[ ]` Move IoT devices to correct SSID once steering is confirmed:
+- `[ ]` After those same checks, move IoT devices to the correct SSID:
   - `ecobee.owl.red` → VLAN 50 (last recorded on the flat management network)
   - `printer.owl.red` (Canon) → VLAN 40 (last recorded on the flat management network)
   - `bambu.owl.red` → VLAN 40 (needs to join network)
@@ -133,9 +192,10 @@ of this phase, not a requirement to have already migrated every VLAN.
 
 ### 1.2 VLAN Access Rules on Switch (`switch.owl.red`)
 - Audit baseline: all ports were Optional/PVID 1 and every VLAN listed only disabled port 5. Port names alone do not establish working trunks or access VLANs.
-- `[ ]` Audit `ansible/switch_configs/css326.yml` — confirm all ports have correct PVID and tagged VLAN membership
-- `[ ]` Apply any missing port VLAN config via `swos-apply-config.yml`
-- `[ ]` Confirm VLAN 40 and VLAN 50 traffic from WAP trunk (SW18) reaches correct OPNsense subinterfaces
+- `[ ]` Reconcile `ansible/switch_configs/css326.yml` with actual cabling; the audit found edge management on SW24, not the historical SW05. Record PVID, ingress receive mode, VLAN membership and egress tagging at each switch/router/PVE/LXC/AP boundary.
+- `[ ]` Save the SwOS configuration privately and test a designated physical recovery/access port before changing filtering or management VLAN. CSS326 has no serial console; reset is disruptive last-resort recovery, not an ordinary rollback.
+- `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
+- `[ ]` Confirm the actual AP trunk carries VLANs 20/30/40/50 to the matching router paths without disrupting legacy management. SW18 is a recorded location to verify, not proof of current cabling.
 
 ### 1.3 OPNsense VLAN Firewall Rules
 - `[ ]` Confirm VLAN 10 → all VLANs (admin rule) exists
@@ -146,32 +206,40 @@ of this phase, not a requirement to have already migrated every VLAN.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-The October audit found /16 addresses on PVE hosts, Talos and the NAS, while
-Technitium's scope definitions already use /24. Its LXC has only one NIC, its
-VLAN 10 scope is disabled, and no leases were present. The target remains one
-clean /24 per VLAN, but scope data alone does not establish live DHCP authority.
+**Observed:** PVE, Talos and NAS use `/16` on the legacy untagged L2. Technitium
+has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
+10 disabled and 20-50 enabled but no leases. Those are not five operational VLANs.
+The legacy connected network is `10.0.0.0/16`, which contains every target `/24`.
+Do not route those targets onto separate L2 domains while relying on legacy
+hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
 
-- `[ ]` **Audit**: identify every place a `/16` mask appears
-  - OPNsense interface/subnet config
-  - Technitium DHCP scope `subnetMask` fields (`gitops/technitium/dhcp/scopes.json`)
-  - Static IPs on any host (Talos configs in `talos/`, Terraform, etc.)
-  - Ansible inventory current/target addressing metadata
-- `[ ]` **Plan cutover order** — VLAN 10 is highest risk (all infra); do IoT VLANs first to practice
-- `[ ]` IoT VLANs (40, 50): change OPNsense subinterface mask → `/24`; update Technitium scopes; verify DHCP still hands out correct range
-- `[ ]` Guest VLAN 30: same as IoT
-- `[ ]` Private VLAN 20: same; warn personal devices may drop briefly
-- `[ ]` Infra VLAN 10: schedule maintenance window
-  - Change OPNsense VLAN 10 interface mask to `/24`
-  - Confirm all static IPs in `10.0.10.0/24` range (they are — no change needed to addresses)
-  - Verify the already-/24 Technitium scope against the new interface and confirm it is the intended sole DHCP authority before enabling it
-  - Rerun `deploy-technitium-lxc.yml` or trigger sync
-  - Verify all hosts still reachable
-- `[ ]` Reconcile the existing /24 scope data, enabled state and VLAN-local DNS with each live VLAN cutover; do not introduce competing DHCP offers
-- `[ ]` Remove any remaining `/16` references across repo
+1. **Inventory and choose the intermediate states.**
+  - `[ ]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings; identify every static or leased client outside `10.0.10.0/24` before narrowing anything
+  - `[ ]` Record masks, gateways and L2 attachment for the operator, PVE/corosync, Talos/etcd, API VIP `.20`, ingress VIP `.201`, NAS, BMC, PDU, AP and Technitium; include any storage/application dependency using the legacy range
+  - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
+  - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
+2. **Prepare the serving-state guard and non-disruptive configuration.**
+  - `[ ]` Verify scope enable/disable behavior against the installed Technitium version and implement/test explicit lifecycle reconciliation, including disabled state after scope creation/update and service restart. Merely changing `enabled` in JSON is not demonstrated control.
+  - `[ ]` Before attaching reachable NICs, explicitly verify non-serving Technitium scope state and absence of offers. Coordinate the timer and any in-flight sync so a new revision cannot undo the guard; preserve existing DNS service.
+  - `[ ]` Review only the affected IaC resources/state and stage the approved port/bridge/router/AP definitions. Do not deploy the full five-NIC LXC target or run bootstrap/sync as a substitute for a migration procedure.
+3. **Contract the legacy network before activating contained routed subnets.**
+  - `[ ]` For the in-place strategy, plan OPNsense pool/prefix and client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.
+  - `[ ]` Change approved host/client masks and the legacy router prefix in the documented order while retaining the current untagged management L2, addresses and OPNsense DNS/DHCP authority. Account for routes and firewall rules which derive from the old prefix.
+  - `[ ]` Check both directions to the operator, gateway, PVE quorum, Talos/etcd/API VIP, ingress VIP and NAS after each bounded batch. Stop and restore the affected previous values on failure; do not proceed to VLAN tagging to fix an unresolved mask problem.
+4. **Prove VLAN paths while OPNsense still serves clients.**
+  - `[ ]` Activate one approved test port/VLAN path and matching gateway/firewall/NAT policy. Use OPNsense DHCP/DNS for any pilot clients where the surveyed engine supports it; a static test client is acceptable before client DHCP is staged.
+  - `[ ]` Verify address, `/24`, gateway, expected DHCP server/DNS options, internet policy and return traffic from a real LAN client. WSL reachability alone cannot prove DHCP broadcasts, VLAN membership or isolation.
+  - `[ ]` Complete the required switch/AP/PVE/LXC paths with Technitium DHCP still guarded; verify scope-local `.30` DNS listeners and firewall exposure. Do not put the same `10.0.10.0/24` address space on both native and tagged router interfaces.
+5. **Approve and perform the DNS/DHCP handoff, then expand.**
+  - `[ ]` Reconcile outstanding leases, reservations and pool exclusions for each broadcast domain; keep a rollback lease map so neither authority reissues an address already in use
+  - `[ ]` After supporting paths/interfaces pass, approve the exact handoff batch. Disable OPNsense DHCP for that domain before enabling its Technitium scope, then renew test clients and verify DNS. Keep unmigrated domains on OPNsense; do not enable every scope at once.
+  - `[ ]` Verify VLAN-local DNS, public resolution and `owl.red` answers from LAN clients, gateway-dependent hosts and existing pods before changing their configured resolver path or enforcing DNS egress
+  - `[ ]` Migrate small client groups, test required camera/printer/media flows, and perform the separately planned management-tag transition with the tested operator/recovery port still available. On DHCP rollback, disable the new authority before restoring the old one and account for leases issued in the interim.
+  - `[ ]` Close G2 only after the coordinated resolver change is verified; tighten DNS policy last. Remove temporary paths and stale active `/16` configuration after acceptance, but retain dated audit/history references.
 
 ### 1.6 Captive Portal (`captive.owl.red`)
 
-- **Requires:** 1.1, 1.3
+- **Requires:** a working VLAN 30 L2/L3 path, verified DNS/DHCP options and isolation from 1.1/1.3/1.5; the portal does not gate initial VLAN preparation
 - `[ ]` Verify OPNsense captive portal zone is bound to VLAN 30
 - `[ ]` Confirm `captive.owl.red` resolves from VLAN 30 clients
 - `[ ]` Test: unauthenticated VLAN 30 client hits splash page
@@ -222,7 +290,7 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 
 ## 5. Home Assistant
 
-- **Requires:** G1-G4, G6, 4 (proven shared storage), 1.1 (correct VLAN for IoT discovery)
+- **Requires:** change-scoped G1; G2/G3 where the deployment uses DNS/Fleet/ingress; G6 and 4 for production stateful storage; 1.1 for IoT discovery
 - `[ ]` Create `gitops/home-assistant/` Fleet app directory
 - `[ ]` Deploy via Helm chart (`home-assistant` from `pajikos` or raw manifests)
 - `[ ]` Validate the proposed 3-replica/anti-affinity design against Home Assistant's supported state/database model before choosing a workload topology; NFS alone does not make an application multi-writer safe
@@ -261,7 +329,7 @@ milestone, not a prerequisite for using existing cert-manager DNS-01 issuance.
 
 Move remaining self-hosted apps from wherever they are now onto the Talos cluster.
 
-- **Requires:** G1-G4, applicable certificate policy and a stable cluster; production stateful migrations also require G6 and Phase 4's storage tests
+- **Requires:** change-scoped G1; verified DNS/Fleet/ingress and certificate policy for the app (G2/G3); G4 only for infrastructure changes. Production stateful migrations also require G6 and Phase 4's storage tests.
 - `[ ]` Inventory all currently running apps and their current hosts
 - `[ ]` Prioritize migration order (stateless first, stateful after storage is proven)
 - `[ ]` Create `gitops/<app>/` Fleet directories per app, matching existing conventions
@@ -284,9 +352,11 @@ Move remaining self-hosted apps from wherever they are now onto the Talos cluste
 ## 8. Proxmox Backup Server (`pbs.owl.red`)
 
 No PBS guest, PVE backup/replication jobs or registered local backup objects were
-found in the October audit. G1 requires a minimal verified recovery path before
-disruptive changes; it does not require completing this full backup platform
-first. Any existing manual/off-platform backups still need verification.
+found in the October audit; the user subsequently confirmed there are no backups.
+This remains a separate data-protection gap. Network G1 requires affected
+configuration/state rollback and practical recovery access, not a full NAS-data
+backup or completion of this platform. Storage or destructive maintenance needs
+its own approved protection plan; it is not part of the network transition.
 
 - `[ ]` Provision PBS VM on `storage.pve.owl.red`
 - `[ ]` Assign MAC, update `dhcp-reservations.json` (currently TBD at `10.0.10.33`)
@@ -384,7 +454,7 @@ Every Proxmox workload must be reproducible from `terraform/proxmox/`. Manual `q
 - `[x]` List all VMs and LXCs across all nodes: 8 running guests on 6 PVE hosts, verified 2026-10-14 via `pvesh get /cluster/resources --type vm`
 - `[x]` Cross-reference local Terraform state metadata: Technitium, 4 Talos VMs and NAS are present; router/PDM scaffold roots have no local state file (verified 2026-10-14)
 - `[ ]` Complete the protected guest imports with no-op plans; do not recreate the live router, NAS or PDM to bypass an import
-- `[ ]` Fix G4's cluster-module parse error before relying on Terraform validation or plans
+- `[x]` Correct G4's five invalid NIC block declarations offline; touched-file formatting and local module validation pass with zero errors (2026-10-14). This does not authorize a plan/apply or close G4.
 
 ### 13.2 Import / Codify Existing Workloads
 Known workloads — add `.tf` file per workload, import into state:
