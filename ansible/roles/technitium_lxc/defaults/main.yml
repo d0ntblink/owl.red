@@ -10,6 +10,7 @@ technitium_git_repo: "https://github.com/d0ntblink/owl.red.git"
 technitium_admin_username: admin
 technitium_api_url: "http://localhost:5380"
 technitium_api_token_name: ansible-sync
+technitium_update_nix_channels: false
 
 # Bitwarden SM secret IDs (values never in plaintext in this repo)
 technitium_admin_bws_secret_id: "29f2afc9-11f3-4091-ae83-b448008b8d94"
