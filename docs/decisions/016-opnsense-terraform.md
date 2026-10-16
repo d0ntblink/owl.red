@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted (2026-06-19).
+Accepted (2026-06-19); superseded for the future router architecture by
+[ADR 022: VyOS Router Replacement](022-vyos-router-replacement.md) (2026-10-16).
+The ownership rules below remain the interim lane for the live OPNsense router
+until its replacement is accepted. Historical context is retained; this does
+not authorize new OPNsense feature work or retirement of the current router.
 
 ## Context
 

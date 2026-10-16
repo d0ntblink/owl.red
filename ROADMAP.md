@@ -10,17 +10,30 @@ Install tools for the owning lane and verify access, interpreter/library paths
 and versions before running commands; package installation is not build success
 or permission to deploy.
 
-**Current focus: prepare a reversible network transition, then prove one small change at a time.**
+**Current focus: prepare the VyOS replacement, accept the router swap, then resume VLAN activation.**
+The architecture is accepted in [ADR 022](docs/decisions/022-vyos-router-replacement.md):
+one VyOS Stream VM on edge, direct WAN/LAN PCI passthrough, unchanged gateway IP,
+no new production router bridges and no HA requirement. Configuration and VM
+preparation precede a separately approved cutover; nothing is deployed by this
+decision. The next work is Phase 0.6, not new OPNsense feature configuration.
+
 The 2026-10-14 audit found a working flat network and Kubernetes control plane,
 not an operational five-VLAN deployment. Internal DNS, Fleet and TLS have known
 gaps. The Terraform NIC syntax failure has since been fixed offline; that does
 not make its five-NIC target safe to apply to the live one-NIC Technitium LXC.
 
-**Transition constraint:** keep client DNS/DHCP on OPNsense until the supporting
-VLAN paths and Technitium interfaces are ready and a coordinated handoff is
-approved. Do not force CoreDNS, Talos resolvers, client DNS or DNS interception
-to the final design early. A separately justified interim DNS repair must retain
-the OPNsense client path and have its own rollback; it is not a VLAN prerequisite.
+**Transition constraint:** OPNsense remains the serving router until the approved
+swap; VyOS must then preserve the agreed client DNS/DHCP behavior at the existing
+endpoint. The later handoff to Technitium waits for supporting VLAN paths and
+interfaces plus its own coordinated approval. Do not force CoreDNS, Talos
+resolvers, client DNS or DNS interception to the final design early. Any interim
+DNS repair needs its own scope and rollback; it is not a VLAN prerequisite.
+
+**Paused router state:** the approved LAN-mask operation saved `/24` at 20:59Z on
+2026-10-16, but the whole-config guard stopped before Apply because other
+interface fields changed. Last verified runtime was `/16`. Resolve the actual
+running/persisted baseline before any router restart or replacement; do not
+resume Apply, restore the whole XML or reboot implicitly.
 
 ## Stabilization Gates
 
@@ -35,8 +48,8 @@ operation because a new Git revision can trigger live Technitium reconciliation.
 | G1 `[ ]` Change-Scoped Access And Rollback | Each live change to an affected component | Working administrative access; saved affected configuration and, if Terraform is used, protected state outside the affected system; exact inverse change and an independent recovery path for the affected management link. The user can connect to a switch port and has NAS keyboard/monitor access; neither proves router/switch recovery. A full NAS-data backup, guest backup programme or unrelated passthrough change is not a network prerequisite. |
 | G2 `[ ]` Final DNS And Public Namespace | Final resolver handoff/enforcement and services requiring correct internal DNS, not VLAN preparation | After G5's supporting paths/interfaces are ready and handoff is approved, LAN clients, gateway-dependent hosts and pods resolve internal names to private targets and external DNS still works. Review wildcard/DDNS consumers and authoritative/public records before ADR 012 cleanup. DNS interception or blocking follows successful renewal/cache/rollback tests, not interface preparation. |
 | G3 `[ ]` GitOps, TLS And Platform Resilience | Declaring platform convergence complete; dependent deployments/drains require the affected release, ingress and PDB checks, not unrelated repairs | Completion means all 9 owl.red bundles ready with matching desired/applied revisions; fleet-agent ownership, replicas, tolerations and PDB reconciled in the owning release. Verify secrets; remove the runtime global backend TLS bypass, retain only PDM's scoped exception, provide trusted management certificates and restrict the dashboard to verified admin sources. This is a separate workstream, not a blanket Phase 1 entry gate. |
-| G4 `[~]` Terraform And Inventory Safety | The specific infrastructure root being planned/applied or guest being imported/changed | NIC syntax/fmt/validation is fixed offline. Reconcile live/state/desired values for the touched resource without unapproved version, placement, sizing or power changes. Import only where needed; review a narrowly scoped plan and reject destroy/recreate, disk, passthrough or unrelated guest actions. Do not apply a whole cluster target to perform a network-only change. |
-| G5 `[ ]` End-To-End VLAN Readiness | Each subnet/L2 migration batch and the subsequent DNS/DHCP handoff | Fresh authenticated OPNsense service/interface/lease survey; resolved legacy `/16` overlap; reviewed router/bridge/switch/AP port map; protected operator path; verified Technitium DHCP lifecycle guard before attaching reachable NICs. Prove gateway, return routes, expected DHCP authority/options and policy from a real LAN client for each batch. Mask contraction and management VLAN tagging are separate changes; readiness is built during Phase 1, not required in full before starting it. |
+| G4 `[~]` Terraform And Inventory Safety | The specific infrastructure root being planned/applied or guest being imported/changed | NIC syntax/fmt/validation is fixed offline. Reconcile live/state/desired values for the touched resource without unapproved version, placement, sizing or power changes. Import only where needed; review a narrowly scoped plan and reject unapproved destroy/recreate, disk, passthrough or unrelated guest actions. The VyOS replacement is a separate VM; Phase 0.6 owns its explicitly approved PCI handoff, not recreation of VM 100. Do not apply a whole cluster target to perform a network-only change. |
+| G5 `[ ]` End-To-End VLAN Readiness | Each subnet/L2 migration batch and the subsequent DNS/DHCP handoff | Fresh authenticated service/interface/lease survey of the serving router: OPNsense before replacement, VyOS after acceptance; resolved legacy `/16` overlap; reviewed router/switch/AP and existing PVE/LXC port map; protected operator path; verified Technitium DHCP lifecycle guard before attaching reachable NICs. Prove gateway, return routes, expected DHCP authority/options and policy from a real LAN client for each batch. Mask contraction and management VLAN tagging are separate changes; readiness is built during Phase 1, not required in full before starting it. |
 | G6 `[ ]` Power And Stateful Storage Safety | NFS activation and production stateful/HA rollout | Verify UPS monitoring and staged shutdown rather than trusting an enable flag. Restrict intended NFS exports and exclude `system` before enabling NFS. Then prove PVC data survives rescheduling and shared Proxmox storage supports the intended failover before moving application state. |
 
 **Offline progress (2026-10-14):** the five NIC block declarations now parse.
@@ -52,12 +65,13 @@ remains open for its other requirements and G1 remains unverified.
 | Step | Work And Dependency | Acceptance Before Advancing |
 |------|---------------------|-----------------------------|
 | 1. Establish the actual baseline | Phase 0.1/0.2 and G1: regain reusable administrative access, read current OPNsense interfaces/routes, DNS, DHCP engine/scopes/leases, NAT, rules and portal; confirm the operator path and real switch/AP links. | Record current service authority and all addresses/masks, including clients outside `10.0.10.0/24`. Save affected configuration privately with its restore method; do not assume the June empty-firewall survey is current. |
-| 2. Approve the transition design | Phase 1.5: decide overlap handling, actual VLAN assignment, native/tagged boundaries and the management-link sequence. Revisit ADRs explicitly where needed. | A per-component before/after table and bounded rollback show that both outbound and return traffic work at each intermediate state. No device is moved just because its future reservation exists. |
-| 3. Prepare without transferring service | Phase 0's relevant IaC and Phase 1.1/1.2/1.3: review declarations, stage only changes proven not to interrupt legacy forwarding, and establish the Technitium DHCP guard before exposing new interfaces. | OPNsense remains the client DNS/DHCP path. A no-offer Technitium state is confirmed by read-back and a real-client packet check, not inferred from source JSON. The known legacy management path remains usable. |
-| 4. Resolve masks, then prove an isolated VLAN path | Execute the approved Phase 1.5 strategy. With in-place contraction, narrow the legacy connected network and relevant static/DHCP client masks on the existing L2 before routing contained target subnets. Management tagging is a later, separate operation. | PVE quorum, Talos/etcd/API VIP, ingress VIP, NAS access and operator reachability remain healthy; a test port/client proves gateway, return path and policy. No competing DHCP server and no premature final resolver enforcement. |
-| 5. Complete supporting paths, then hand off DNS/DHCP | Finish the required router/trunk/AP/LXC paths and approve a coordinated authority transfer. OPNsense can serve pilot/migrated VLAN clients during preparation where supported by its verified current engine. | Disable the old DHCP authority for the affected broadcast domain before enabling the new one; retain an address-conflict-safe lease/reservation rollback. Test renewals, scope-local DNS, external resolution and management from real clients and existing pods. Unmigrated domains keep their old authority. |
-| 6. Expand and enforce | Move small client batches, finish the separately planned management-tag migration, then close G2 and Phase 1.6. | Validate required application flows, guest authentication/isolation and IoT restrictions. Only then tighten DNS egress/redirects and retire temporary paths; never remove the final recovery path while it is still needed. |
-| 7. Stabilize platform and add stateful services | G3 and Phase 3 can proceed independently when their own access/dependencies are met. G6 -> Phase 4 storage tests -> production stateful workloads; Phase 8 provides the longer-term backup programme. | Network completion is not claimed from a green Fleet status, and storage safety is not claimed from working VLANs. Each workstream has its own evidence. |
+| 2. Record the router and transition design | ADR 022 selects one VyOS VM with direct passthrough and no HA requirement. Phase 1.5 still decides overlap handling, native/tagged boundaries and the management-link sequence. | Architecture acceptance does not approve activation. Define per-component before/after values and exact rollback; no device is moved just because its future reservation exists. |
+| 3. Prepare VyOS without transferring service | Phase 0.6: pin the image, codify native configuration, stage a separate VM and test isolated virtual interfaces. Preserve the completed Technitium lifecycle guard and all accepted mask work. | OPNsense alone serves production. The candidate persists its configuration and passes focused simulated routing/service/logging checks without claiming production PCI devices, emitting DHCP/RA or advertising duplicate gateway IPs there. |
+| 4. Resolve the rollback baseline, then swap routers | Phase 0.6 and G1/G4: resolve the saved-but-unapplied OPNsense change, verify actual hardware/interface/WAN identities, agree lease-safe service parity and approve one bounded stop/PCI-transfer/start batch. | Only one router owns the devices, gateway and serving state. Management, WAN, DHCP/DNS, applicable IPv6 and blocked-connection diagnosis pass; otherwise stop VyOS and return devices/startup ownership to the agreed OPNsense baseline. Keep its VM/disk for rollback. |
+| 5. Finish mask contraction, then prove an isolated VLAN path | After router acceptance, execute the remaining Phase 1.5 strategy. Narrow the legacy connected network and remaining client masks on existing L2 before routing contained target subnets. Management tagging is separate. | PVE quorum, Talos/etcd/API VIP, ingress VIP, NAS access and operator reachability remain healthy; a real test client proves gateway, return path and policy. No competing DHCP server or premature resolver enforcement. |
+| 6. Complete supporting paths, then hand off DNS/DHCP | Finish required VyOS/trunk/AP/LXC paths and approve a coordinated authority transfer. VyOS provides the agreed interim services for pilot/migrated clients before Technitium handoff. | Disable the old DHCP authority for the affected broadcast domain before enabling the new one; retain a conflict-safe lease/reservation rollback. Test renewals, scope-local DNS, external resolution and management from real clients and existing pods. Unmigrated domains keep their existing authority. |
+| 7. Expand and enforce | Move small client batches, finish the separately planned management-tag migration, then close G2 and Phase 1.6. | Validate required application flows, guest authentication/isolation and IoT restrictions. Only then tighten DNS egress/redirects and retire temporary paths; never remove the final recovery path while it is still needed. |
+| 8. Stabilize platform and add stateful services | G3 and Phase 3 can proceed independently when their own access/dependencies are met. G6 -> Phase 4 storage tests -> production stateful workloads; Phase 8 provides the longer-term backup programme. | Network completion is not claimed from a green Fleet status, and storage safety is not claimed from working VLANs. Each workstream has its own evidence. |
 
 **Design recommendation, not an approved live runbook:** prefer contracting the
 legacy network to `10.0.10.0/24` on its current untagged L2 before introducing the
@@ -112,9 +126,18 @@ site-specific cutover.
 
 ---
 
-## 0. OPNsense — Terraform IaC
+## 0. Router IaC And VyOS Replacement
 
-Bring the OPNsense objects needed for each network batch under reproducible ownership before changing them; completing every firewall feature is not a prerequisite for VLAN preparation. **Decision: Terraform-primary + a documented manual floor** — see [ADR 016](docs/decisions/016-opnsense-terraform.md). The runner is `scripts/opnsense-terraform-run.sh <plan|apply>`; these are reference commands, not approval to apply.
+**Target decision:** [ADR 022](docs/decisions/022-vyos-router-replacement.md)
+replaces the future OPNsense configuration plan with native VyOS desired state
+and one Ansible deployment lane. Terraform owns the separate replacement VM,
+not router configuration over SSH. Phase 0.6 is the next implementation sequence.
+
+**Interim only:** [ADR 016](docs/decisions/016-opnsense-terraform.md)'s ownership
+rules still protect the serving OPNsense router. Retain its configuration, VM and
+recovery evidence; do not expand the OPNsense target or apply its parked VLAN
+drafts. The existing runner remains `scripts/opnsense-terraform-run.sh`, not a
+VyOS deployment mechanism or permission to apply.
 
 **Survey finding (2026-06-19):** a read-only survey via the dedicated `terraform` API user found the router **near-default** — WAN `igc0`, LAN `ixl1` on a single **flat `10.0.10.1/16`** (no VLAN interfaces yet), and **0** custom aliases / automation filter rules / NAT / Unbound overrides (only built-in defaults + 1 auto-generated Unbound forward). So there is **nothing custom to import**; firewall aliases/rules get **created during the VLAN transition (§1)**, authored as Terraform — not imported. Forward-looking `/24` drafts are parked in `terraform/opnsense/planned/`.
 
@@ -126,7 +149,7 @@ The router is `26.1.9`, still flat `/16`, with Dnsmasq DHCP, an Unbound-to-Dnsma
 are built-ins. Do not rely on the June blanket "nothing to import" assumption;
 review supported existing objects and the remaining manual-floor evidence first.
 
-**Lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0 in the lockfile) is the selected lane for supported API-backed objects. The documented WebUI floor includes base interface assignment/IP/WAN, gateways, system settings including **NTP (§16.1)**, captive portal, shaper and IDS/IPS. Check the installed OPNsense version, active DHCP engine and actual provider resources before relying on historical coverage claims. Revise the ownership matrix explicitly if current support changes it; do not manage the same object through two writers.
+**Interim lane split (ADR 016):** Terraform (`browningluke/opnsense` v0.24.0 in the lockfile) owns supported existing API-backed objects; the documented WebUI floor covers legacy settings. Use only for an explicitly scoped baseline/recovery change while OPNsense remains active. Do not extend this floor to VyOS or manage the same object through two writers.
 
 > Scope note: this phase is the OPNsense **config** via `terraform/opnsense/`. The OPNsense **VM shell** (`edge.owl.red`, VMID 100) is separate, scaffolded under `terraform/proxmox/opnsense-vm/` (§13). `opnsense_firewall_filter` rules live under Firewall → **Automation** → Filter (separate from classic per-interface rules) — see the module README for the safe "delete classic rules" procedure.
 
@@ -142,33 +165,48 @@ review supported existing objects and the remaining manual-floor evidence first.
 - `[~]` Authenticated API survey completed for interfaces/routes, DHCP/DNS, aliases, automation filter search, NAT and portal (2026-10-14). Dnsmasq is the live LAN DHCP authority; full classic filter semantics, automatic outbound-NAT mode and IPv6 advertisement/client behavior remain unverified.
 - `[ ]` Carry the existing Plex WAN TCP `32400` -> NAS `32400` rule into the ownership/exposure review; do not silently remove it or assume ADR 012 is already enforced
 - `[x]` Remove the live DHCP/MetalLB allocation overlap (2026-10-16 UTC): approved range-only Ansible activation changed DHCP `.100-.200` to `.100-.199`, leaving MetalLB `.200-.250`. Fresh range/client preimages are retained privately; API, service, DNS/HTTPS and DISCOVER/OFFER checks pass. Remaining device-identity gaps stay tracked in Phase 1.5.
-- `[ ]` Export the affected configuration privately; verify the restore method, real operator path and independent router recovery before a disruptive router change
-- `[ ]` Import any existing API-managed objects found by that survey, or freshly verify that the empty module is a no-op
+- `[~]` A real current export was retained privately at 20:45Z on 2026-10-16. The subsequent saved-but-unapplied change means a fresh agreed running/persisted rollback baseline, exact inverse and independent recovery are still required before stopping or restarting the router.
+- `[ ]` Reconcile only existing OPNsense objects needed for a specifically approved interim change; a blanket import is not a prerequisite for creating the separate VyOS VM
 
 Historical checks below were completed on 2026-06-19, not revalidated in October:
 - `[x]` Surveyed live config (read-only): router is near-default — **nothing custom to import**
 - `[x]` 0 custom aliases / filter rules / NAT / overrides; the 1 auto-generated Unbound forward (Dnsmasq) is left unmanaged
 - `[x]` Active module declares no resources; `plan` shows no changes (clean baseline)
 
-### 0.3 Codify Devices / Aliases (created during the VLAN transition §1 — not imported)
-> Aliases reference per-VLAN subnets that don't exist on the firewall yet; drafts are staged in `terraform/opnsense/planned/aliases.tf` with `/24` *target* masks. Activate per the §1.5 cutover.
-- `[ ]` VLAN 10 reserved hosts → aliases (from `gitops/technitium/dhcp-reservations.json`)
-- `[ ]` IoT device aliases (VLAN 40/50)
+### 0.3 Codify Device Groups (VyOS Target)
+The OPNsense drafts in `terraform/opnsense/planned/` are reference material only,
+not candidates to apply. Author equivalent native VyOS groups from the canonical
+registry without activating target subnets prematurely.
+- `[ ]` VLAN 10 reserved-host groups from `gitops/technitium/dhcp-reservations.json`
+- `[ ]` IoT device groups for VLANs 40/50
 
-### 0.4 Codify Firewall Rules (created during the VLAN transition §1)
-> Authored as `opnsense_firewall_filter` (Automation lane) in a new `terraform/opnsense/firewall_rules.tf` once the VLANs exist. They won't appear on the classic per-interface Rules pages — see the module README.
+### 0.4 Codify Firewall Rules (VyOS Target)
+Use native VyOS rules in the single configuration lane. First preserve the flat
+network's reviewed behavior; activate target VLAN policy only after Phase 0.6.
 - `[ ]` Inter-VLAN policy rules:
   - VLAN 10 admin → all VLANs allowed
   - VLAN 20 private → internet + VLAN 10 services, no lateral
   - VLAN 30 guest → internet only via captive portal, blocked from all VLANs
   - VLAN 40 IoT → LAN only, no internet, no lateral
   - VLAN 50 IoT → internet, no lateral movement
-- `[ ]` `terraform apply` — review the plan first; verify rules under Firewall → Automation → Filter
+- `[ ]` Compare the native candidate and deploy through the reviewed confirmed-commit lane; no OPNsense Automation rules or parallel Terraform config writer
 - `[ ]` Test each VLAN segment for correct connectivity
 
 ### 0.5 Ongoing
-- `[ ]` API-backed OPNsense changes use `terraform/opnsense/` where the locked provider supports the object. The Dnsmasq range has a documented range-only Ansible exception; the ADR 016 manual floor remains WebUI-managed, with no overlapping ownership.
-- `[ ]` Add OPNsense to `scripts/terraform-run.sh` workflow documentation
+- `[ ]` Document one VyOS configuration deployment lane, drift/removal handling, native commit-confirm/confirmation/save and private Bitwarden inputs. Terraform remains the VM lifecycle owner; the read-only dashboard cannot configure the router.
+- `[ ]` Keep OPNsense baseline/recovery ownership unchanged until accepted replacement; retirement is a later explicit decision
+
+### 0.6 Stage And Accept The VyOS Replacement
+
+- `[x]` Accept [ADR 022](docs/decisions/022-vyos-router-replacement.md) (2026-10-16): one VyOS Stream VM, direct existing PCI passthrough, gateway IP retained, HA deferred, router swap before VLAN activation. Architecture/preparation only; no live change is claimed.
+- `[ ]` Pin the exact Stream image, published verification material and required feature support, including native Suricata. Resolve/mitigate the selected image's boot-time firewall ordering risk and document update/recovery policy; rolling documentation alone is not acceptance.
+- `[ ]` Author the complete native baseline with one Ansible configuration lane. Include verified MAC/PCI-to-Linux mappings, WAN DHCP identity, applicable IPv6 DUID/PD/RA, current DNS/DHCP/NTP behavior, reservations, conflict-safe outstanding lease handling, NAT and reviewed Plex exposure. Keep secrets private; document all new tooling/collection versions and prerequisites in the controller guide before use.
+- `[ ]` Declare a separate Terraform VM with an unused ID, using verified current CPU/RAM/disk/firmware settings as the starting point. Preserve VM 100 and its disk; do not apply its unimported scaffold or create the replacement by changing the old resource. Stage without production PCI ownership or autostart.
+- `[ ]` Boot/test the pinned image on isolated temporary virtual interfaces: persisted configuration, focused routing/NAT/services and log attribution, plus native compare/commit-confirm/confirm/save and the verified timeout recovery action. No production DHCP/RA or duplicate gateway advertisement; physical NIC/WAN acceptance remains a cutover check.
+- `[ ]` Provide the read-only blocked-connection view before accepting the replacement: time/IP/port/protocol/interface/VLAN/verdict/rule filters, deployed-rule descriptions/revision and separate firewall/Suricata alert/drop events. Prefer an existing log UI/backend such as Grafana/Loki; keep local SSH/console diagnosis and query-only UI credentials. A custom frontend or full SIEM is not required.
+- `[!]` Resolve the paused OPNsense LAN Save before any router restart: last recorded runtime `/16`, saved `/24` plus collateral interface-field changes, no Apply sent. Refresh actual state and approve its exact resolution/rollback baseline. Do not blindly repeat Save/Apply, restore the full XML or reboot. Preserve completed host/client `/24` work.
+- `[ ]` Approve one bounded cutover with independent controller connectivity and literal-IP PVE/console recovery. Stop/verify OPNsense, transfer exclusive PCI ownership, start VyOS on the agreed native L2/IP/prefix and set exclusive startup ownership. Do not combine VLAN tagging, Technitium handoff or new IPS blocking; expect interruption and old sessions to reset.
+- `[ ]` Accept management/operator/NAS reachability, WAN, DHCP/DNS, applicable IPv6, required NAT/policy and a known blocked-flow diagnosis; confirm/save native configuration. On failure stop VyOS, return exact devices/startup ownership and boot the agreed OPNsense baseline. Retain its VM/disk; proceed to Phase 1 only after acceptance.
 
 ---
 
@@ -177,9 +215,10 @@ Historical checks below were completed on 2026-06-19, not revalidated in October
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
 Follow the [execution order](#execution-order), not the numerical order of the
 subsections below. G1 applies per change; G4 applies to the root/resource being
-used. Build G5 readiness through this phase, keep OPNsense client DNS/DHCP during
-preparation, and transfer authority only after the supporting paths/interfaces
-are ready. Final G2 DNS and unrelated G3 repairs are not entry gates.
+used. Resume live VLAN activation only after Phase 0.6 accepts VyOS. Build G5
+readiness through this phase, retain the serving router's interim client
+DNS/DHCP, and transfer to Technitium only after supporting paths/interfaces are
+ready. Final G2 DNS and unrelated G3 repairs are not entry gates.
 
 An offline AP blocks wireless steering and wireless acceptance, not an otherwise
 safe wired pilot. Apply only the prerequisites for the actual batch; similarly,
@@ -216,7 +255,8 @@ completion of unrelated dashboard certificates or every Fleet repair.
 - `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
 - `[ ]` Confirm the actual AP trunk carries VLANs 20/30/40/50 to the matching router paths without disrupting legacy management. SW18 is a recorded location to verify, not proof of current cabling.
 
-### 1.3 OPNsense VLAN Firewall Rules
+### 1.3 VyOS VLAN Firewall Rules
+- **Requires:** Phase 0.6 router acceptance; all target rules remain inactive during the parity replacement
 - `[ ]` Confirm VLAN 10 → all VLANs (admin rule) exists
 - `[ ]` Confirm VLAN 20 → internet + VLAN 10 services only (no lateral)
 - `[ ]` Confirm VLAN 40 → LAN only, no internet, no lateral movement
@@ -230,8 +270,9 @@ addresses (edge `.3`, storage `.4`, compute `.11-.14`) and all four Talos guest
 node addresses (`.21-.24`) use `/24`. NAS `.5` now uses `/24` after the approved
 DHCP mask/renewal step; the active range advertises `/24`. Operator Ethernet
 `.174` is also `/24` after its separately approved 20:32Z renewal. Router LAN
-`.1` remains `/16` on the legacy untagged L2; other client masks await
-verification. Technitium
+`.1` was last verified running `/16` on the legacy untagged L2; a later Save
+persisted `/24` but was stopped before Apply. Resolve that paused baseline in
+Phase 0.6 before any router restart. Other client masks await verification. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
 zero leases were observed. Those are not five operational VLANs.
@@ -261,7 +302,8 @@ recovery and connectivity requirements.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
   - `[x]` Apply the explicitly approved overlap fix after fresh ownership/preimage checks (2026-10-16T00:40:51Z-00:41:00Z). The field-only save and Dnsmasq reconfigure passed; only `end_addr` differs, all eight reservations and LAN `.1/16` are unchanged, service/DNS/HTTPS and a correlated zero-drop DHCP offer check pass. Scoped recovery artifacts are retained; no Windows route change or automatic rollback was made.
-  - `[ ]` Before a broader router interface/subnet change, retain the applicable current configuration export and exact recovery procedure, and address its control-connection risk. The August history download is not a certified full-current export. The range-only owner's proceed decision does not approve the broader migration; Dnsmasq reconfigure can also reload firewall rules.
+  - `[x]` Retain the current router configuration for the bounded LAN-mask candidate (2026-10-16T20:45:30Z): a real WebUI current export, 72,671 bytes, verified LAN `.1/16`, DHCP `/24` and corrected pool, owner-only outside Git. The earlier August history download is not relabeled current. Read-only form check at 20:52Z finds no pending interface Apply and only `subnet: 16 -> 24` in the proposed form; IPv6 `idassoc6` is preserved. The [cutover procedure](terraform/opnsense/README.md#router-lan-mask-cutover) records exact inverse, console path and focused acceptance; a restore was not rehearsed.
+  - `[!]` LAN-mask approval was given and one Save ran at 20:59Z (2026-10-16), persisting `subnet: 16 -> 24`. The whole-config guard detected other interface-field changes and stopped before Apply; no accepted runtime prefix change is claimed. The transaction is paused under Phase 0.6: inspect actual state and agree exact resolution before any router restart, Apply or replacement. Do not request the already-given approval again as though no Save occurred, or treat it as approval for a VyOS cutover.
   - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
   - `[x]` Prepare the isolated worker-host pilot `.14/16` to `.14/24` through the [guarded Ansible playbook](ansible/playbooks/proxmox-prefix-pilot.yml), with no router/storage/operator-path change. Eleven final offline cases cover rollback/locking, actual staged-model assertions and only the verified zero-byte PVE-generated SDN include. Initial and converged connected previews make zero changes. Future live activation still defaults off.
@@ -288,7 +330,9 @@ recovery and connectivity requirements.
   procedure is prepared. Completed approvals cover the DHCP range boundary and
   advertised mask, six PVE masks, four Talos masks, NAS DHCP mask acceptance and
   the separately approved operator Ethernet renewal. No router mask, VLAN or
-  DNS/DHCP authority migration is claimed by those results.
+  DNS/DHCP authority migration is claimed by those results. The separately
+  approved router Save remains paused before Apply; it is not an accepted
+  prefix change or permission to restart the router.
 
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
@@ -307,16 +351,17 @@ recovery and connectivity requirements.
   - `[x]` Explicitly approve and apply only the DHCP mask (2026-10-16T20:16:44Z-20:16:55Z; `ok=25`, `changed=5`, `failed=0`). Complete model comparison shows exactly one `subnet_mask` change. Post-wire transaction `0x2d9ce05d` is correlated on both capture paths with zero drops, `/24`, correct broadcast and unchanged gateway/DNS/lease timing; only OPNsense offers. Approved NAS normal IPv4 renewal reaches `.5/24`; a kernel default-route deletion during prefix replacement was detected, and only the exact saved default route was restored at 20:20:44Z. Controlled stable-`/24` renewal passes at 20:22:08Z with gateway retained, unchanged NAS config hash/boot/MAC/IPv6/daemon/non-eth0 routes and working NAS/external HTTPS. No release/rebind/service restart or persistent NAS edit occurred. Final 20:24:49Z router LAN remains `.1/16`, all eight reservations unchanged, DNS healthy and four Kubernetes nodes Ready; operator Ethernet remains DHCP `.174/16`, read only.
   - `[x]` Separately approve and request only operator Ethernet IPv4 renewal (20:32:14Z): `.174/16 -> .174/24`, with unchanged address/NIC/gateway/DNS/interface and route metrics. No release, NIC reset, IPv6 or hotspot-routing change. At 20:33:26Z router/edge/storage/NAS ports and external HTTPS pass; private before/after evidence retained.
   - `[ ]` Verify other client/static-appliance masks and coordinate any remaining renewals; do not claim every existing lease has `/24`. Preserve `.1/16` and the unchanged authority until the later scoped router/interface cutover is ready.
-  - `[ ]` For the in-place strategy, plan OPNsense pool/prefix and client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.
-  - `[ ]` Change approved host/client masks and the legacy router prefix in the documented order while retaining the current untagged management L2, addresses and OPNsense DNS/DHCP authority. Account for routes and firewall rules which derive from the old prefix.
+  - `[x]` Refresh remaining appliance entry points read-only (2026-10-16 UTC): CSS326 SwOS 2.18 reports `.2`, static fallback `.2` and `DHCP with fallback`; the system API exposes no subnet-mask field, so this is not switch `/24` acceptance. Storage BMC `.6` HTTPS responds and APC `.9` redirects to its management page. Storage has an existing local IPMI device but no `ipmitool`; no package/module install, appliance login/write, outlet/power or port/VLAN action was performed by these checks. BMC/PDU masks and current router export remain to be resolved before their affected cutover.
+  - `[ ]` After Phase 0.6 establishes the accepted router baseline, plan the serving router's pool/prefix and remaining client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.
+  - `[ ]` Change only remaining approved host/client masks and, if still required, the legacy router prefix in the documented order while retaining the native management L2, addresses and interim router DNS/DHCP. Account for derived routes/rules; do not rerun completed host/client migrations.
   - `[ ]` Check both directions to the operator, gateway, PVE quorum, Talos/etcd/API VIP, ingress VIP and NAS after each bounded batch. Stop and restore the affected previous values on failure; do not proceed to VLAN tagging to fix an unresolved mask problem.
-4. **Prove VLAN paths while OPNsense still serves clients.**
-  - `[ ]` Activate one approved test port/VLAN path and matching gateway/firewall/NAT policy. Use OPNsense DHCP/DNS for any pilot clients where the surveyed engine supports it; a static test client is acceptable before client DHCP is staged.
+4. **Prove VLAN paths after VyOS acceptance, before Technitium handoff.**
+  - `[ ]` Activate one approved test port/VLAN path and matching VyOS gateway/firewall/NAT policy. Use the agreed interim VyOS DHCP/DNS for pilot clients; a static test client is acceptable before client DHCP is staged.
   - `[ ]` Verify address, `/24`, gateway, expected DHCP server/DNS options, internet policy and return traffic from a real LAN client. WSL reachability alone cannot prove DHCP broadcasts, VLAN membership or isolation.
   - `[ ]` Complete the required switch/AP/PVE/LXC paths with Technitium DHCP still guarded; verify scope-local `.30` DNS listeners and firewall exposure. Do not put the same `10.0.10.0/24` address space on both native and tagged router interfaces.
 5. **Approve and perform the DNS/DHCP handoff, then expand.**
   - `[ ]` Reconcile outstanding leases, reservations and pool exclusions for each broadcast domain; keep a rollback lease map so neither authority reissues an address already in use
-  - `[ ]` After supporting paths/interfaces pass, approve the exact handoff batch. Disable OPNsense DHCP for that domain before enabling its Technitium scope, then renew test clients and verify DNS. Keep unmigrated domains on OPNsense; do not enable every scope at once.
+  - `[ ]` After supporting paths/interfaces pass, approve the exact handoff batch. Disable VyOS DHCP for that domain before enabling its Technitium scope, then renew test clients and verify DNS. Keep unmigrated domains on their accepted interim authority; do not enable every scope at once.
   - `[ ]` Verify VLAN-local DNS, public resolution and `owl.red` answers from LAN clients, gateway-dependent hosts and existing pods before changing their configured resolver path or enforcing DNS egress
   - `[ ]` Migrate small client groups, test required camera/printer/media flows, and perform the separately planned management-tag transition with the tested operator/recovery port still available. On DHCP rollback, disable the new authority before restoring the old one and account for leases issued in the interim.
   - `[ ]` Close G2 only after the coordinated resolver change is verified; tighten DNS policy last. Remove temporary paths and stale active `/16` configuration after acceptance, but retain dated audit/history references.
@@ -324,11 +369,12 @@ recovery and connectivity requirements.
 ### 1.6 Captive Portal (`captive.owl.red`)
 
 - **Requires:** a working VLAN 30 L2/L3 path, verified DNS/DHCP options and isolation from 1.1/1.3/1.5; the portal does not gate initial VLAN preparation
-- `[ ]` Verify OPNsense captive portal zone is bound to VLAN 30
+- `[ ]` Select a proven enforcement engine/placement compatible with the VyOS guest path; a central web/auth service alone is not enforcement, and the weak WAP must not host the heavy portal service
+- `[ ]` Validate unauthenticated/authenticated enforcement for IPv4 and applicable IPv6 without exposing management or bypassing guest isolation
 - `[ ]` Confirm `captive.owl.red` resolves from VLAN 30 clients
 - `[ ]` Test: unauthenticated VLAN 30 client hits splash page
 - `[ ]` Test: authenticated client reaches internet, blocked from other VLANs
-- `[ ]` DHCP Option 114 (`RFC 8910`) set on VLAN 30 scope in Technitium
+- `[ ]` Serve a valid CAPPORT API and HTTPS portal; use captive HTTP discovery/option 114, not interception of arbitrary HTTPS. Replace the OPNsense-specific endpoint before advertising it from the accepted DHCP authority, finally Technitium.
 
 ---
 
@@ -347,7 +393,7 @@ recovery and connectivity requirements.
 Audit baseline: Tailscale is online on the NAS, but MagicDNS is disabled. This
 does not prove management-subnet routing, split-DNS, or an exit-node design.
 
-- `[ ]` Choose exit node placement (OPNsense plugin vs. dedicated LXC vs. k8s pod)
+- `[ ]` Review whether an additional exit node is needed beyond the running NAS connector; choose a supported placement without requiring an OPNsense plugin or bundling it into the router swap
 - `[ ]` Deploy Tailscale on chosen host
 - `[ ]` Confirm `owl.red` split-DNS via Tailscale MagicDNS or override to Technitium
 - `[ ]` Verify VLAN 10 services reachable over Tailscale from outside network
@@ -384,7 +430,7 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 - `[ ]` Home Assistant `homeassistant.http.use_x_forwarded_for` + trusted proxy set to Traefik pod CIDR
 - `[ ]` IoT device discovery: HA needs mDNS/multicast access to VLAN 40/50
   - Either run HA with `hostNetwork: true` on a dedicated node
-  - Or configure mDNS repeater / Avahi proxy on OPNsense between VLANs
+  - Or use native VyOS mDNS repetition on only the reviewed interfaces; allow required discovery/service flows without broad IoT-to-management access
 - `[ ]` Integrate ecobee, Bambu A1, Canon printer once network is correct
 
 ---
@@ -455,14 +501,14 @@ For services that should be reachable from the internet without opening inbound 
 
 - **Requires:** G2/G3 and a fresh authenticated firewall exposure review. The public unproxied wildcard A record was still present in the audit; inventory dependencies/DDNS ownership before removing it under ADR 012.
 - `[ ]` Decide which services get public exposure (start with zero — add deliberately)
-- `[ ]` Create Cloudflare Tunnel in Cloudflare dashboard; save tunnel token to Bitwarden
+- `[ ]` Codify the Cloudflare Tunnel and required Access policies in the selected account IaC lane; inject connector credentials from Bitwarden without a second dashboard-only configuration writer
 - `[ ]` Deploy `cloudflared` connector:
   - Option A: k8s Deployment in its own namespace (`cloudflared`)
   - Option B: LXC on `edge.pve` — simpler, no k8s dependency
   - **Likely: k8s Deployment so it benefits from cluster HA**
 - `[ ]` Configure tunnel routes in `cloudflared` config (ingress rules by hostname)
 - `[ ]` Verify public hostname resolves via Cloudflare and traffic reaches internal service through Traefik
-- `[ ]` Firewall rule: confirm OPNsense allows `cloudflared` egress to Cloudflare IPs only
+- `[ ]` Codify scoped VyOS connector egress: Cloudflare's documented destinations, outbound UDP/TCP `7844` for QUIC/HTTP2, required DNS and feature-specific HTTPS endpoints. No inbound web forward; keep local access independent of the tunnel.
 - See: `docs/decisions/012-cloudflare-tunnel-no-inbound-port-forwarding.md`
 
 ---
@@ -537,7 +583,7 @@ Every Proxmox workload must be reproducible from `terraform/proxmox/`. Manual `q
 ### 13.1 Audit Current State
 - `[x]` List all VMs and LXCs across all nodes: 8 running guests on 6 PVE hosts, verified 2026-10-14 via `pvesh get /cluster/resources --type vm`
 - `[x]` Cross-reference local Terraform state metadata: Technitium, 4 Talos VMs and NAS are present; router/PDM scaffold roots have no local state file (verified 2026-10-14)
-- `[ ]` Complete the protected guest imports with no-op plans; do not recreate the live router, NAS or PDM to bypass an import
+- `[ ]` Complete required protected guest imports with no-op plans; do not recreate NAS/PDM or apply the live router scaffold to bypass an import. OPNsense stays frozen for rollback; its adoption is not a prerequisite for the separate VyOS resource.
 - `[x]` Correct G4's five invalid NIC block declarations offline; touched-file formatting and local module validation pass with zero errors (2026-10-14). This does not authorize a plan/apply or close G4.
 
 ### 13.2 Import / Codify Existing Workloads
@@ -545,7 +591,8 @@ Known workloads — add `.tf` file per workload, import into state:
 
 | Workload | Node | VMID | Status |
 |----------|------|------|--------|
-| `edge.owl.red` (OPNsense VM) | edge.pve | 100 | `[~]` scaffold `terraform/proxmox/opnsense-vm/` — import pending |
+| `edge.owl.red` (OPNsense VM) | edge.pve | 100 | `[~]` scaffold `terraform/proxmox/opnsense-vm/`; retain live/rollback VM, no replacement through this resource |
+| VyOS replacement VM | edge.pve | TBD, separate unused ID | `[ ]` Phase 0.6; declare before staging, direct PCI attached only during approved cutover |
 | `nas.owl.red` (Unraid VM) | storage.pve | 101 | `[x]` `terraform/proxmox/nas/nas.tf` |
 | Technitium LXC | edge.pve | 200 | `[x]` `terraform/proxmox/technitium/technitium-lxc.tf` |
 | PDM LXC | cp1.pve | 231 | `[~]` scaffold `terraform/proxmox/pdm/` — import pending |
@@ -555,7 +602,7 @@ Known workloads — add `.tf` file per workload, import into state:
 | Talos cp3.k8s VM | cp3.pve | 603 | `[x]` `main.tf` (`control_planes`) |
 | Talos worker1.k8s VM | worker1.pve | 604 | `[x]` `main.tf` (`workers`) |
 
-- `[ ]` `terraform -chdir=terraform/proxmox/<workload> import <resource> <vmid>` for each
+- `[ ]` Import only existing workloads being adopted into their reviewed roots; the new VyOS VM is created separately, not imported as VM 100
 - `[ ]` Verify `terraform plan` shows no diff after import
 - `[ ]` All new workloads going forward: `.tf` first, then `apply`
 
@@ -585,7 +632,7 @@ Known workloads — add `.tf` file per workload, import into state:
 - `[ ]` Create logical network diagram:
   - Physical layer: switch ports, SFP+ links, WAP trunk
   - VLAN layer: per-VLAN subnets, DHCP ranges, gateway IPs
-  - Service layer: Technitium, OPNsense, Traefik VIP, MetalLB pool
+  - Service layer: Technitium, VyOS target (OPNsense until accepted replacement), Traefik VIP, MetalLB pool
 - `[ ]` Export to `docs/diagrams/network-logical.svg`
 - `[ ]` Create physical layer diagram (which NIC connects where)
 - `[ ]` Export to `docs/diagrams/network-physical.svg`
@@ -608,7 +655,7 @@ Known workloads — add `.tf` file per workload, import into state:
 Do this last — docs written after everything is running are accurate.
 
 ### 15.1 Guides (create in `docs/guides/`)
-- `[ ]` `opnsense-terraform.md` — bootstrap API user, run terraform, import workflow
+- `[ ]` Document the VyOS image/configuration/bootstrap, confirmed-commit/save, exclusive PCI handoff, rollback and read-only troubleshooting workflow before use; keep the existing OPNsense runbook as interim/recovery documentation
 - `[ ]` `talos-iac.md` — full Talos VM → config → bootstrap → upgrade sequence
 - `[x]` `proxmox-terraform.md` — cluster IaC coverage audit, passthrough commands, add-a-node (incl. Talos) — done 2026-06-18
 - `[ ]` `fleet-gitops.md` — how Fleet watches this repo, how to add a new app
@@ -619,11 +666,12 @@ Do this last — docs written after everything is running are accurate.
 - `[ ]` `mail-server.md` — user creation, SMTP relay config for services
 
 ### 15.2 Decisions (create in `docs/decisions/`)
-- `[x]` `016-opnsense-terraform.md` — OPNsense config: Terraform-primary + manual floor (done 2026-06-19)
+- `[x]` `016-opnsense-terraform.md` — historical OPNsense Terraform/manual-floor decision; superseded for the target router by ADR 022, retained for interim ownership
 - `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
 - `[x]` `018-storage-backend.md` — NFS-from-NAS now, Longhorn later (created 2026-06-18)
 - `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
 - `[x]` `021-unraid-hybrid-iac.md` — hybrid API/File/Manual IaC for the Unraid NAS (done 2026-06-18)
+- `[x]` [022-vyos-router-replacement.md](docs/decisions/022-vyos-router-replacement.md) — single VyOS Stream VM, direct PCI passthrough, staged same-IP replacement, no HA requirement, read-only diagnosis (accepted 2026-10-16; not deployed)
 
 ### 15.3 README
 - `[ ]` Update README workload table to reflect final state
@@ -639,16 +687,16 @@ Two layers: a free consolidation fix (do first), and an optional GNSS stratum-1
 appliance (resilience / hobby). Nothing in the stack *requires* high-precision time
 (etcd/TLS/logs tolerate ordinary NTP), so 16.1 is the real win and 16.2 is optional.
 
-### 16.1 Point everything at OPNsense as the LAN NTP server (free, do first)
+### 16.1 Keep The Router As The LAN NTP Endpoint
 Audit baseline: Unraid already points at `10.0.10.1`; PVE hosts use public chrony
 sources, and Talos reports synchronized time without an explicit LAN server.
-**Decision: OPNsense (`10.0.10.1`) is the single internal NTP
-authority for the LAN.** Every host points at it; OPNsense itself uses the public
-pool as upstream. (If/when the GNSS appliance in 16.2 exists, it feeds OPNsense as an
-additional source.)
+**Target:** keep `10.0.10.1` as the internal NTP endpoint. Preserve existing
+OPNsense service during preparation and configure native VyOS NTP for replacement,
+with public upstream sources. A future GNSS appliance is an additional source,
+not a router/VLAN migration prerequisite. Do not change all client time settings
+during the router swap.
 
-- `[ ]` Confirm OPNsense NTP service is enabled and serving on `10.0.10.1`
-  (Services → Network Time → General); restrict to LAN VLANs
+- `[ ]` Verify baseline NTP consumers/service and native VyOS service parity at `10.0.10.1` during Phase 0.6; restrict access to approved LAN sources
 - `[ ]` Point all hosts at `10.0.10.1` (manage via IaC where possible):
   - `[x]` Unraid — NTP set to `10.0.10.1`; now owned by `terraform/unraid/` (GraphQL
     `updateSystemTime`). `NTP_SERVER1=10.0.10.1` and empty 2-4 reverified 2026-10-14.

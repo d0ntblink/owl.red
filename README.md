@@ -109,6 +109,13 @@ Access rule: these service VIPs are intended for LAN clients. They only work whe
 
 Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it uses physical PCIe NIC passthrough (`hostpci`). Do not plan routine live or offline migration of this VM.
 
+Selected replacement: [ADR 022](docs/decisions/022-vyos-router-replacement.md)
+chooses one VyOS Stream VM on the same host with direct WAN/LAN PCI passthrough,
+the same gateway IP and no HA requirement. OPNsense remains live until the staged
+replacement passes its separately approved cutover. The tables above are not
+claims of a deployed VyOS router; follow [the roadmap](ROADMAP.md) for preparation,
+the paused OPNsense rollback baseline and later VLAN/DNS-DHCP work.
+
 ---
 
 ## Front Patching
@@ -357,31 +364,34 @@ operational action; see the [Technitium guide](gitops/technitium/README.md).
 
 ### Guest VLAN Captive Portal
 
-The following is target configuration, not a verified live portal. The October
-audit could not authenticate to OPNsense and `captive.owl.red` was NXDOMAIN.
+The portal is a target, not a verified live service; `captive.owl.red` was
+NXDOMAIN in the October audit. Under [ADR 022](docs/decisions/022-vyos-router-replacement.md),
+select a proven enforcement engine and placement for the VyOS guest path before
+guest activation. A central web/auth service alone does not enforce access, and
+the weak WAP must not host the heavy portal service.
 
 | Setting | Value | Notes |
 |---------|-------|-------|
-| Zone | VLAN 30 on LAN trunk | OPNsense captive portal zone |
+| Enforcement | VLAN 30 on LAN trunk | Engine/placement undecided; cover IPv4 and applicable IPv6 |
 | Authentication | Splash-only | Future voucher or RADIUS possible |
-| Idle / hard timeout | `0 / 0` | No forced disconnect |
-| Portal hostname | `https://captive.owl.red` | Must resolve and be reachable from guest VLAN |
-| DHCP Option 114 | `https://captive.owl.red:8000/api/captiveportal/access/api` | RFC 8910 captive portal API |
-| Fallback endpoint | `https://10.0.30.1:8000/api/captiveportal/access/api` | Direct IP path if DNS is down |
+| Idle / hard timeout | `0 / 0` target | Validate against the chosen engine |
+| Portal hostname | `https://captive.owl.red` | Working guest DNS, trusted TLS and pre-auth reachability required |
+| DHCP Option 114 | API URL from the chosen engine, not yet selected | Advertise a real CAPPORT API, not the splash page or old OPNsense endpoint |
 
-The portal policy below is a target to validate against the installed OPNsense
-version, not an audited rule set. During preparation, guest DNS remains on
-OPNsense. At the approved final handoff, permit the VLAN-local Technitium DNS
-endpoint instead; do not enable final DNS blocking before testing the new path.
+Validate policy against the chosen engine, not an assumed OPNsense zone. The
+serving router provides agreed interim DNS until the approved final handoff to
+the VLAN-local Technitium endpoint. Do not enable final DNS blocking early.
 
 Firewall behavior for the guest VLAN should remain ordered as follows:
-1. Allow DNS to the current approved resolver (OPNsense during preparation; Technitium `10.0.30.30` after handoff).
-2. Redirect guest HTTP and HTTPS to the captive portal.
-3. Maintain the authenticated captive portal alias.
+1. Allow required DHCP, approved DNS and the specific portal/discovery endpoints before authentication.
+2. Support captive HTTP discovery and CAPPORT with a valid HTTPS portal; do not intercept arbitrary HTTPS.
+3. Maintain authenticated client state through the chosen enforcement engine.
 4. Allow authenticated guests to reach the internet.
-5. Deny unauthenticated guest traffic.
+5. Deny other unauthenticated traffic; verify IPv6 cannot bypass enforcement.
 
-Guest isolation rules should explicitly block access from VLAN 30 to VLANs 10, 20, 40, and 50, block direct access to OPNsense except approved portal functions and transitional DNS, and block multicast discovery traffic (`224.0.0.0/4`).
+Guest isolation must block access from VLAN 30 to VLANs 10, 20, 40 and 50 except
+the specific approved infrastructure endpoints, and deny router management.
+Block cross-VLAN discovery while retaining required local IPv6 control traffic.
 
 ### Power and Recovery
 
