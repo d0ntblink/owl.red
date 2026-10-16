@@ -106,6 +106,24 @@ Recorded MACs and prior addresses were not re-probed during this allocation upda
 
 ## Allocation Status
 
+### Live Attachment Evidence
+
+Read-only follow-up, 2026-10-15 UTC; target allocations above are unchanged.
+
+| MAC | Current Evidence | Interpretation |
+|-----|------------------|----------------|
+| `84:3a:5b:87:91:dd` | Operator USB Ethernet, connected at `10.0.10.174/16`, gateway `.1`, DNS `.30` | Active management NIC; owner identifies switch port 22 (`cab-trunk`). No new fixed target lease is assigned by this observation. |
+| `5c:87:9c:fa:10:f4` | Operator Wi-Fi disconnected, retaining `10.0.10.180/16` in Windows | Historical/cache state is not an active recovery link; do not silently replace its approved target reservation with the USB NIC. |
+| `24:fb:e3:7c:cf:da` | Router lease `.112` with hostname `KAM1WL102916` | Different from the older recorded Wi-Fi MAC; verify the laptop's actual NIC before updating registry metadata. Remains dynamic. |
+| `02:32:6d:84:75:0e` | Router ARP for NAS `.5`; matches NAS-local `vhost0` macvtap | Physical NAS NIC/reservation remains `f8:f2:1e:48:91:40`. Do not prune or rewrite based on the ARP mismatch alone. |
+| `6c:fe:54:70:08:31` | Current OPNsense LAN `ixl1`, `10.0.10.1/16` | Use the live passthrough-interface identity for planning; the older VM-vNIC record is not evidence of the current LAN attachment. |
+
+All current router lease/LAN ARP addresses are inside `10.0.10.0/24`; the owner
+reports the old outside-range work-laptop address is historical. This snapshot
+cannot prove absence of offline/static clients. Switch port 18 is now linked,
+but its AP-labelled device and recorded management endpoint are not verified.
+See the [mask/recovery assessment](issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+
 - The [DHCP registry](../gitops/technitium/dhcp-reservations.json) is the machine-consumed source for target allocations. Confirmed reservations have matching [DNS records](../gitops/technitium/zones/owl.red.zone), except the existing PDM ingress/backend split.
 - The tablet's VLAN 20 address is reserved in the plan only: `status: pending`, lease MAC `TBD`, and no static DNS record. Verify the MAC on its target SSID before confirming the lease. Current SSH/ADB endpoints are unchanged.
 - The work laptop is recorded under VLAN 20 `dynamicClients` metadata, which the sync ignores. It must remain dynamic rather than receive an invented fixed lease.

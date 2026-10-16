@@ -61,6 +61,33 @@ No VLAN interfaces; no custom aliases / rules / NAT / overrides. **Nothing to im
 so this module currently declares **no resources** and `plan` shows **no changes**. It is
 the ready lane for the VLAN transition (§1); forward-looking drafts sit in `planned/`.
 
+## DHCP Range And Recovery Preparation
+
+The audited serving engine is Dnsmasq, not Kea. Its LAN range ends at
+`10.0.10.200`, overlapping the MetalLB pool that starts there. The minimal
+candidate is to retain the start address and change only the range end to
+`10.0.10.199`, matching the target allocation. Refresh both systems before
+review: a source edit or a smaller future range does not resolve an address
+already leased or allocated.
+
+Do not apply Kea resources to this Dnsmasq instance or infer provider support
+from the existence of an appliance API. Verify the locked provider's schema
+before choosing an owning automation path. This preparation is not permission
+to add a second writer, change the DHCP engine, import a whole configuration,
+or apply the provider-only root as a repair.
+
+Before an approved range change, retain the exact range object and lease/
+reservation evidence privately, verify the router backup download/restore
+path, and review the inverse with current `.200` ownership on both systems.
+A full router export can contain credentials and private keys: never print it
+or put it in Git. Keep local trusted copies owner-only and protect copies
+leaving that trusted controller. A backup download is not a restore rehearsal;
+do not invoke revert/import or reboot merely to test it.
+
+This candidate leaves LAN `10.0.10.1/16`, VLANs, client DNS/DHCP authority,
+existing reservations and lease timing unchanged. Any required Dnsmasq service
+reconfiguration and its interruption risk need explicit review and approval.
+
 ## Running
 ```
 export BW_SESSION="$(bw unlock --raw)"
