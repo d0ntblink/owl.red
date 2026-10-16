@@ -1,0 +1,268 @@
+firewall {
+    ipv4 {
+        forward {
+            filter {
+                default-action drop
+                default-log
+                rule 10 {
+                    action accept
+                    state established
+                    state related
+                }
+                rule 20 {
+                    action drop
+                    log
+                    state invalid
+                }
+                rule 100 {
+                    action accept
+                    description "LAB-LAN-TO-WAN"
+                    inbound-interface {
+                        name {{ vyos_lab.lan_interface }}
+                    }
+                    outbound-interface {
+                        name {{ vyos_lab.wan_interface }}
+                    }
+                    source {
+                        address {{ vyos_lab.subnet }}
+                    }
+                }
+                rule 200 {
+                    action accept
+                    description "LAB-PLEX-DNAT"
+                    destination {
+                        address {{ vyos_lab.nas_address }}
+                        port 32400
+                    }
+                    inbound-interface {
+                        name {{ vyos_lab.wan_interface }}
+                    }
+                    protocol tcp
+                }
+            }
+        }
+        input {
+            filter {
+                default-action drop
+                default-log
+                rule 10 {
+                    action accept
+                    state established
+                    state related
+                }
+                rule 20 {
+                    action drop
+                    log
+                    state invalid
+                }
+                rule 30 {
+                    action accept
+                    inbound-interface {
+                        name lo
+                    }
+                }
+                rule 40 {
+                    action accept
+                    destination {
+                        port 67
+                    }
+                    inbound-interface {
+                        name {{ vyos_lab.lan_interface }}
+                    }
+                    protocol udp
+                    source {
+                        port 68
+                    }
+                }
+                rule 50 {
+                    action accept
+                    destination {
+                        port 68
+                    }
+                    inbound-interface {
+                        name {{ vyos_lab.wan_interface }}
+                    }
+                    protocol udp
+                    source {
+                        port 67
+                    }
+                }
+                rule 60 {
+                    action accept
+                    destination {
+                        port "22,53"
+                    }
+                    inbound-interface {
+                        name {{ vyos_lab.lan_interface }}
+                    }
+                    protocol tcp
+                    source {
+                        address {{ vyos_lab.subnet }}
+                    }
+                }
+                rule 70 {
+                    action accept
+                    destination {
+                        port "53,123"
+                    }
+                    inbound-interface {
+                        name {{ vyos_lab.lan_interface }}
+                    }
+                    protocol udp
+                    source {
+                        address {{ vyos_lab.subnet }}
+                    }
+                }
+                rule 80 {
+                    action accept
+                    inbound-interface {
+                        name {{ vyos_lab.lan_interface }}
+                    }
+                    protocol icmp
+                    source {
+                        address {{ vyos_lab.subnet }}
+                    }
+                }
+            }
+        }
+    }
+    ipv6 {
+        forward {
+            filter {
+                default-action drop
+                default-log
+            }
+        }
+        input {
+            filter {
+                default-action drop
+                default-log
+            }
+        }
+    }
+}
+interfaces {
+    ethernet {{ vyos_lab.wan_interface }} {
+        address dhcp
+        description "ISOLATED-LAB-WAN"
+        hw-id {{ vyos_lab.wan_mac }}
+    }
+    ethernet {{ vyos_lab.lan_interface }} {
+        address {{ vyos_lab.address }}
+        description "ISOLATED-LAB-LAN"
+        hw-id {{ vyos_lab.lan_mac }}
+    }
+    loopback lo {
+    }
+}
+nat {
+    destination {
+        rule 100 {
+            description "LAB-PLEX"
+            destination {
+                port 32400
+            }
+            inbound-interface {
+                name {{ vyos_lab.wan_interface }}
+            }
+            protocol tcp
+            translation {
+                address {{ vyos_lab.nas_address }}
+                port 32400
+            }
+        }
+    }
+    source {
+        rule 100 {
+            description "LAB-MASQUERADE"
+            outbound-interface {
+                name {{ vyos_lab.wan_interface }}
+            }
+            source {
+                address {{ vyos_lab.subnet }}
+            }
+            translation {
+                address masquerade
+            }
+        }
+    }
+}
+service {
+    dhcp-server {
+        listen-interface {{ vyos_lab.lan_interface }}
+        shared-network-name LAB {
+            authoritative
+            subnet {{ vyos_lab.subnet }} {
+                lease {{ vyos_lab.lease_seconds }}
+                option {
+                    default-router {{ vyos_lab.gateway }}
+                    domain-name {{ vyos_lab.domain }}
+                    name-server {{ vyos_lab.gateway }}
+                }
+                range 0 {
+                    start {{ vyos_lab.dhcp_start }}
+                    stop {{ vyos_lab.dhcp_stop }}
+                }
+                static-mapping nas {
+                    ip-address {{ vyos_lab.nas_address }}
+                    mac {{ vyos_lab.nas_mac }}
+                }
+                subnet-id 10
+            }
+        }
+    }
+    dns {
+        forwarding {
+            allow-from 127.0.0.0/8
+            allow-from {{ vyos_lab.subnet }}
+            listen-address 127.0.0.1
+            listen-address {{ vyos_lab.gateway }}
+        }
+    }
+    ntp {
+        allow-client {
+            address {{ vyos_lab.subnet }}
+        }
+        listen-address {{ vyos_lab.gateway }}
+{% for server in vyos_lab.ntp_servers %}
+        server {{ server }} {
+        }
+{% endfor %}
+    }
+    ssh {
+        disable-password-authentication
+        listen-address {{ vyos_lab.gateway }}
+        port 22
+    }
+}
+system {
+    config-management {
+        commit-confirm {
+            action reload
+        }
+    }
+    console {
+        device ttyS0 {
+            speed 115200
+        }
+    }
+    domain-name {{ vyos_lab.domain }}
+    host-name {{ vyos_lab.hostname }}
+    login {
+        user {{ vyos_lab.user }} {
+            authentication {
+                public-keys controller {
+                    key {{ vyos_ssh_key_parts[1] | to_json }}
+                    type ssh-ed25519
+                }
+            }
+        }
+    }
+    name-server 127.0.0.1
+    static-host-mapping {
+        host-name nas.{{ vyos_lab.domain }} {
+            inet {{ vyos_lab.nas_address }}
+        }
+    }
+    time-zone UTC
+}

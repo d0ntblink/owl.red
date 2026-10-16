@@ -47,6 +47,46 @@ Terraform provider locks, Nixpkgs inputs and chart versions are different layers
 Adding a dependency requires updating this guide and the owning automation or
 dependency declaration, not relying on an undocumented local installation.
 
+## VyOS Image And Offline Preparation
+
+Use [the release manifest](../../vyos/image.json) for the exact Stream image,
+signature URL and Stream signing key, not a rolling/nightly image or key. A
+downloaded image is not verified until Minisign accepts its signature; record
+the resulting SHA-256 before treating the manifest as a locked build input.
+
+The preparation lane uses the existing Ansible environment and built-in modules.
+Image verification requires Minisign `0.11`; ISO inspection uses `bsdtar` from
+Ubuntu's `libarchive-tools` and `unsquashfs` from `squashfs-tools`. These are
+controller tools, not packages to install on OPNsense or Proxmox. For a normal
+Ubuntu controller installation, run this yourself if sudo needs a password:
+
+```bash
+sudo apt-get install minisign libarchive-tools squashfs-tools
+```
+
+Alternatively, use `apt-get download` for exact versions from the controller's
+authenticated Ubuntu package indexes and `dpkg-deb -x` into a private local
+preparation directory. This does not run package installation scripts or require
+root. Keep any matching shared libraries in that same prefix, scope library-path
+overrides to the inspection command, and record package versions/checksums.
+Neither method changes appliance configuration. Local rendering and image/schema
+inspection are not a native boot, hardware or production acceptance test.
+
+The [localhost renderer](../../ansible/playbooks/vyos-render.yml) needs the
+existing controller Ansible/PyYAML environment and an Ed25519 public key; no
+VyOS collection, Bitwarden unlock, router credential or target Python is needed
+for this render-only step. It writes only under `~/.local/state/owl-red/` and
+refuses production profiles.
+
+[Focused tests](../../scripts/vyos-config.test.mjs) additionally use Node.js 20+
+(tested with `24.21.0`), OpenSSH `ssh-keygen` and a controller Python executable.
+They default to `.venv/bin/ansible-playbook` and `.venv/bin/python`, with explicit
+`ANSIBLE_PLAYBOOK`/`PYTHON` overrides. The native compatibility test needs
+`VYOS_NATIVE_ROOT` pointing to the authenticated image extraction and compatible
+libc/libm/libpcre2-8 libraries to load its real `libvyosconfig.so.0`. Missing that
+fixture is a reported skip, not release acceptance. See the
+[preparation workflow](../../vyos/README.md) for extraction and commands.
+
 ## Ubuntu And WSL Installation
 
 Run package installation directly in an interactive local terminal when sudo

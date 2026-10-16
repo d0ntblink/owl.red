@@ -1,0 +1,25 @@
+{
+  "channel": "rolling",
+  "release": "2026.10.16-0024-rolling",
+  "architecture": "amd64",
+  "filename": "vyos-2026.10.16-0024-rolling-generic-amd64.iso",
+  "url": "https://github.com/vyos/vyos-nightly-build/releases/download/2026.10.16-0024-rolling/vyos-2026.10.16-0024-rolling-generic-amd64.iso",
+  "signature_url": "https://github.com/vyos/vyos-nightly-build/releases/download/2026.10.16-0024-rolling/vyos-2026.10.16-0024-rolling-generic-amd64.iso.minisig",
+  "minisign_public_key": "RWSIhkR/dkM2DSaBRniv/bbbAf8hmDqdbOEmgXkf1RxRoxzodgKcDyGq",
+  "sha256": "dcd4b4328495e70de067ec806ee4aabdd6b3f6f4cae90aebe571ee7cacd1556c",
+  "verified": true,
+  "release_page": "https://github.com/vyos/vyos-nightly-build/releases/tag/2026.10.16-0024-rolling",
+  "build_git": "",
+  "build_uuid": "ae7b6104-8d03-4b05-952b-abd3c725e52b",
+  "purpose": "isolated-lab-candidate",
+  "suricata_decision": "qualify-native-ids-on-pinned-rolling",
+  "crowdsec_decision": "required-in-design-not-deployed",
+  "qualification": {
+    "native_suricata": true,
+    "native_crowdsec": false,
+    "native_remote_groups": true,
+    "native_boot_tested": false,
+    "boot_firewall_ordering_verified": false,
+    "production_approved": false
+  }
+}

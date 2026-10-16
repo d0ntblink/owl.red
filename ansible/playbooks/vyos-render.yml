@@ -1,0 +1,78 @@
+---
+- name: Render an isolated VyOS lab candidate without deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars_files:
+    - ../../vyos/baseline.yml
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    vyos_profile: lab
+    vyos_output_dir: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/vyos-lab"
+    vyos_public_key_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_owl_ansible.pub"
+    vyos_image: "{{ lookup('file', playbook_dir ~ '/../../vyos/image.json') | from_json }}"
+    vyos_ssh_key_parts: "{{ lookup('file', vyos_public_key_file).split() }}"
+  tasks:
+    - name: Refuse deployment profiles and unsafe output paths
+      ansible.builtin.assert:
+        that:
+          - vyos_profile == 'lab'
+          - ansible_connection | default('local') == 'local'
+          - vyos_image.verified is sameas true
+          - vyos_image.sha256 is match('^[a-f0-9]{64}$')
+          - vyos_image.purpose == 'isolated-lab-candidate'
+          - vyos_output_dir is match('^' ~ ((lookup('env', 'HOME') ~ '/.local/state/owl-red/') | regex_escape))
+          - "'..' not in vyos_output_dir.split('/')"
+        fail_msg: >-
+          This playbook only renders an isolated lab candidate into a private
+          controller directory. Production preparation and deployment are not
+          implemented; no router, VM or PCI operation is permitted here.
+
+    - name: Keep the lab model separate from production identities
+      ansible.builtin.assert:
+        that:
+          - vyos_lab.wan_interface == 'eth0'
+          - vyos_lab.lan_interface == 'eth1'
+          - vyos_lab.wan_mac == '02:76:79:00:00:01'
+          - vyos_lab.lan_mac == '02:76:79:00:00:02'
+          - vyos_lab.subnet == '192.0.2.0/24'
+          - vyos_lab.address == '192.0.2.1/24'
+          - vyos_lab.gateway == '192.0.2.1'
+          - vyos_lab.dhcp_start == '192.0.2.100'
+          - vyos_lab.dhcp_stop == '192.0.2.199'
+          - vyos_lab.nas_address == '192.0.2.5'
+          - vyos_lab.nas_mac == '02:76:79:00:00:05'
+          - vyos_lab.domain == 'lab.owl.invalid'
+          - vyos_lab.hostname == 'owl-vyos-lab'
+          - vyos_lab.user == 'owl-ansible'
+          - vyos_lab.lease_seconds | int == 86400
+          - vyos_lab.ntp_servers == ['0.pool.ntp.org', '1.pool.ntp.org']
+        fail_msg: The lab profile cannot be repurposed as a production configuration.
+
+    - name: Require an Ed25519 public bootstrap key
+      ansible.builtin.assert:
+        that:
+          - vyos_ssh_key_parts | length >= 2
+          - vyos_ssh_key_parts[0] == 'ssh-ed25519'
+          - vyos_ssh_key_parts[1] is match('^[A-Za-z0-9+/]+={0,2}$')
+        fail_msg: Provide the controller public .pub file, never its private key.
+
+    - name: Create the private local artifact directory
+      ansible.builtin.file:
+        path: "{{ vyos_output_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Render the native candidate locally
+      ansible.builtin.template:
+        src: ../../vyos/config.boot.j2
+        dest: "{{ vyos_output_dir }}/candidate.config"
+        mode: "0600"
+      diff: false
+
+    - name: Report the preparation boundary
+      ansible.builtin.debug:
+        msg: >-
+          Rendered {{ vyos_output_dir }}/candidate.config for an isolated lab.
+          No router connection, native commit, VM creation or PCI assignment ran.
