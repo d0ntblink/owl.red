@@ -46,3 +46,21 @@ jobs:
           node-version: "24"
       - name: Exercise offline packet-capture coordination
         run: node --test scripts/capture-dhcp-authority.test.mjs
+
+  opnsense-range:
+    name: OPNsense range guard (offline only)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the tested controller version for loopback fixtures
+        run: python -m pip install 'ansible-core==2.16.3'
+      - name: Exercise range guards against a local fake API
+        run: node --test scripts/opnsense-dhcp-range.test.mjs
+      - name: Exercise worker-prefix rollback guards offline
+        run: node --test scripts/proxmox-prefix-pilot.test.mjs
