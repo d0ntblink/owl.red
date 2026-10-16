@@ -234,6 +234,37 @@ service {
         listen-address {{ vyos_lab.gateway }}
         port 22
     }
+    suricata {
+        address-group home-net {
+            address {{ vyos_lab.subnet }}
+        }
+        address-group external-net {
+            group "!home-net"
+        }
+{% for name in ['http-servers', 'smtp-servers', 'sql-servers', 'dns-servers', 'telnet-servers', 'dc-servers', 'dnp3-server', 'dnp3-client', 'modbus-client', 'modbus-server', 'enip-client', 'enip-server'] %}
+        address-group {{ name }} {
+            group home-net
+        }
+{% endfor %}
+        address-group aim-servers {
+            group external-net
+        }
+        interface {{ vyos_lab.lan_interface }}
+        log {
+            eve {
+                filetype syslog
+                type alert
+                type anomaly
+            }
+        }
+{% for name, ports in {'http-ports': ['80', '8080'], 'shellcode-ports': ['!80'], 'oracle-ports': ['1521'], 'ssh-ports': ['22'], 'dnp3-ports': ['20000'], 'modbus-ports': ['502'], 'file-data-ports': ['80', '8080', '110', '143'], 'ftp-ports': ['21'], 'geneve-ports': ['6081'], 'vxlan-ports': ['4789'], 'teredo-ports': ['3544']}.items() %}
+        port-group {{ name }} {
+{% for port in ports %}
+            port {{ port | to_json }}
+{% endfor %}
+        }
+{% endfor %}
+    }
 }
 system {
     config-management {

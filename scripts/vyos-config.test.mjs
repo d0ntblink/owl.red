@@ -55,20 +55,29 @@ test('real localhost render is private, isolated and idempotent', () => {
   assert.equal(fs.statSync(outputDirectory).mode & 0o777, 0o700);
   assert.equal(fs.statSync(candidate).mode & 0o777, 0o600);
   assert.match(configuration, /address 192\.0\.2\.1\/24/);
-  assert.doesNotMatch(configuration, /10\.0\.10\.|service suricata|vif /);
+  assert.match(configuration, /suricata \{/);
+  assert.match(configuration, /filetype syslog/);
+  assert.doesNotMatch(configuration, /10\.0\.10\.|vif |action queue|copy-mode ips/);
   const second = render();
   assert.equal(second.status, 0, second.error?.message || second.stdout + second.stderr);
   assert.match(second.stdout, /changed=0\s/);
   assert.equal(fs.readFileSync(candidate, 'utf8'), configuration);
 });
 
-test('production profile, repository output and non-Ed25519 key are refused before rendering', () => {
+test('unsafe profiles, paths, keys and image qualifications are refused before rendering', () => {
   const wrongKey = path.join(temporary, 'wrong-type.pub');
   fs.writeFileSync(wrongKey, 'ssh-rsa invalid-test-key\n', { mode: 0o600 });
+  const image = JSON.parse(fs.readFileSync(path.join(repository, 'vyos/image.json'), 'utf8'));
   const attempts = [
     { vyos_profile: 'production', vyos_output_dir: path.join(temporary, 'production') },
     { vyos_output_dir: rejectedOutput },
     { vyos_public_key_file: wrongKey, vyos_output_dir: path.join(temporary, 'wrong-key') },
+    { vyos_image: { ...image, verified: false }, vyos_output_dir: path.join(temporary, 'unverified') },
+    { vyos_image: { ...image, channel: 'stream' }, vyos_output_dir: path.join(temporary, 'wrong-channel') },
+    {
+      vyos_image: { ...image, qualification: { ...image.qualification, native_suricata: false } },
+      vyos_output_dir: path.join(temporary, 'missing-suricata'),
+    },
   ];
   for (const extra of attempts) {
     const result = render(extra);
@@ -92,6 +101,7 @@ version = json.loads((root / 'usr/share/vyos/version.json').read_text())
 image = json.loads(manifest.read_text())
 assert version['version'] == image['release']
 assert version['build_git'] == image['build_git']
+assert version['build_uuid'] == image['build_uuid']
 assert image['verified'] is True
 spec = importlib.util.spec_from_file_location(
     'signed_vyos_configtree', root / 'usr/lib/python3/dist-packages/vyos/configtree.py'
@@ -113,6 +123,12 @@ expected = [
     ('set', 'system', 'config-management', 'commit-confirm', 'action', 'reload'),
     ('set', 'nat', 'destination', 'rule', '100', 'translation', 'address', '192.0.2.5'),
     ('set', 'service', 'ssh', 'disable-password-authentication'),
+    ('set', 'service', 'suricata', 'interface', 'eth1'),
+    ('set', 'service', 'suricata', 'address-group', 'home-net', 'address', '192.0.2.0/24'),
+    ('set', 'service', 'suricata', 'address-group', 'external-net', 'group', '!home-net'),
+    ('set', 'service', 'suricata', 'port-group', 'http-ports', 'port', '80'),
+    ('set', 'service', 'suricata', 'log', 'eve', 'filetype', 'syslog'),
+    ('set', 'service', 'suricata', 'log', 'eve', 'type', 'alert'),
 ]
 for command in expected:
     assert command in commands, command
@@ -133,7 +149,10 @@ for command in commands:
     if node.name == 'node.tag':
         definition = node.parent / 'node.def'
     assert definition.is_file() and len(remaining) <= 1, command
-assert not tree.exists(['service', 'suricata'])
+assert tree.exists(['service', 'suricata'])
+assert (schema / 'service/suricata/node.def').is_file()
+assert image['channel'] == 'rolling'
+assert image['qualification']['native_suricata'] is True
 assert not tree.exists(['interfaces', 'ethernet', 'eth1', 'vif'])
 print(f'Native grammar and {len(commands)} release schema paths passed; no boot/commit claim')
 `, process.env.VYOS_NATIVE_ROOT, candidate, path.join(repository, 'vyos/image.json')], {

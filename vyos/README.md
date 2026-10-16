@@ -6,18 +6,22 @@ router service, client resolver or VLAN was changed by this preparation.
 
 ## Image Qualification
 
-[image.json](image.json) pins official Stream `2026.03` by URL, Stream signing key,
-SHA-256 and image build revision. Its signature and trusted comment were verified
-with Minisign `0.11`. The image's own version metadata reports `2026.03`, build
-`1cac4fd63750b0`, built on 2026-03-18.
+[image.json](image.json) pins official rolling `2026.10.16-0024-rolling` by its
+dated release URL, rolling signing key and SHA-256. Its signature/trusted comment
+were verified with Minisign `0.11`, and the downloaded digest matches the
+official GitHub asset digest. Image metadata reports that exact version, built
+on 2026-10-16, build UUID `ae7b6104-8d03-4b05-952b-abd3c725e52b`; its embedded
+Git revision is empty, so no commit identity is invented.
 
-**Release-specific gap:** the authenticated filesystem contains no Suricata files
-or native Suricata CLI schema. The current rolling documentation does describe
-that service, but it is not evidence of support in this Stream image. The owner
-explicitly chose to keep Stream and defer onboard Suricata (2026-10-16). Suricata
-is therefore not a core router cutover prerequisite. Do not silently change to
-rolling or install ad hoc router packages; introduce IDS/IPS later as its own
-version-qualified change. The image still needs the core qualification below.
+The owner explicitly selected rolling after the previously inspected Stream
+`2026.03` lacked Suricata. The authenticated rolling filesystem contains its
+binary, native CLI schema and configuration implementation, plus native remote
+firewall groups. It contains no CrowdSec files. Do not confuse that absence
+with CrowdSec being unsupported as an external service or claim it is bundled.
+
+Rolling is a development release. Keep the exact pin, qualify changes before
+upgrading, and retain the previous working image and private configuration.
+Do not track `latest`, auto-upgrade nightly or install unreviewed router packages.
 
 Native boot, semantic commit validation and boot-time firewall ordering have not
 been qualified. The manifest records those limits separately from successful
@@ -34,9 +38,10 @@ and [Phase 0.6](../ROADMAP.md#06-stage-and-accept-the-vyos-replacement).
 - [config.boot.j2](config.boot.j2) renders native VyOS grammar for the lab: DHCP
   WAN, `192.0.2.0/24` LAN, Kea DHCP `.100-.199`, recursive DNS, a sample static
   hostname, NTP, key-only LAN SSH, explicit IPv4/default-deny logging and sample
-  Plex DNAT/SNAT policy. It does not implement Plex reflection or production
-  IPv6 delegation; IPv6 is closed in this lab, not silently disabled for the
-  future production replacement.
+  Plex DNAT/SNAT policy. It includes passive native Suricata capture on the
+  synthetic LAN, address/port variables and EVE alert/anomaly events to syslog.
+  It does not implement Plex reflection or production IPv6 delegation; IPv6 is
+  closed in this lab, not silently disabled for the future production replacement.
 - [vyos-render.yml](../ansible/playbooks/vyos-render.yml) runs only on localhost,
   refuses production profiles, fixes the lab identities and writes a private
   candidate outside Git. It has no SSH/API router connection, native commit,
@@ -64,6 +69,50 @@ profiles, repository output and non-Ed25519 bootstrap keys fail before rendering
 
 Do not use the lab candidate as a production boot file. It uses synthetic MACs,
 the documentation subnet and no production DHCP reservations or live IPv6 setup.
+
+## Layered Security Requirements
+
+These are requested capabilities and qualification tasks, not deployed services:
+
+- Technitium: selected DNS ad/tracker and malicious-domain lists, with source,
+  allowlist, refresh and false-positive handling in Git. Final client DNS
+  enforcement still waits for the approved resolver handoff; do not add early
+  DNS interception or overrides. DNS filtering is not full traffic inspection
+  and cannot reliably remove ads served from the same domains as content.
+- VyOS: curated IP/CIDR feeds such as Spamhaus DROP and a reviewed FireHOL
+  selection. Domain lists and mail DNSBLs are not interchangeable IP feeds.
+  Define traffic direction, IPv4/IPv6 coverage, protected infrastructure,
+  feed overlap, size, fetch validation, staleness and rollback. FireHOL feeds
+  containing bogon/private ranges must not become indiscriminate LAN deny rules.
+- Suricata: qualify native IDS first. On a real lab boot, fetch/maintain rules
+  through the supported native mechanism, validate rule variables and service
+  configuration, and prove a controlled alert reaches the logs. Empty rules or
+  a configured service are not coverage. The current capture block has no inline
+  interface pair or NFQUEUE rule; new IPS blocking requires a separate decision.
+- CrowdSec: qualify an external Security Engine/LAPI, actual log acquisition,
+  parsers/scenarios and a remediation component. A candidate is a private
+  [Blocklist Mirror](https://docs.crowdsec.net/u/bouncers/blocklist-mirror/)
+  consumed by native VyOS remote groups: VyOS owns firewall policy, not a second
+  agent rewriting nftables. Pin service versions and declare ownership before
+  deployment. Test IPv4/IPv6 decisions, expiry/revocation, valid empty feeds,
+  failed refresh, cache staleness and administrative exclusions. Native remote
+  groups retain cached data on fetch failure, so expiry is not guaranteed by
+  polling alone. Decide a bounded stale-data policy before automatic blocking.
+- Tunnelled web traffic: the router sees connector/Cloudflare peers, not the
+  original HTTP visitor. Use verified real-client-IP logs and a compatible
+  proxy/Cloudflare remediation point, never a blanket router ban on those peers.
+  Scope secrets and API access; review Cloudflare plan/quota/failure modes and
+  preserve independent local access. Do not expose LAPI publicly to make this work.
+- Anubis: optional future anti-bot evaluation for anonymous/public browser
+  endpoints only if the chosen Cloudflare protections leave a demonstrated need.
+  Access-authenticated private applications may not need it; Tunnel alone is
+  transport, not anti-bot protection. Do not break APIs/webhooks/automation or
+  turn another browser challenge into a router/Zero Trust migration gate.
+
+Keep detection, visibility and enforcement distinct. None of these layers replaces
+mail-service spam filtering or the base VLAN/firewall isolation policy. CrowdSec
+decisions and downloaded lists are dynamic data, not a second configuration
+authority; their consumption must remain within the reviewed VyOS-owned rules.
 
 ## Focused Checks
 
@@ -96,8 +145,8 @@ VYOS_NATIVE_ROOT="$IMAGE_DIR/native-parser" node --test scripts/vyos-config.test
 Stop if signature/hash verification or extraction fails; do not continue with
 unverified files. The native check loads the image's real configuration parser
 and `libvyosconfig.so.0` without modifying them, compares image version/revision,
-parses the generated candidate, checks expected policy paths and verifies all
-105 generated command paths against that image's CLI schema. The library needs
+parses the generated candidate, checks expected policy/Suricata paths and verifies
+all generated command paths against that image's CLI schema. The library needs
 the controller's compatible libc, libm and libpcre2-8 runtime libraries.
 
 Without `VYOS_NATIVE_ROOT`, the native check reports a skip; that is not a pass
@@ -110,6 +159,7 @@ DHCP offers, WAN/IPv6 operation or persistence after a real native save.
 Resolve the paused OPNsense Save and agree the rollback/running prefix. Refresh
 the affected WAN/IPv6 identities, current leases/exclusions, recursive/local DNS
 behavior, automatic rules and Plex reflection. Then qualify native boot/firewall
-ordering and the real hardware path. Suricata remains explicitly deferred, not
-silently replaced by a container or a rolling build. No production renderer or
-deployment is enabled merely by editing the image qualification booleans.
+ordering, actual IDS rule loading/events and the real hardware path. CrowdSec
+remediation and new IP/DNS blocking need their own scoped qualification and
+approval; no production renderer or deployment is enabled merely by editing the
+image qualification booleans.
