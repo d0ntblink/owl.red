@@ -491,6 +491,112 @@ claim a measured zero-interruption restart, whole-LXC boot, unattached target
 VLANs, IPv6/RA policy or client renewal/handoff. No NIC, VLAN, mask or NAS change
 was made. The existing router/cluster DNS findings remain separate.
 
+## Follow-Up: Mask Inventory And Recovery Assessment
+
+**Observed:** 2026-10-15 UTC, using read-only host commands and GET APIs. Current
+network metadata is retained privately outside Git with owner-only permissions;
+API keys, vault sessions, SNMP communities and appliance passwords are excluded.
+No address, mask, lease, resolver, port, service, VM, NAS or power setting was
+changed, and no Terraform plan/apply was run.
+
+### Current Masks And Dependencies
+
+| Surface | Current IPv4 / Gateway | DNS / Attachment Evidence |
+|---------|------------------------|---------------------------|
+| OPNsense LAN | `10.0.10.1/16`; connected `10.0.0.0/16` | `ixl1`, actual LAN MAC `6c:fe:54:70:08:31`; passthrough NICs, not the historical VM-vNIC assumption. LAN still has a global IPv6 `/56`. |
+| PVE edge / storage | `.3/16`, `.4/16`, gateway `.1` | Runtime matches configured `vmbr0` CIDRs. Edge uses `onboard`; storage uses `bond0`. Storage DNS is already `.30`, edge DNS `.1`. |
+| PVE compute | `.11-.14/16`, gateway `.1` | Runtime/configured `vmbr0` over `nic0`; DNS `.1`. Actual fourth cluster node name is `worker1`. |
+| Corosync | `.3`, `.4`, `.11-.14` | Ring addresses match PVE management IPs; six nodes online and cluster quorate. Addresses must not be renumbered as part of a mask-only operation. |
+| Talos node IPs | `.21-.24/16`, gateway `.1` | Native virtual NICs on the owning PVE `vmbr0`, no VLAN tags in guest definitions; DNS `.1` and `1.1.1.1`. All Kubernetes nodes Ready. |
+| API VIP | `.20/32`, currently on cp2 Talos | Preserve the `/32`; it is separate from the node's `.22/16` address. |
+| Traefik / MetalLB | VIP `.201`; live pool `.200-.250` | L2 service address, not a host `/16` to rewrite. Pod/service networks are separate from the legacy LAN. |
+| Technitium | `.30/24`, gateway `.1` | Existing native LXC NIC on edge `vmbr0`; five scopes disabled and timer/DNS healthy. |
+| PDM | `.31/24`, gateway `.1` | Configured and runtime container networking agree; native LXC NIC on cp1 `vmbr0`. |
+| NAS | `.5/16`, gateway/DNS `.1` | Physical `eth0` MAC `f8:f2:1e:48:91:40`; router ARP MAC `02:32:6d:84:75:0e` matches local `vhost0` macvtap. Attribution is not permission to rewrite reservations or a complete duplicate-IP investigation. |
+| Active operator | `.174/16`, gateway `.1`, DNS `.30` | USB Ethernet MAC `84:3a:5b:87:91:dd`. Owner identifies switch port 22 (`cab-trunk`); Windows route to `.3` is on-link. WSL has a separate `172.19.28.120/20` NAT interface. |
+| Operator Wi-Fi | Retained `.180/16`, disconnected | MAC `5c:87:9c:fa:10:f4`; do not treat a cached address as a second active management path. |
+| Storage management / power strip | `.6` / `.9`, masks and gateways unverified | BMC means the storage server's management port; PDU means the managed power strip. Their web ports respond, but network-settings reads are incomplete. |
+| AP-labelled path | Switch port 18 linked; device identity unverified | Recorded `.40:22` SSH probe fails. Link and label do not establish OpenWrt access, current mask or cabling. |
+
+All switch ports currently have PVID 1, VLAN mode Optional and receive Any.
+Switch management allows VLAN 1 and all ports; address acquisition is DHCP with
+static fallback `.2`. The vendor documents reply-to-source behavior without a
+default gateway, so do not invent a conventional Linux-style switch mask/gateway
+edit. VLANs 10-50 still list only disabled port 5. The learned-host helper returns
+an empty list; that does not identify the operator port or prove no hosts exist.
+Most unused ports are disabled; port 23 is labelled WAN, not an approved spare.
+
+### Client Identity And Address Evidence
+
+- Router pagination is complete: 15 lease records, eight reservations and one
+  range. All returned lease and LAN ARP addresses are inside the retained `/24`.
+  Lease presence is not proof of an online client or its current local mask.
+- The owner reports the old work-laptop `10.0.203.172` entry is historical and
+  knows of no current outside-range client. Offline/static-client absence is
+  not independently proven by a bounded snapshot.
+- The current `KAM1WL102916` lease is `.112`, MAC `24:fb:e3:7c:cf:da`, distinct
+  from its old recorded Wi-Fi MAC. Keep it dynamic and verify the actual NIC
+  before replacing target-registry metadata. The tablet lease remains `.166`
+  with its observed locally administered MAC; the phone is now `.129`.
+- Current NAS reservations are `.4` on the storage-host MAC and `.5` on the
+  NAS physical MAC. Do not interpret both `nas` labels as the same interface
+  or prune them based on ARP alone.
+- The DHCP range still ends at `.200`; the live MetalLB pool starts there.
+  Resolve this overlap through the owning configuration before allocation or
+  migration. Native-LAN offers advertise a 24-hour lease; shortening it only
+  affects clients after renewal, not instantly or merely after waiting.
+
+### Scoped Before And After Proposal
+
+**Preferred candidate, not approved execution:** retain every current address,
+gateway, native L2 attachment and resolver while contracting the affected
+ordinary LAN prefixes from `/16` to `/24`. Leave Technitium/PDM `/24`, API VIP
+`/32`, corosync addresses, ingress VIP and pod/service CIDRs unchanged. Management
+VLAN tagging remains a later separate change; do not attach contained routed
+target `/24`s while relying on old hosts' `/16` ARP behavior.
+
+The existing Talos Terraform root still declares `/16` node IPs and pins an
+older Talos version than runtime. A whole-root apply is not a safe way to make
+only a mask change. Prepare a reviewed network-only IaC/rollback lane and
+affected-resource evidence first; do not silently upgrade/downgrade nodes,
+change guest NICs, write NAS boot files or modify passthrough/disks/array/power.
+Intermediate mixed masks on the same untagged L2 need explicit forward/return
+checks; the observed all-`.10` addresses are evidence to evaluate, not a blanket
+zero-interruption guarantee.
+
+### Recovery Evidence And Remaining Checks
+
+- **Confirmed:** active operator Ethernet and on-link route to literal PVE `.3`;
+  owner can access PVE Web. Port 22 is the owner's protected cab-trunk path and
+  must remain untouched during independent mask preparation.
+- **Console access verified later (2026-10-15):** the owner's screenshot shows
+  PVE at literal `10.0.10.3:8006`, VM 100 selected, and OPNsense `26.1.9` at its
+  interactive console menu. LAN `ixl1` is still `10.0.10.1/16`. This closes the
+  earlier menu-access gap, not an outage recovery or configuration-restore
+  rehearsal. No console configuration command was requested or executed by
+  the assistant; retain the affected router configuration and exact restore
+  procedure before a router-prefix change.
+- **Component-scoped gaps:** read `.6` storage-management and `.9` power-strip
+  network settings before changing those components or depending on their
+  routed return paths. PDU HTTPS negotiation failed; no legacy TLS downgrade
+  or password-over-HTTP login was attempted. An exact-IP vault lookup did not
+  identify a BMC item; that does not prove no such credential exists elsewhere.
+- **Path-scoped gaps:** identify the device/cabling behind port 18 before AP or
+  wireless work. This is not a blanket gate on an independent wired pilot with
+  its own recovery path. No spare switch port is approved merely from its label.
+- **Before an affected change:** review dynamic firewall-network aliases,
+  legacy rules/outbound NAT and IPv6 behavior; export only affected configuration
+  and verify its inverse/recovery. A NAS-data backup or unrelated cabinet-wide
+  remediation is not a prerequisite for scoped network preparation.
+
+The inventory supports evaluating in-place mask contraction; it does not
+authorize any apply. The operator has now demonstrated VM 100's console menu;
+no further menu input is required for that access check. Affected configuration
+capture, exact inverse/restore steps, hardware masks and per-resource IaC
+recovery remain explicit unknowns, not guessed defaults. The screenshot is
+later evidence for console access, not a refresh of every earlier lease or
+host-inventory observation.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the

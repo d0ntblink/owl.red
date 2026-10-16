@@ -1,0 +1,242 @@
+---
+- name: Reconcile the existing OPNsense Dnsmasq LAN range only
+  hosts: opnsense
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    opnsense_range_api_url: "https://{{ ansible_host }}"
+    opnsense_range_uuid: caca46e0-9db2-4b3a-bab3-d6eda6246104
+    opnsense_range_start: 10.0.10.100
+    opnsense_range_expected_end: 10.0.10.200
+    opnsense_range_desired_end: 10.0.10.199
+    opnsense_range_apply_confirmed: false
+    opnsense_range_recovery_verified: false
+    opnsense_range_recovery_dir: ""
+    opnsense_range_validate_certs: true
+    opnsense_range_services_command:
+      - kubectl
+      - get
+      - services
+      - --all-namespaces
+      - -o
+      - json
+  module_defaults:
+    ansible.builtin.uri:
+      url_username: "{{ lookup('ansible.builtin.env', 'OPNSENSE_API_KEY') }}"
+      url_password: "{{ lookup('ansible.builtin.env', 'OPNSENSE_API_SECRET') }}"
+      force_basic_auth: true
+      validate_certs: "{{ opnsense_range_validate_certs }}"
+      return_content: true
+      timeout: 10
+      unredirected_headers:
+        - Authorization
+  tasks:
+    - name: Require check mode or explicit live-change and recovery approval
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode or (opnsense_range_apply_confirmed | bool and opnsense_range_recovery_verified | bool)
+          - opnsense_range_start == '10.0.10.100'
+          - opnsense_range_expected_end == '10.0.10.200'
+          - opnsense_range_desired_end == '10.0.10.199'
+        fail_msg: Use --check for inspection; activation requires explicit change and recovery approval.
+        quiet: true
+
+    - name: Require credentials supplied only through the process environment
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'OPNSENSE_API_KEY') | length > 0
+          - lookup('ansible.builtin.env', 'OPNSENSE_API_SECRET') | length > 0
+        quiet: true
+      no_log: true
+
+    - name: Read the existing range by its reviewed UUID
+      ansible.builtin.uri:
+        url: "{{ opnsense_range_api_url }}/api/dnsmasq/settings/getRange/{{ opnsense_range_uuid }}"
+        method: GET
+      register: _range_before
+      check_mode: false
+      no_log: true
+
+    - name: Refuse a missing range or an unreviewed range/interface baseline
+      ansible.builtin.assert:
+        that:
+          - _range_before.json['range'] is defined
+          - _range_before.json['range']['start_addr'] == opnsense_range_start
+          - _range_before.json['range']['end_addr'] in [opnsense_range_expected_end, opnsense_range_desired_end]
+          - _range_before.json['range']['interface']['lan']['selected'] | int == 1
+        fail_msg: Existing range, start/end or LAN binding differs; no upsert or replacement is allowed.
+        quiet: true
+
+    - name: Read current leases and reservations including complete pagination
+      ansible.builtin.uri:
+        url: "{{ opnsense_range_api_url }}{{ item }}"
+        method: GET
+      loop:
+        - /api/dnsmasq/leases/search?current=1&rowCount=100
+        - /api/dnsmasq/settings/searchHost?current=1&rowCount=100
+      register: _range_client_reads
+      check_mode: false
+      no_log: true
+
+    - name: Refuse incomplete client evidence or existing DHCP ownership of .200
+      ansible.builtin.assert:
+        that:
+          - _range_client_reads.results[0].json.total | int == _range_client_reads.results[0].json.rows | length
+          - _range_client_reads.results[1].json.total | int == _range_client_reads.results[1].json.rows | length
+          - _range_client_reads.results[0].json.rows | selectattr('address', 'equalto', opnsense_range_expected_end) | list | length == 0
+          - _range_client_reads.results[1].json.rows | selectattr('ip', 'equalto', opnsense_range_expected_end) | list | length == 0
+        fail_msg: Client evidence is incomplete or .200 already appears in a lease/reservation; stop for conflict review.
+        quiet: true
+
+    - name: Read actual Kubernetes service allocations without changing the cluster
+      ansible.builtin.command:
+        argv: "{{ opnsense_range_services_command }}"
+      register: _range_services
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Refuse current load-balancer ownership of .200
+      ansible.builtin.assert:
+        that:
+          - (_range_services.stdout | from_json)['items'] is iterable
+          - opnsense_range_expected_end not in ((_range_services.stdout | from_json)['items'] | map(attribute='spec.loadBalancerIP', default='') | list)
+          - opnsense_range_expected_end not in ((_range_services.stdout | from_json)['items'] | map(attribute='status.loadBalancer.ingress', default=[]) | flatten | map(attribute='ip', default='') | list)
+        fail_msg: .200 is already requested or allocated by a Kubernetes service; stop for conflict review.
+        quiet: true
+
+    - name: Report only the intended range-end change
+      ansible.builtin.debug:
+        msg:
+          uuid: "{{ opnsense_range_uuid }}"
+          start_unchanged: "{{ opnsense_range_start }}"
+          before_end: "{{ _range_before.json['range']['end_addr'] }}"
+          desired_end: "{{ opnsense_range_desired_end }}"
+          check_only: "{{ ansible_check_mode }}"
+          activation_note: Dnsmasq reconfigure can interrupt DHCP/DNS and reload firewall rules.
+      changed_when: _range_before.json['range']['end_addr'] != opnsense_range_desired_end
+
+    - name: Save and reconcile only when live change is approved and needed
+      when:
+        - not ansible_check_mode
+        - _range_before.json['range']['end_addr'] != opnsense_range_desired_end
+      block:
+        - name: Require a new absolute private recovery directory
+          ansible.builtin.assert:
+            that:
+              - opnsense_range_recovery_dir.startswith('/')
+              - opnsense_range_recovery_dir | length > 10
+            fail_msg: Supply a new owner-only recovery directory outside Git.
+            quiet: true
+
+        - name: Check that the recovery destination does not already exist
+          ansible.builtin.stat:
+            path: "{{ opnsense_range_recovery_dir }}"
+          register: _range_recovery_destination
+
+        - name: Refuse to overwrite earlier recovery evidence
+          ansible.builtin.assert:
+            that:
+              - not _range_recovery_destination.stat.exists
+            quiet: true
+
+        - name: Create the private affected-state directory on the controller
+          ansible.builtin.file:
+            path: "{{ opnsense_range_recovery_dir }}"
+            state: directory
+            mode: "0700"
+
+        - name: Save fresh range and client preimages without credentials
+          ansible.builtin.copy:
+            dest: "{{ opnsense_range_recovery_dir }}/before.json"
+            mode: "0600"
+            content: >-
+              {{ {'uuid': opnsense_range_uuid, 'range': _range_before.json['range'],
+                  'leases': _range_client_reads.results[0].json,
+                  'reservations': _range_client_reads.results[1].json,
+                  'services': (_range_services.stdout | from_json)} | to_nice_json }}
+          no_log: true
+
+        - name: Recheck the existing object immediately before the field-only save
+          ansible.builtin.uri:
+            url: "{{ opnsense_range_api_url }}/api/dnsmasq/settings/getRange/{{ opnsense_range_uuid }}"
+            method: GET
+          register: _range_immediate
+          no_log: true
+
+        - name: Refuse a changed or missing pre-save object
+          ansible.builtin.assert:
+            that:
+              - _range_immediate.json['range'] == _range_before.json['range']
+            fail_msg: Range changed after preflight; do not create, overwrite or retry it.
+            quiet: true
+
+        - name: Change only the existing range end
+          ansible.builtin.uri:
+            url: "{{ opnsense_range_api_url }}/api/dnsmasq/settings/setRange/{{ opnsense_range_uuid }}"
+            method: POST
+            body_format: json
+            body:
+              range:
+                end_addr: "{{ opnsense_range_desired_end }}"
+          register: _range_saved
+          changed_when: true
+          no_log: true
+
+        - name: Require a successful save acknowledgement
+          ansible.builtin.assert:
+            that:
+              - _range_saved.json.result == 'saved'
+            quiet: true
+
+        - name: Read back the saved object before service activation
+          ansible.builtin.uri:
+            url: "{{ opnsense_range_api_url }}/api/dnsmasq/settings/getRange/{{ opnsense_range_uuid }}"
+            method: GET
+          register: _range_after
+          no_log: true
+
+        - name: Require only the reviewed field to differ before reconfigure
+          ansible.builtin.assert:
+            that:
+              - _range_after.json['range']['end_addr'] == opnsense_range_desired_end
+              - "(_range_after.json['range'] | combine({'end_addr': _range_before.json['range']['end_addr']})) == _range_before.json['range']"
+            fail_msg: Saved range differs beyond the reviewed end address; service activation is refused.
+            quiet: true
+
+        - name: Reconfigure Dnsmasq only after the saved-field check passes
+          ansible.builtin.uri:
+            url: "{{ opnsense_range_api_url }}/api/dnsmasq/service/reconfigure"
+            method: POST
+            body_format: json
+            body: {}
+          register: _range_reconfigured
+          changed_when: true
+          no_log: true
+
+        - name: Require a successful service-reconfigure acknowledgement
+          ansible.builtin.assert:
+            that:
+              - _range_reconfigured.json.status == 'ok'
+            quiet: true
+
+        - name: Read service status after the reviewed activation
+          ansible.builtin.uri:
+            url: "{{ opnsense_range_api_url }}/api/dnsmasq/service/status"
+            method: GET
+          register: _range_status
+          no_log: true
+
+        - name: Require Dnsmasq to be running
+          ansible.builtin.assert:
+            that:
+              - _range_status.json.status == 'running'
+            quiet: true
+      rescue:
+        - name: Stop rather than automatically retry or restore an overlapping range
+          ansible.builtin.fail:
+            msg: >-
+              Range activation was not confirmed. Inspect actual configured/runtime state
+              before retrying. No automatic rollback or full-config restore was performed.
+              Fresh preimages, if created, remain in {{ opnsense_range_recovery_dir }}.

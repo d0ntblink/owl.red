@@ -319,6 +319,45 @@ headers as evidence. An evidence-ready result still requires packet review.
   client renewal/handoff, and DNS-daemon/LXC restart behavior remain separate
   checks; this procedure does not authorize those changes.
 
+## Read-Only Subnet Inventory
+
+The mask/recovery survey uses existing tools, not an installer or a configuration
+writer. Keep structured evidence outside Git with directory mode `0700` and
+file mode `0600`; never retain vault credentials, full machine configs, container
+environments, API tokens or SNMP communities in that evidence.
+
+- Controller: Node.js 24 built-in JSON/process/HTTPS APIs, Python 3 standard
+  JSON/socket/HTML parsers and the existing strict-host-key deployment SSH key.
+  Parse the ignored credential file with `util.parseEnv`, not shell `source`.
+- Linux/PVE/NAS targets: read-only `ip -j` / `bridge -j` from iproute2, selected
+  `pvesh get` networking/guest fields and, where needed, `pct exec` read commands.
+  Query NAS interface/Docker-network metadata only; do not read container secret
+  environments or invoke install, restart, power, disk or array operations.
+- Windows under WSL: existing Windows PowerShell with `Get-NetIPConfiguration`
+  and `Find-NetRoute`, invoked non-interactively. Record adapter status as well
+  as address/MAC/prefix: a disconnected Wi-Fi adapter can retain old values.
+  WSL's NAT interface is not the operator's physical DHCP/VLAN identity.
+- Talos/Kubernetes: selected existing contexts, `talosctl get` address/route/
+  resolver resources and scoped Kubernetes node/service/MetalLB pool fields.
+  Talos JSON output can contain successive JSON objects; use a JSON decoder,
+  not a single-object assumption or text extraction. Never dump raw credential
+  configs or Kubernetes Secrets to establish network masks.
+- Router: existing dedicated API item and the verified working private Bitwarden
+  CLI/profile. Use documented GET actions and verify returned row counts against
+  reported totals for leases/reservations/ranges. A per-appliance self-signed
+  exception is not permission for a global TLS bypass or legacy TLS downgrade.
+- SwOS: existing `mikrotik-swos==1.3.2`, requests and the repository platform
+  override, with bounded GET-only reads. For an ad hoc reader, import
+  [swos_info.py](../../ansible/library/swos_info.py) by file location; adding the
+  whole library directory to `sys.path` can shadow the installed `swos` package
+  with its sibling module. Avoid the unfiltered facts-playbook output when
+  collecting private evidence: it prints the SNMP community.
+
+Storage-management port (BMC) and managed power strip (PDU) network settings
+must be read, not inferred from a lease or a responsive web port. A console
+socket or a linked switch-port label is likewise not a verified recovery
+session. Keep each missing check attached to the component/path it gates.
+
 ## Non-Mutating Validation
 
 ```bash

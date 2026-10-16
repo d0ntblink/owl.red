@@ -227,16 +227,30 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 **Observed:** PVE, Talos and NAS use `/16` on the legacy untagged L2. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
-10 disabled and 20-50 enabled but no leases. Those are not five operational VLANs.
+10-50 disabled after the approved guard rollout and daemon-persistence check;
+zero leases were observed. Those are not five operational VLANs.
 The legacy connected network is `10.0.0.0/16`, which contains every target `/24`.
 Do not route those targets onto separate L2 domains while relying on legacy
 hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
 
 1. **Inventory and choose the intermediate states.**
-  - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings; authenticated API evidence exists and native-LAN offers confirm `/16`, gateway/DNS `.1` and a 24-hour lease. Still identify every static or leased client outside `10.0.10.0/24` before narrowing anything.
-  - `[ ]` Record masks, gateways and L2 attachment for the operator, PVE/corosync, Talos/etcd, API VIP `.20`, ingress VIP `.201`, NAS, BMC, PDU, AP and Technitium; include any storage/application dependency using the legacy range
+  - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The 2026-10-15 GET-only refresh returns all 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. DHCP still ends at `.200`, overlapping the live MetalLB pool; preserve the 24-hour lease/renewal implications.
+  - `[~]` Record masks, gateways and L2 attachment. Six PVE hosts, four Talos node IPs, NAS and the active operator NIC use `/16`; Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`; Wi-Fi is disconnected despite a retained address. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
+  - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
+
+  **Assessment, not apply approval:** mask-only contraction remains the leading
+  option for the observed addresses. The operator-to-PVE `.3` path is on-link
+  in the captured inventory, and the owner has now shown the router VM's actual
+  console menu through PVE. Configuration restore and the exact inverse change
+  remain unverified; console access alone does not complete them. Appliance checks apply before
+  changing or depending on their return paths; AP management gates wireless or
+  affected AP work, not independent wired preparation. Preserve the API VIP
+  `/32`, existing DNS overrides and the native L2 while a scoped IaC/rollback
+  procedure is prepared. No mask, VLAN, DHCP option or reservation was changed.
+
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
   - `[x]` Validate the actual Nix module, packaged sync/ShellCheck and full LXC system closure locally without activation (2026-10-14). After read-only target comparison, pin `nix/hosts/technitium/check.nix` to the live NixOS `25.11.10830.d7a713c0b7e4` revision and rebuild successfully; no remote copy, channel update or host switch was performed.
