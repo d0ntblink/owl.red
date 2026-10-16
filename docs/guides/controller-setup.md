@@ -371,7 +371,7 @@ host/guest networking; this is not a zero-interruption guarantee.
 | Inventory Host | Management Address | Guest / Direct API Check | Additional Check |
 |----------------|--------------------|--------------------------|------------------|
 | `edge_pve` | `10.0.10.3/24` | Protected OPNsense VM 100 / Technitium LXC 200 | Router/Technitium ports, DNS and process identities |
-| `storage_pve` | `10.0.10.4/24` | Protected NAS VM 101 | Bond runtime, unchanged NAS `.5/16` identity, HTTPS/SMB TCP and Technitium DNS |
+| `storage_pve` | `10.0.10.4/24` | Protected NAS VM 101 | Bond runtime, unchanged NAS `.5/24` identity, HTTPS/SMB TCP and Technitium DNS |
 | `cp1_pve` | `10.0.10.11/24` | `cp1-talos` / `.21:6443/readyz` | PDM `.31:8443` TCP |
 | `cp2_pve` | `10.0.10.12/24` | `cp2-talos` / `.22:6443/readyz` | None |
 | `cp3_pve` | `10.0.10.13/24` | `cp3-talos` / `.23:6443/readyz` | None |
@@ -622,6 +622,26 @@ Both live activation flags default false. The documented
 must be satisfied before lifting them: the offered phone hotspot is not a
 verified fallback until internet/DNS and LAN routes are tested. No silent
 Windows route, resolver or IPv6 changes are part of controller setup.
+
+The same playbook now supports explicit `opnsense_range_field=subnet_mask` for
+the fixed empty-to-`255.255.255.0` transition; default `end_addr` still selects
+the completed pool-boundary operation. It uses Python's standard `ipaddress`
+module to check observed IPv4 lease/reservation containment; no `netaddr` or
+additional Ansible collection is needed. Twelve offline cases cover both
+single-field payloads, default-deny/no-op/check behavior, unexpected saved-field
+drift, outside clients and refused field/value overrides. Connected mask preview
+at 2026-10-16T20:00:38Z reports `ok=10`, `changed=1`, `failed=0`; that change is
+a proposal only and the mutating block is skipped.
+
+Wire acceptance reuses the existing physical Nmap/tcpdump capture controller
+and its documented prerequisites; it does not accept a synthetic lease.
+Real NAS acceptance needs its already installed `dhcpcd 9.5.2`, iproute2,
+Python 3 and strict existing root SSH access. The existing IPv4 `eth0` PID file
+and `-N` option were verified using `-P` print-only mode, not by restarting a
+daemon. Requesting `/sbin/dhcpcd -4 -N eth0` is a separately approved normal
+renewal after wire checks, not permission to release a lease, stop services,
+write NAS network configuration or change IPv6. Full procedure and the scoped
+mask inverse are in the [owning range guide](../../terraform/opnsense/README.md#dhcp-mask-preparation-before-router-contraction).
 
 The owner later explicitly requested the bounded range-only deployment without
 Windows route changes. That one-time activation used fresh affected-field

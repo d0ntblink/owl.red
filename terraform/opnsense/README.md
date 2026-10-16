@@ -101,9 +101,13 @@ The playbook reads only the reviewed existing UUID, checks complete lease/
 reservation evidence and actual Kubernetes service allocations, and refuses
 observed ownership of `.200`. Missing objects are refused before the API's
 upsert-capable setter. It records a fresh private JSON preimage before posting
-only `range.end_addr`; every other returned range field must remain identical
-before reconfigure. Coordinate other router operators: these requests are not
-an atomic transaction lock.
+exactly one selected range field; every other returned range field must remain
+identical before reconfigure. Default `opnsense_range_field=end_addr` retains
+the completed `.200 -> .199` operation. Explicit `subnet_mask` selects only the
+reviewed empty-to-`255.255.255.0` transition, requires the corrected `.100-.199`
+pool and refuses observed IPv4 DHCP clients outside `10.0.10.0/24`. Other fields
+and before/after values are refused. Coordinate other router operators: these
+requests are not an atomic transaction lock.
 
 Preview only, with `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET` supplied through
 the child process environment:
@@ -125,8 +129,87 @@ restoring `.200` into the overlapping pool.
 OPNsense 26.1.9's Dnsmasq reconfigure path can reload firewall rules as well
 as interrupt DHCP/DNS. A saved API value and a running service are not complete
 wire/client acceptance; verify connectivity and runtime behavior separately.
-The [eight offline cases](../../scripts/opnsense-dhcp-range.test.mjs) use a
+The [twelve offline cases](../../scripts/opnsense-dhcp-range.test.mjs) use a
 loopback fake API and synthetic credentials, never the router.
+
+### DHCP Mask Preparation Before Router Contraction
+
+The NAS is DHCP-managed, not a candidate for a separate `network.cfg` writer.
+The 2026-10-16 read-only survey confirms `.5/16`, DNS `.1`, the expected physical
+MAC, matching current reservation and reachable HTTPS/SMB TCP. The active range
+mask is blank; the wired baseline advertises `/16`, gateway/DNS `.1` and a
+24-hour lease. OPNsense's Dnsmasq template supports an explicit range mask, so
+DHCP clients can be prepared without changing router LAN `.1/16` or DNS/DHCP
+authority. This is not permission to activate contained routed VLANs yet.
+
+Preview the explicit mask operation with the same child-only credentials:
+
+```bash
+ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook \
+  -i ansible/inventory/hosts.yml ansible/playbooks/opnsense-dhcp-range.yml \
+  --limit opnsense --check -e opnsense_range_validate_certs=false \
+  -e opnsense_range_field=subnet_mask
+```
+
+Both activation/recovery flags remain false until approval. A successful
+check-mode proposal reports `changed=1` but performs no API writes. Before live
+save/reconfigure, retain exact range/lease/reservation and NAS before-state
+evidence, preserve console access and review interruption risk. Afterward,
+require a correlated zero-drop wire offer containing `/24`, unchanged gateway/
+DNS/lease time and no Technitium offer before renewing a real client.
+
+For the existing NAS `dhcpcd 9.5.2` IPv4 `eth0` daemon, `-P -4 -N eth0` was
+verified in print-only mode against `/run/eth0-4.pid`. After explicit approval
+and wire acceptance, `/sbin/dhcpcd -4 -N eth0` requests normal address renewal;
+it does not reload client configuration, release the lease, stop Docker/network
+services, change static DNS or operate on IPv6. Check `.5/24`, DHCP route,
+gateway/DNS, same MAC/boot identity/network-config hash and NAS services after
+the request; command exit alone is not renewal acceptance. Do not silently
+renew the operator's Windows interfaces. Unrenewed clients can retain `/16`
+until their existing leases renew; track them before the router/VLAN cutover.
+
+The installed custom `99-create_network_ini` hook was read, not executed:
+its entry gate skips `RENEW` before Docker/network-display/service-update code.
+The matching dhcpcd source selects that reason for a same-address renewal from
+the existing server, even with a changed mask. Do not substitute `-n` rebind,
+`-k` release or daemon restart. If the expected renewal fails, stop and inspect
+the DHCP outcome rather than force a new bind; that path can run Unraid service
+updates. Normal DHCP runtime/cache updates are not a persistent `network.cfg`
+edit or permission to rewrite client hooks.
+
+The owner approved this bounded step on 2026-10-16. Mask activation completed
+20:16:44Z-20:16:55Z (`ok=25`, `changed=5`, `failed=0`); full model comparison
+shows only that one mask leaf changed. Zero-drop packet review proves `/24`,
+correct broadcast, unchanged lease/T1/T2, gateway/DNS `.1` and no Technitium
+offer. Router LAN remains runtime/persisted `.1/16`; all eight reservations and
+service authority are unchanged. No broader interface/VLAN change was made.
+
+The NAS prefix-changing renewal at 20:19:16Z exposed a dhcpcd/kernel route-update
+edge case: the ACK contained `/24` and router `.1`, but a kernel notification
+deleted the default route. Local NAS access remained available. At 20:20:44Z,
+after exact config/boot/MAC and route-preimage checks, the missing route alone
+was recovered as `default via 10.0.10.1 dev eth0 proto dhcp src 10.0.10.5 metric 1005`.
+No persistent network setting or unrelated route was edited. A controlled
+same-`/24` normal renewal at 20:22:08Z retained the default route; cached ACK,
+NAS ports and external HTTPS pass with unchanged config hash, boot/MAC/IPv6/
+daemon and non-`eth0` routes. Preserve this exception in future procedures:
+inspect actual state after failure, and restore only an absent exact preimage
+route, never overwrite an unknown route or blindly repeat a lease action.
+
+Final router/DHCP/DNS/Kubernetes checks pass at 20:24:49Z. Operator Ethernet is
+still DHCP `.174/16`; no Windows setting or renewal action was made. Other
+leases are not thereby certified `/24`. Full hook/remote CI runs were not
+performed; twelve local range/mask cases and the updated storage/NAS guard pass.
+
+Scoped inverse: stop and inspect actual configured/runtime state, then, only
+after recovery approval and drift checks against the saved range, POST only
+`{"range":{"subnet_mask":""}}` to the same existing range setter. Read back
+that all other fields remain unchanged before reconfigure. This restores the
+interface-derived `/16` advertisement, not leases already issued; affected
+clients may need approved normal renewal. Never restore the entire router
+configuration, the old `.200` range end or a stale lease map as an automatic
+reaction. A saved history download is not a certified full-current export for
+the later LAN-interface change.
 
 ### Preserve The Control Connection
 

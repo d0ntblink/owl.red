@@ -15,6 +15,33 @@ keyboard/monitor recovery; do not run a general settings apply as its preflight.
 > **Else, is it an allow-listed `/boot/config` flash key?** → **Ansible** (`unraid_settings` role, file lane).
 > **Else (array / disk / user / secret / network lockout)?** → **Manual** (Unraid UI) — the role only drift-reports.
 
+### DHCP-Managed NAS Mask
+
+Read-only verification on 2026-10-16 at 19:50:45Z confirms
+`USE_DHCP[0]="yes"`, dynamic `eth0` address `10.0.10.5/16`, DHCP default/connected
+routes via `.1` and resolver `10.0.10.1`. The physical MAC remains
+`f8:f2:1e:48:91:40`; HTTPS/SMB TCP ports respond.
+
+Do not make a separate static NAS mask/DNS edit or add a `network.cfg` writer.
+Its persistent mask must be handled with the active OPNsense DHCP/LAN transition
+and verified client renewal. Preserve the `.5` reservation and existing DNS
+authority, save the affected router/DHCP state and check NAS reachability after
+that bounded change. This preparation does not stop Docker/network services,
+release the NAS lease, change IPv6 or touch any NAS configuration, array, disk,
+passthrough, boot or power setting.
+
+The owner subsequently approved only DHCP `/24` advertisement and normal NAS
+IPv4 renewal. NAS is accepted at `.5/24` on 2026-10-16 at 20:22:08Z with the
+same persistent network-config hash, boot/MAC/IPv6/daemon and non-`eth0` routes;
+NAS ports and external HTTPS pass. The first prefix-changing renewal lost its
+default route via a kernel deletion despite the correct DHCP router option.
+Only the exact saved runtime default route was restored, then a controlled
+same-`/24` renewal retained it. This was not a zero-interruption or first-try
+acceptance, and no static NAS setting, release/rebind, service restart or disk/
+array/boot/power operation was performed. The owning
+[range guide](../../terraform/opnsense/README.md#dhcp-mask-preparation-before-router-contraction)
+records this recovery boundary; the manual `network.cfg` policy is unchanged.
+
 ## The 3 methods
 
 | Method | Source of truth | Run | Used for |

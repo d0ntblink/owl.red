@@ -1002,6 +1002,52 @@ permissions and fourteen evidence files per node are hashed in an integrity
 manifest. No additional network write was made for this acceptance. The CI
 job's YAML and shell syntax pass locally; remote CI/full hook suites were not run.
 
+## Follow-up: Approved DHCP Mask And NAS Renewal
+
+Read-only NAS evidence at 2026-10-16T19:50:45Z establishes DHCP-managed `.5/16`,
+not a static-mask setting: `USE_DHCP[0]="yes"`, DHCP routes and resolver `.1`.
+The active Dnsmasq range is `.100-.199` with blank mask, fifteen returned lease
+records and eight reservations inside the retained `/24`; the NAS reservation
+now matches its physical MAC. This is not proof of every offline/static client.
+
+The same default-off, one-range Ansible exception was extended to the fixed
+`subnet_mask` operation, not a second writer or a whole-router apply. Twelve
+offline cases pass. Connected check mode reports only a proposal, with no API
+write. Baseline wire transaction `0x15fb973f` is matched on both wired/client and
+Technitium paths, one DISCOVER/OPNsense OFFER each, zero drops, `/16`, gateway/
+DNS `.1`, lease 86400. No synthetic lease was accepted or released.
+
+The owner explicitly approved only DHCP `/24` advertisement and normal NAS
+IPv4 renewal after wire acceptance. From 20:16:44Z to 20:16:55Z the save and
+Dnsmasq reconfigure completed `ok=25`, `changed=5`, `failed=0`, no rescue.
+Complete model comparison shows one `subnet_mask` leaf changed; router LAN
+runtime/config stays `.1/16`. After-wire transaction `0x2d9ce05d` matches both
+capture paths with zero drops, `/24`, broadcast `.10.255`, unchanged lease/
+T1/T2/gateway/DNS and only OPNsense offers. No Technitium authority was enabled.
+
+NAS normal existing-daemon IPv4 renewal produced `.5/24` at 20:19:16Z, but
+acceptance caught a missing default route. Cached ACK has router `.1` and `/24`;
+the client log records a kernel route deletion during prefix replacement.
+Local SSH/HTTPS/SMB stayed reachable. At 20:20:44Z only the exact missing saved
+default route was restored after config-hash/boot/MAC and actual-route checks,
+without persistent NAS edits or another lease action. The subsequent controlled
+stable-`/24` renewal passes at 20:22:08Z with the default route retained, cached
+ACK verified, unchanged network-config hash/boot/MAC/IPv6/DHCP daemon/non-eth0
+routes and working NAS ports plus external HTTPS. No release/rebind, service
+restart, reboot, array/disk/passthrough/boot/power action occurred. This is a
+verified result after scoped recovery, not a first-try or zero-interruption claim.
+
+Final 20:24:49Z read-back confirms `/24` advertisement, `.1/16` router LAN,
+eight unchanged reservations, running Dnsmasq, external/internal DNS checks and
+four Ready Kubernetes nodes. Inventory now records NAS prefix 24; the storage
+host's NAS-preservation guard and drift fixture match it, with a zero-change
+connected storage preview (`ok=21`, `failed=0`). Read-only Windows evidence
+still shows Ethernet `.174/16` with DHCP enabled; no Windows renewal, routing,
+DNS, metrics or IPv6 setting was changed. Remaining client renewals and the
+later router/interface/VLAN cutover are separate. Private exact preimages,
+captures, failure/recovery and acceptance evidence remain outside Git. No
+assistant commit/push or remote CI/full hook run occurred.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
