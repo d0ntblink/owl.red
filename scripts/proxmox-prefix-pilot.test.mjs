@@ -48,8 +48,11 @@ function confirm(fixture) {
   return execute(confirmSource, [fixture.state, fixture.config, 'offline-timer', fixture.systemctl]);
 }
 
-test('policy is worker-only, default-deny, scoped and guarded in check mode', () => {
-  assert.equal(play.hosts, 'worker1_pve');
+test('policy is compute-allowlisted, one-host, default-deny and guarded in check mode', () => {
+  assert.equal(play.hosts, 'cp1_pve:cp2_pve:cp3_pve:worker1_pve');
+  assert.equal(play.serial, 1);
+  assert.equal(play.any_errors_fatal, true);
+  assert.deepEqual(Object.keys(play.vars.proxmox_prefix_pilot_targets).sort(), ['cp1_pve', 'cp2_pve', 'cp3_pve', 'worker1_pve']);
   assert.equal(play.vars.proxmox_prefix_pilot_apply_confirmed, false);
   assert.equal(play.vars.proxmox_prefix_pilot_rollback_seconds, 180);
   const activation = play.tasks.find(task => task.name.startsWith('Stage and activate'));
@@ -63,6 +66,11 @@ test('policy is worker-only, default-deny, scoped and guarded in check mode', ()
     ['ansible.builtin.assert'].that.some(condition => condition.includes("selectattr('family', 'equalto', 'inet')")));
   function inspect(tasks) {
     for (const task of tasks) {
+      for (const argument of task['ansible.builtin.command']?.argv ?? []) {
+        if (typeof argument === 'string' && argument.startsWith('/nodes/')) {
+          assert.ok(argument.includes('{{ proxmox_prefix_pilot_node }}'), task.name);
+        }
+      }
       for (const condition of task['ansible.builtin.assert']?.that ?? []) {
         assert.ok(['string', 'boolean'].includes(typeof condition), task.name);
       }
@@ -70,6 +78,44 @@ test('policy is worker-only, default-deny, scoped and guarded in check mode', ()
     }
   }
   inspect(play.tasks);
+});
+
+test('actual scope guard resolves every compute mapping and refuses edge, storage, wrong IP or multiple hosts', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'owl-prefix-scope-test-'));
+  try {
+    const samples = [
+      { host: 'cp1_pve', ip: '10.0.10.11', node: 'cp1', guest: 'cp1-talos', api: '10.0.10.21', accepted: true },
+      { host: 'cp2_pve', ip: '10.0.10.12', node: 'cp2', guest: 'cp2-talos', api: '10.0.10.22', accepted: true },
+      { host: 'cp3_pve', ip: '10.0.10.13', node: 'cp3', guest: 'cp3-talos', api: '10.0.10.23', accepted: true },
+      { host: 'worker1_pve', ip: '10.0.10.14', node: 'worker1', guest: 'worker1-talos', api: '', accepted: true },
+      { host: 'edge_pve', ip: '10.0.10.3', accepted: false },
+      { host: 'storage_pve', ip: '10.0.10.4', accepted: false },
+      { host: 'cp1_pve', ip: '10.0.10.3', accepted: false },
+      { host: 'cp1_pve', ip: '10.0.10.11', overrides: { proxmox_prefix_pilot_api_address: '10.0.10.23' }, accepted: false },
+      { host: 'cp1_pve', ip: '10.0.10.11', extra: 'cp2_pve ansible_host=10.0.10.12', accepted: false },
+    ];
+    for (const [index, sample] of samples.entries()) {
+      const inventory = path.join(directory, `case-${index}.ini`);
+      fs.writeFileSync(inventory, `${sample.host} ansible_host=${sample.ip}\n${sample.extra ?? ''}\n`);
+      const tasks = [play.tasks[0]];
+      if (sample.accepted) tasks.push({ name: 'Verify resolved target only', 'ansible.builtin.assert': { that: [
+        `proxmox_prefix_pilot_node == '${sample.node}'`,
+        `proxmox_prefix_pilot_address == '${sample.ip}'`,
+        `proxmox_prefix_pilot_guest == '${sample.guest}'`,
+        `proxmox_prefix_pilot_api_address == '${sample.api}'`,
+        `proxmox_prefix_pilot_after == '${sample.ip}/24'`,
+      ] } });
+      const filename = path.join(directory, `case-${index}.json`);
+      fs.writeFileSync(filename, JSON.stringify([{ hosts: 'all', connection: 'local', gather_facts: false,
+        vars: { ...play.vars, ...sample.overrides }, tasks }]));
+      const result = spawnSync('ansible-playbook', ['-i', inventory, filename, '--check'], {
+        cwd: repository, encoding: 'utf8', timeout: 20000,
+        env: { ...process.env, ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg'), ANSIBLE_NOCOLOR: '1' },
+      });
+      if (sample.accepted) assert.equal(result.status, 0, result.stdout + result.stderr);
+      else assert.notEqual(result.status, 0, sample.host);
+    }
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('both production recovery programs have valid Bash syntax', () => {

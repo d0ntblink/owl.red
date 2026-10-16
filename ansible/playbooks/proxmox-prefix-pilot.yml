@@ -1,13 +1,46 @@
 ---
-- name: Guard the worker1 management-prefix pilot
-  hosts: worker1_pve
+- name: Guard allowlisted compute management-prefix changes
+  hosts: cp1_pve:cp2_pve:cp3_pve:worker1_pve
+  serial: 1
+  any_errors_fatal: true
   gather_facts: false
   become: false
   vars:
-    proxmox_prefix_pilot_node: worker1
+    proxmox_prefix_pilot_targets:
+      cp1_pve:
+        node: cp1
+        address: 10.0.10.11
+        guest: cp1-talos
+        api_address: 10.0.10.21
+        service_checks:
+          - host: 10.0.10.31
+            port: 8443
+      cp2_pve:
+        node: cp2
+        address: 10.0.10.12
+        guest: cp2-talos
+        api_address: 10.0.10.22
+        service_checks: []
+      cp3_pve:
+        node: cp3
+        address: 10.0.10.13
+        guest: cp3-talos
+        api_address: 10.0.10.23
+        service_checks: []
+      worker1_pve:
+        node: worker1
+        address: 10.0.10.14
+        guest: worker1-talos
+        api_address: ""
+        service_checks: []
+    proxmox_prefix_pilot_target: "{{ proxmox_prefix_pilot_targets[inventory_hostname] }}"
+    proxmox_prefix_pilot_node: "{{ proxmox_prefix_pilot_target.node }}"
+    proxmox_prefix_pilot_address: "{{ proxmox_prefix_pilot_target.address }}"
+    proxmox_prefix_pilot_guest: "{{ proxmox_prefix_pilot_target.guest }}"
+    proxmox_prefix_pilot_api_address: "{{ proxmox_prefix_pilot_target.api_address }}"
     proxmox_prefix_pilot_interface: vmbr0
-    proxmox_prefix_pilot_before: 10.0.10.14/16
-    proxmox_prefix_pilot_after: 10.0.10.14/24
+    proxmox_prefix_pilot_before: "{{ proxmox_prefix_pilot_address }}/16"
+    proxmox_prefix_pilot_after: "{{ proxmox_prefix_pilot_address }}/24"
     proxmox_prefix_pilot_apply_confirmed: false
     proxmox_prefix_pilot_state_dir: ""
     proxmox_prefix_pilot_controller_dir: ""
@@ -70,15 +103,18 @@
       ansible.builtin.assert:
         that:
           - ansible_check_mode or proxmox_prefix_pilot_apply_confirmed | bool
-          - inventory_hostname == 'worker1_pve'
-          - ansible_host == '10.0.10.14'
+          - inventory_hostname in ['cp1_pve', 'cp2_pve', 'cp3_pve', 'worker1_pve']
           - ansible_play_hosts_all | length == 1
-          - proxmox_prefix_pilot_node == 'worker1'
+          - ansible_host == proxmox_prefix_pilot_target.address
+          - proxmox_prefix_pilot_address == proxmox_prefix_pilot_target.address
+          - proxmox_prefix_pilot_node == proxmox_prefix_pilot_target.node
+          - proxmox_prefix_pilot_guest == proxmox_prefix_pilot_target.guest
+          - proxmox_prefix_pilot_api_address == proxmox_prefix_pilot_target.api_address
           - proxmox_prefix_pilot_interface == 'vmbr0'
-          - proxmox_prefix_pilot_before == '10.0.10.14/16'
-          - proxmox_prefix_pilot_after == '10.0.10.14/24'
+          - proxmox_prefix_pilot_before == ansible_host ~ '/16'
+          - proxmox_prefix_pilot_after == ansible_host ~ '/24'
           - proxmox_prefix_pilot_rollback_seconds | int == 180
-        fail_msg: Only the reviewed worker1 prefix pilot is allowed; use --check unless explicitly approved.
+        fail_msg: Select exactly one allowlisted compute host; use --check unless its prefix change is explicitly approved.
         quiet: true
 
     - name: Read the owning PVE interface configuration
@@ -160,7 +196,7 @@
           - (_prefix_pve.stdout | from_json)['bridge_ports'] == 'nic0'
           - (_prefix_pve.stdout | from_json)['gateway'] == '10.0.10.1'
           - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
-          - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.14') | map(attribute='prefixlen') | first | int == (_prefix_pve.stdout | from_json)['netmask'] | int
+          - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', proxmox_prefix_pilot_address) | map(attribute='prefixlen') | first | int == (_prefix_pve.stdout | from_json)['netmask'] | int
           - (_prefix_cluster.stdout | from_json) | selectattr('type', 'equalto', 'node') | selectattr('online', 'equalto', 1) | list | length == 6
           - (_prefix_cluster.stdout | from_json) | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
         fail_msg: Pilot baseline differs or a pending change already exists; nothing will be staged or activated.
@@ -172,19 +208,40 @@
       changed_when: false
       check_mode: false
 
-    - name: Verify the current worker guest is Ready
+    - name: Verify the selected compute guest is Ready
       ansible.builtin.command:
-        argv: [kubectl, get, node, worker1-talos, -o, json]
+        argv: [kubectl, get, node, "{{ proxmox_prefix_pilot_guest }}", -o, json]
       delegate_to: localhost
       register: _prefix_guest_before
       changed_when: false
       check_mode: false
 
-    - name: Refuse an already unhealthy worker guest
+    - name: Refuse an already unhealthy compute guest
       ansible.builtin.assert:
         that:
           - (_prefix_guest_before.stdout | from_json)['status']['conditions'] | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length == 1
         quiet: true
+
+    - name: Verify the selected control-plane API before a host change
+      ansible.builtin.command:
+        argv: [kubectl, "--server=https://{{ proxmox_prefix_pilot_api_address }}:6443", --request-timeout=10s, get, --raw=/readyz]
+      delegate_to: localhost
+      register: _prefix_api_before
+      changed_when: false
+      check_mode: false
+      failed_when: _prefix_api_before.rc != 0 or (_prefix_api_before.stdout | trim) != 'ok'
+      when: proxmox_prefix_pilot_api_address | length > 0
+
+    - name: Verify service ports attached to the selected compute host
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        connect_timeout: 2
+        timeout: 5
+        state: started
+      delegate_to: localhost
+      loop: "{{ proxmox_prefix_pilot_target.service_checks }}"
+      check_mode: false
 
     - name: Report the one-host prefix-only proposal
       ansible.builtin.debug:
@@ -197,7 +254,7 @@
           live_activation_requires_explicit_opt_in: true
           host_local_rollback_seconds: "{{ proxmox_prefix_pilot_rollback_seconds }}"
 
-    - name: Stage and activate only the explicitly approved worker prefix change
+    - name: Stage and activate only the explicitly approved compute prefix change
       when:
         - not ansible_check_mode
         - (_prefix_pve.stdout | from_json)['cidr'] != proxmox_prefix_pilot_after
@@ -208,9 +265,9 @@
               - proxmox_prefix_pilot_state_dir is match('^/var/lib/owl-red/prefix-pilot/[A-Za-z0-9_-]+$')
               - proxmox_prefix_pilot_controller_dir.startswith('/')
               - proxmox_prefix_pilot_controller_dir | length > 10
-              - proxmox_prefix_pilot_unit is match('^owl-prefix-worker1-[A-Za-z0-9_-]+$')
-              - (_prefix_source.content | b64decode) | regex_findall('10\.0\.10\.14/16') | length == 1
-              - "'10.0.10.14/24' not in (_prefix_source.content | b64decode)"
+              - proxmox_prefix_pilot_unit is match('^owl-prefix-' ~ proxmox_prefix_pilot_node ~ '-[A-Za-z0-9_-]+$')
+              - (_prefix_source.content | b64decode) | regex_findall(proxmox_prefix_pilot_before | regex_escape) | length == 1
+              - proxmox_prefix_pilot_after not in (_prefix_source.content | b64decode)
             quiet: true
 
         - name: Refuse a pre-existing host recovery directory
@@ -270,7 +327,7 @@
 
         - name: Stage only the management CIDR through the PVE API
           ansible.builtin.command:
-            argv: [pvesh, set, /nodes/worker1/network/vmbr0, --type, bridge, --cidr, "{{ proxmox_prefix_pilot_after }}"]
+            argv: [pvesh, set, "/nodes/{{ proxmox_prefix_pilot_node }}/network/vmbr0", --type, bridge, --cidr, "{{ proxmox_prefix_pilot_after }}"]
           changed_when: true
 
         - name: Read the staged file without displaying it
@@ -370,7 +427,7 @@
 
         - name: Activate the staged network through PVE without FRR regeneration
           ansible.builtin.command:
-            argv: [pvesh, set, /nodes/worker1/network, --regenerate-frr, "0", --output-format, json]
+            argv: [pvesh, set, "/nodes/{{ proxmox_prefix_pilot_node }}/network", --regenerate-frr, "0", --output-format, json]
           register: _prefix_apply
           changed_when: true
 
@@ -379,16 +436,16 @@
             timeout: 30
             connect_timeout: 3
 
-        - name: Require a worker1 network-task identifier
+        - name: Require the selected host's network-task identifier
           ansible.builtin.assert:
             that:
               - (_prefix_apply.stdout | from_json) is string
-              - (_prefix_apply.stdout | from_json) is match('^UPID:worker1:')
+              - (_prefix_apply.stdout | from_json) is match('^UPID:' ~ proxmox_prefix_pilot_node ~ ':')
             quiet: true
 
         - name: Wait for the actual background reload to stop
           ansible.builtin.command:
-            argv: [pvesh, get, "/nodes/worker1/tasks/{{ _prefix_apply.stdout | from_json }}/status", --output-format, json]
+            argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/tasks/{{ _prefix_apply.stdout | from_json }}/status", --output-format, json]
           register: _prefix_task_status
           changed_when: false
           until: (_prefix_task_status.stdout | from_json)['status'] == 'stopped'
@@ -409,7 +466,7 @@
 
         - name: Read the committed PVE interface
           ansible.builtin.command:
-            argv: [pvesh, get, /nodes/worker1/network/vmbr0, --output-format, json]
+            argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/network/vmbr0", --output-format, json]
           register: _prefix_after_pve
           changed_when: false
 
@@ -417,7 +474,7 @@
           ansible.builtin.assert:
             that:
               - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
-              - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.14') | selectattr('prefixlen', 'equalto', 24) | list | length == 1
+              - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', proxmox_prefix_pilot_address) | selectattr('prefixlen', 'equalto', 24) | list | length == 1
               - (_prefix_after_pve.stdout | from_json)['cidr'] == proxmox_prefix_pilot_after
               - (_prefix_after_pve.stdout | from_json)['gateway'] == '10.0.10.1'
               - (_prefix_after_pve.stdout | from_json)['bridge_ports'] == 'nic0'
@@ -441,11 +498,30 @@
               - (_prefix_after_cluster.stdout | from_json) | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
             quiet: true
 
-        - name: Verify the unchanged worker guest from the controller
+        - name: Verify the unchanged compute guest from the controller
           ansible.builtin.command:
-            argv: [kubectl, wait, --for=condition=Ready, node/worker1-talos, --timeout=30s]
+            argv: [kubectl, wait, --for=condition=Ready, "node/{{ proxmox_prefix_pilot_guest }}", --timeout=30s]
           delegate_to: localhost
           changed_when: false
+
+        - name: Verify the selected control-plane API after the host reload
+          ansible.builtin.command:
+            argv: [kubectl, "--server=https://{{ proxmox_prefix_pilot_api_address }}:6443", --request-timeout=10s, get, --raw=/readyz]
+          delegate_to: localhost
+          register: _prefix_api_after
+          changed_when: false
+          failed_when: _prefix_api_after.rc != 0 or (_prefix_api_after.stdout | trim) != 'ok'
+          when: proxmox_prefix_pilot_api_address | length > 0
+
+        - name: Verify attached service ports before confirming the host change
+          ansible.builtin.wait_for:
+            host: "{{ item.host }}"
+            port: "{{ item.port }}"
+            connect_timeout: 2
+            timeout: 5
+            state: started
+          delegate_to: localhost
+          loop: "{{ proxmox_prefix_pilot_target.service_checks }}"
 
         - name: Confirm only while holding the rollback lock
           ansible.builtin.command:
@@ -462,7 +538,7 @@
 
         - name: Record the completed one-host pilot
           ansible.builtin.debug:
-            msg: worker1 is .14/24, reload OK, SSH/gateway/quorum/guest checks passed, rollback cancelled under lock.
+            msg: "{{ proxmox_prefix_pilot_node }} is {{ proxmox_prefix_pilot_after }}, reload and host/guest/service checks passed, rollback cancelled under lock."
       rescue:
         - name: Stop and preserve local recovery rather than retrying a network change
           ansible.builtin.fail:

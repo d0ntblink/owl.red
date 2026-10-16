@@ -225,8 +225,10 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Observed:** after the approved one-host pilot, worker1 PVE `.14` uses `/24`;
-the other five PVE hosts, Talos and NAS retain `/16` on the legacy untagged L2. Technitium
+**Observed:** after the approved worker pilot and sequential compute batch,
+PVE `cp1`, `cp2`, `cp3`, `worker1` (`.11-.14`) use `/24`. PVE edge/storage,
+Talos guest node addresses, NAS and the operator retain `/16` on the legacy
+untagged L2. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
 zero leases were observed. Those are not five operational VLANs.
@@ -251,8 +253,8 @@ recovery and connectivity requirements.
 
 1. **Inventory and choose the intermediate states.**
   - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The dated refresh returns 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. The approved 2026-10-16 range correction now ends at `.199`; preserve the unchanged 24-hour lease/renewal implications.
-  - `[~]` Record masks, gateways and L2 attachment. Worker1 PVE `.14` now uses `/24`; the other five PVE hosts, four Talos node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
-  - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`; Wi-Fi is disconnected despite a retained address. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
+  - `[~]` Record masks, gateways and L2 attachment. All four compute PVE hosts `.11-.14` now use `/24`; edge/storage PVE, four Talos guest node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`. Initial Wi-Fi was disconnected; a hotspot was connected later, without claiming it became the selected internet path. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
   - `[x]` Apply the explicitly approved overlap fix after fresh ownership/preimage checks (2026-10-16T00:40:51Z-00:41:00Z). The field-only save and Dnsmasq reconfigure passed; only `end_addr` differs, all eight reservations and LAN `.1/16` are unchanged, service/DNS/HTTPS and a correlated zero-drop DHCP offer check pass. Scoped recovery artifacts are retained; no Windows route change or automatic rollback was made.
@@ -261,6 +263,8 @@ recovery and connectivity requirements.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
   - `[x]` Prepare the isolated worker-host pilot `.14/16` to `.14/24` through the [guarded Ansible playbook](ansible/playbooks/proxmox-prefix-pilot.yml), with no router/storage/operator-path change. Eleven final offline cases cover rollback/locking, actual staged-model assertions and only the verified zero-byte PVE-generated SDN include. Initial and converged connected previews make zero changes. Future live activation still defaults off.
   - `[x]` Explicitly approve and run the one-host pilot with private on/off-host preimages and host-local rollback (2026-10-16T01:13:43Z-01:14:15Z). The first stage was safely refused for PVE-generated header/formatting and reverted without reload. Repaired guards compare every non-comment directive and all parsed interface fields except the approved CIDR. The successful PVE task finished `OK`; runtime/persisted `.14/24`, SSH, gateway, six-node quorum and guest readiness passed before lock-protected timer cancellation. No pending file or triggered rollback remains. The guest stays `/16`; the rest of the contraction is not approved by this pilot.
+  - `[x]` Extend the same guarded playbook to an explicit compute-only allowlist for `cp1`, `cp2`, `cp3` and the completed worker. Twelve offline cases cover canonical mappings, single-host limits and refused router/storage/cross-host paths. Connected `cp1`/`cp2`/`cp3` previews pass with zero changes, including direct guest API readiness and PDM reachability on `cp1`.
+  - `[x]` Approve and apply `cp1` `.11/24`, `cp2` `.12/24`, `cp3` `.13/24` sequentially (2026-10-16T01:39:42Z-01:42:54Z), preserving addresses/gateway/DNS/bridge/VLAN and guest prefixes. Each host's 180-second rollback was confirmed inactive before the next began. Final acceptance at 01:43:58Z shows matching runtime/persisted `/24`, no pending files or rollback, six online/quorate PVE members, all four Kubernetes nodes Ready, three direct API readiness checks passing and PDM TCP reachable. Router, storage, Windows, NAS and guest-version configuration were not changed.
 
   **Assessment, not apply approval:** mask-only contraction remains the leading
   option for the observed addresses. The operator-to-PVE `.3` path is on-link
@@ -270,7 +274,9 @@ recovery and connectivity requirements.
   changing or depending on their return paths; AP management gates wireless or
   affected AP work, not independent wired preparation. Preserve the API VIP
   `/32`, existing DNS overrides and the native L2 while a scoped IaC/rollback
-  procedure is prepared. No mask, VLAN, DHCP option or reservation was changed.
+  procedure is prepared. The approved changes so far are the DHCP range boundary
+  and four compute-host masks; no router mask, VLAN or guest-prefix migration is
+  claimed by those results.
 
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
