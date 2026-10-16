@@ -662,6 +662,24 @@ do not claim the original stayed byte-identical for that whole interval.
 The subsequent isolated status check left it unchanged. Protect profiles and
 sessions as before; do not persist master passwords or session keys in files.
 
+### Operator DHCP Renewal
+
+The separately approved Windows client step used existing WSL interop,
+Windows PowerShell (`Get-NetIPAddress`, `Get-NetIPInterface`, `Get-NetAdapter`,
+`Get-NetRoute`, `Get-DnsClientServerAddress`) and native `ipconfig.exe`.
+No Linux package or PowerShell module installation was needed. Read the exact
+Ethernet address/MAC, DHCP status, gateway, DNS and metrics before requesting
+`ipconfig.exe /renew Ethernet`; do not use `/release`, `/renew6`, a NIC reset
+or change metrics/DNS to make the check pass. Stop if privilege or state checks
+fail; a new request is not permission to reset unrelated interfaces.
+
+On 2026-10-16 at 20:32:14Z the approved normal renewal accepted `.174/24`,
+preserving every saved identity/gateway/DNS/metric field. At 20:33:26Z scoped
+router/PVE/NAS TCP and external HTTPS checks pass. Private owner-only evidence
+is retained. This is not a router prefix/VLAN change or proof of independent
+hotspot egress; the current LAN authority and protected native switch path stay
+unchanged. Other client masks remain a separate check.
+
 ## Non-Mutating Validation
 
 ```bash

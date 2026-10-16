@@ -1048,6 +1048,25 @@ later router/interface/VLAN cutover are separate. Private exact preimages,
 captures, failure/recovery and acceptance evidence remain outside Git. No
 assistant commit/push or remote CI/full hook run occurred.
 
+## Follow-up: Approved Operator Ethernet Renewal
+
+After the DHCP/NAS step, the owner separately approved only normal Windows
+Ethernet IPv4 renewal. The before-state is DHCP `.174/16` on USB Ethernet MAC
+`84:3a:5b:87:91:dd`. At 2026-10-16T20:32:14Z one actual
+`ipconfig.exe /renew Ethernet` accepts `.174/24`; before/after address, NIC,
+gateway, DNS, interface metric and route metric fields are identical. No lease
+release, NIC reset, manual DNS/gateway/metric, IPv6 or hotspot-routing action
+was made. An initial local wrapper syntax error occurred before any Windows
+command ran; it was corrected, not treated as an unknown lease outcome.
+
+At 20:33:26Z router HTTPS, edge/storage PVE HTTPS, NAS HTTPS/SMB TCP and external
+HTTPS are reachable through the controller. Private before/after, native-command
+and acceptance records are owner-only with an integrity manifest. This does
+not certify independent hotspot egress, every other DHCP/static mask, router
+LAN `/24`, VLAN routing or DNS/DHCP authority handoff. Router LAN remains
+`.1/16`; broader interface changes still need their own current configuration
+export/recovery and explicit scope.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
