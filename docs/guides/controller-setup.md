@@ -49,10 +49,11 @@ dependency declaration, not relying on an undocumented local installation.
 
 ## VyOS Image And Offline Preparation
 
-Use [the release manifest](../../vyos/image.json) for the exact Stream image,
-signature URL and Stream signing key, not a rolling/nightly image or key. A
-downloaded image is not verified until Minisign accepts its signature; record
-the resulting SHA-256 before treating the manifest as a locked build input.
+Use [the release manifest](../../vyos/image.json) for the exact dated rolling
+image, signature URL and rolling signing key, not a moving `latest` image or a
+Stream/LTS signing key. A downloaded image is not verified until Minisign accepts
+its signature and its digest matches the pin. Record version/build metadata and
+actual feature support before treating it as a qualified build input.
 
 The preparation lane uses the existing Ansible environment and built-in modules.
 Image verification requires Minisign `0.11`; ISO inspection uses `bsdtar` from
@@ -76,7 +77,10 @@ The [localhost renderer](../../ansible/playbooks/vyos-render.yml) needs the
 existing controller Ansible/PyYAML environment and an Ed25519 public key; no
 VyOS collection, Bitwarden unlock, router credential or target Python is needed
 for this render-only step. It writes only under `~/.local/state/owl-red/` and
-refuses production profiles.
+refuses production profiles or images without qualified native Suricata support.
+CrowdSec engine/parser/bouncer packages and credentials are future service
+dependencies, not hidden requirements of the renderer. Pin and document them
+when selecting that deployment; no new package was installed on a router here.
 
 [Focused tests](../../scripts/vyos-config.test.mjs) additionally use Node.js 20+
 (tested with `24.21.0`), OpenSSH `ssh-keygen` and a controller Python executable.

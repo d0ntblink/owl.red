@@ -20,6 +20,8 @@
           - vyos_profile == 'lab'
           - ansible_connection | default('local') == 'local'
           - vyos_image.verified is sameas true
+          - vyos_image.channel == 'rolling'
+          - vyos_image.qualification.native_suricata is sameas true
           - vyos_image.sha256 is match('^[a-f0-9]{64}$')
           - vyos_image.purpose == 'isolated-lab-candidate'
           - vyos_output_dir is match('^' ~ ((lookup('env', 'HOME') ~ '/.local/state/owl-red/') | regex_escape))

@@ -110,7 +110,7 @@ Access rule: these service VIPs are intended for LAN clients. They only work whe
 Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it uses physical PCIe NIC passthrough (`hostpci`). Do not plan routine live or offline migration of this VM.
 
 Selected replacement: [ADR 022](docs/decisions/022-vyos-router-replacement.md)
-chooses one VyOS Stream VM on the same host with direct WAN/LAN PCI passthrough,
+chooses one pinned VyOS rolling VM on the same host with direct WAN/LAN PCI passthrough,
 the same gateway IP and no HA requirement. OPNsense remains live until the staged
 replacement passes its separately approved cutover. The tables above are not
 claims of a deployed VyOS router; follow [the roadmap](ROADMAP.md) for preparation,
