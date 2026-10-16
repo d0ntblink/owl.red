@@ -1,17 +1,71 @@
 ---
-- name: Guard allowlisted compute management-prefix changes
-  hosts: cp1_pve:cp2_pve:cp3_pve:worker1_pve
+- name: Guard allowlisted PVE management-prefix changes
+  hosts: edge_pve:storage_pve:cp1_pve:cp2_pve:cp3_pve:worker1_pve
   serial: 1
   any_errors_fatal: true
   gather_facts: false
   become: false
   vars:
     proxmox_prefix_pilot_targets:
+      storage_pve:
+        node: storage
+        address: 10.0.10.4
+        guest: ""
+        api_address: ""
+        bridge_ports: bond0
+        interfaces: [lo, obnic0, obnic1, bond0, vmbr0]
+        bond_interface: bond0
+        bond_parameters:
+          mode: active-backup 1
+          slaves: obnic0 obnic1
+          miimon: "100"
+          primary: obnic0
+          active_slave: obnic0
+        protected_guests:
+          - kind: qemu
+            id: "101"
+        dns_checks:
+          - server: 10.0.10.30
+            domain: rancher.owl.red
+            expected_address: 10.0.10.201
+        service_checks:
+          - host: 10.0.10.5
+            port: 443
+          - host: 10.0.10.5
+            port: 445
+      edge_pve:
+        node: edge
+        address: 10.0.10.3
+        guest: ""
+        api_address: ""
+        bridge_ports: onboard
+        interfaces: [lo, onboard, vmbr0, nic0, nic1, nic2, nic3]
+        protected_guests:
+          - kind: qemu
+            id: "100"
+          - kind: lxc
+            id: "200"
+        dns_checks:
+          - server: 10.0.10.1
+            domain: example.com
+            expected_address: ""
+          - server: 10.0.10.30
+            domain: rancher.owl.red
+            expected_address: 10.0.10.201
+        service_checks:
+          - host: 10.0.10.1
+            port: 443
+          - host: 10.0.10.30
+            port: 5380
       cp1_pve:
         node: cp1
         address: 10.0.10.11
         guest: cp1-talos
         api_address: 10.0.10.21
+        bridge_ports: nic0
+        interfaces: [lo, nic0, vmbr0]
+        protected_guests: []
+        dns_checks: []
         service_checks:
           - host: 10.0.10.31
             port: 8443
@@ -20,24 +74,47 @@
         address: 10.0.10.12
         guest: cp2-talos
         api_address: 10.0.10.22
+        bridge_ports: nic0
+        interfaces: [lo, nic0, vmbr0]
+        protected_guests: []
+        dns_checks: []
         service_checks: []
       cp3_pve:
         node: cp3
         address: 10.0.10.13
         guest: cp3-talos
         api_address: 10.0.10.23
+        bridge_ports: nic0
+        interfaces: [lo, nic0, vmbr0]
+        protected_guests: []
+        dns_checks: []
         service_checks: []
       worker1_pve:
         node: worker1
         address: 10.0.10.14
         guest: worker1-talos
         api_address: ""
+        bridge_ports: nic0
+        interfaces: [lo, nic0, vmbr0]
+        protected_guests: []
+        dns_checks: []
         service_checks: []
     proxmox_prefix_pilot_target: "{{ proxmox_prefix_pilot_targets[inventory_hostname] }}"
     proxmox_prefix_pilot_node: "{{ proxmox_prefix_pilot_target.node }}"
     proxmox_prefix_pilot_address: "{{ proxmox_prefix_pilot_target.address }}"
     proxmox_prefix_pilot_guest: "{{ proxmox_prefix_pilot_target.guest }}"
     proxmox_prefix_pilot_api_address: "{{ proxmox_prefix_pilot_target.api_address }}"
+    proxmox_prefix_pilot_dns_probe: |
+      const { Resolver } = require('node:dns').promises;
+      const [server, domain, expected] = process.argv.slice(1);
+      const resolver = new Resolver({ timeout: 2000, tries: 1 });
+      resolver.setServers([server]);
+      resolver.resolve4(domain).then(addresses => {
+        if (!addresses.length || (expected && !addresses.includes(expected))) {
+          throw new Error('Unexpected DNS result');
+        }
+        console.log('ok');
+      }).catch(() => { console.error('Scoped DNS query failed'); process.exitCode = 1; });
     proxmox_prefix_pilot_interface: vmbr0
     proxmox_prefix_pilot_before: "{{ proxmox_prefix_pilot_address }}/16"
     proxmox_prefix_pilot_after: "{{ proxmox_prefix_pilot_address }}/24"
@@ -103,7 +180,7 @@
       ansible.builtin.assert:
         that:
           - ansible_check_mode or proxmox_prefix_pilot_apply_confirmed | bool
-          - inventory_hostname in ['cp1_pve', 'cp2_pve', 'cp3_pve', 'worker1_pve']
+          - inventory_hostname in ['edge_pve', 'storage_pve', 'cp1_pve', 'cp2_pve', 'cp3_pve', 'worker1_pve']
           - ansible_play_hosts_all | length == 1
           - ansible_host == proxmox_prefix_pilot_target.address
           - proxmox_prefix_pilot_address == proxmox_prefix_pilot_target.address
@@ -114,7 +191,7 @@
           - proxmox_prefix_pilot_before == ansible_host ~ '/16'
           - proxmox_prefix_pilot_after == ansible_host ~ '/24'
           - proxmox_prefix_pilot_rollback_seconds | int == 180
-        fail_msg: Select exactly one allowlisted compute host; use --check unless its prefix change is explicitly approved.
+        fail_msg: Select exactly one allowlisted PVE management host; NAS is not a target and every live prefix change needs explicit approval.
         quiet: true
 
     - name: Read the owning PVE interface configuration
@@ -144,7 +221,7 @@
     - name: Inventory included interface files
       ansible.builtin.find:
         paths: /etc/network/interfaces.d
-        file_type: file
+        file_type: any
         hidden: true
       register: _prefix_includes
 
@@ -193,7 +270,7 @@
           - (_prefix_sdn.stdout | from_json) | length == 0
           - (_prefix_pve.stdout | from_json)['cidr'] in [proxmox_prefix_pilot_before, proxmox_prefix_pilot_after]
           - (_prefix_pve.stdout | from_json)['type'] == 'bridge'
-          - (_prefix_pve.stdout | from_json)['bridge_ports'] == 'nic0'
+          - (_prefix_pve.stdout | from_json)['bridge_ports'] == proxmox_prefix_pilot_target.bridge_ports
           - (_prefix_pve.stdout | from_json)['gateway'] == '10.0.10.1'
           - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
           - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', proxmox_prefix_pilot_address) | map(attribute='prefixlen') | first | int == (_prefix_pve.stdout | from_json)['netmask'] | int
@@ -208,6 +285,41 @@
       changed_when: false
       check_mode: false
 
+    - name: Read storage bond runtime parameters without changing them
+      ansible.builtin.slurp:
+        src: "/sys/class/net/{{ proxmox_prefix_pilot_target.bond_interface }}/bonding/{{ item }}"
+      loop: "{{ (proxmox_prefix_pilot_target.bond_parameters | default({})).keys() | list }}"
+      register: _prefix_bond_before
+      no_log: true
+
+    - name: Require the reviewed storage bond baseline
+      ansible.builtin.assert:
+        that:
+          - (item.content | b64decode | trim) == proxmox_prefix_pilot_target.bond_parameters[item.item]
+        quiet: true
+      loop: "{{ _prefix_bond_before.results }}"
+      no_log: true
+
+    - name: Read NAS interface identity without changing guest settings
+      ansible.builtin.command:
+        argv: [ip, -j, address, show, dev, eth0]
+      delegate_to: nas_unraid
+      register: _prefix_nas_before
+      changed_when: false
+      check_mode: false
+      no_log: true
+      when: proxmox_prefix_pilot_node == 'storage'
+
+    - name: Require the expected NAS identity before changing its PVE host
+      ansible.builtin.assert:
+        that:
+          - (_prefix_nas_before.stdout | from_json)[0]['ifname'] == 'eth0'
+          - (_prefix_nas_before.stdout | from_json)[0]['address'] == 'f8:f2:1e:48:91:40'
+          - (_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
+          - (_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.5') | selectattr('prefixlen', 'equalto', 16) | list | length == 1
+        quiet: true
+      when: proxmox_prefix_pilot_node == 'storage'
+
     - name: Verify the selected compute guest is Ready
       ansible.builtin.command:
         argv: [kubectl, get, node, "{{ proxmox_prefix_pilot_guest }}", -o, json]
@@ -215,12 +327,64 @@
       register: _prefix_guest_before
       changed_when: false
       check_mode: false
+      when: proxmox_prefix_pilot_guest | length > 0
 
     - name: Refuse an already unhealthy compute guest
       ansible.builtin.assert:
         that:
           - (_prefix_guest_before.stdout | from_json)['status']['conditions'] | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length == 1
         quiet: true
+      when: proxmox_prefix_pilot_guest | length > 0
+
+    - name: Read protected guest configurations before changing the host
+      ansible.builtin.command:
+        argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/{{ item.kind }}/{{ item.id }}/config", --output-format, json]
+      loop: "{{ proxmox_prefix_pilot_target.protected_guests }}"
+      register: _prefix_protected_config_before
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Read protected guest running state before changing the host
+      ansible.builtin.command:
+        argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/{{ item.kind }}/{{ item.id }}/status/current", --output-format, json]
+      loop: "{{ proxmox_prefix_pilot_target.protected_guests }}"
+      register: _prefix_protected_status_before
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Refuse an already stopped protected guest
+      ansible.builtin.assert:
+        that:
+          - (item.stdout | from_json)['status'] == 'running'
+          - item.item.kind != 'qemu' or ((item.stdout | from_json)['pid'] | default(0) | int) > 0
+        quiet: true
+      loop: "{{ _prefix_protected_status_before.results }}"
+      no_log: true
+
+    - name: Read the existing Technitium daemon identity on edge
+      ansible.builtin.command:
+        argv: [pct, exec, "200", --, /run/current-system/sw/bin/systemctl, show, technitium-dns-server.service, --property=MainPID, --value]
+      register: _prefix_dns_pid_before
+      changed_when: false
+      check_mode: false
+      when: proxmox_prefix_pilot_node == 'edge'
+
+    - name: Require a running Technitium daemon before changing edge
+      ansible.builtin.assert:
+        that:
+          - _prefix_dns_pid_before.stdout | trim | int > 0
+        quiet: true
+      when: proxmox_prefix_pilot_node == 'edge'
+
+    - name: Verify existing scoped DNS behavior before changing the host
+      ansible.builtin.command:
+        argv: [node, -e, "{{ proxmox_prefix_pilot_dns_probe }}", "{{ item.server }}", "{{ item.domain }}", "{{ item.expected_address }}"]
+      loop: "{{ proxmox_prefix_pilot_target.dns_checks }}"
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
 
     - name: Verify the selected control-plane API before a host change
       ansible.builtin.command:
@@ -254,7 +418,7 @@
           live_activation_requires_explicit_opt_in: true
           host_local_rollback_seconds: "{{ proxmox_prefix_pilot_rollback_seconds }}"
 
-    - name: Stage and activate only the explicitly approved compute prefix change
+    - name: Stage and activate only the explicitly approved host prefix change
       when:
         - not ansible_check_mode
         - (_prefix_pve.stdout | from_json)['cidr'] != proxmox_prefix_pilot_after
@@ -329,6 +493,40 @@
           ansible.builtin.command:
             argv: [pvesh, set, "/nodes/{{ proxmox_prefix_pilot_node }}/network/vmbr0", --type, bridge, --cidr, "{{ proxmox_prefix_pilot_after }}"]
           changed_when: true
+          when: proxmox_prefix_pilot_node != 'storage'
+
+        - name: Recheck the storage source immediately before exact staging
+          ansible.builtin.slurp:
+            src: /etc/network/interfaces
+          register: _prefix_storage_source
+          no_log: true
+          when: proxmox_prefix_pilot_node == 'storage'
+
+        - name: Refuse storage source drift since its recovery preimage
+          ansible.builtin.assert:
+            that:
+              - _prefix_storage_source.content == _prefix_source.content
+            quiet: true
+          when: proxmox_prefix_pilot_node == 'storage'
+
+        - name: Stage the exact storage preimage with only its CIDR replaced
+          ansible.builtin.copy:
+            dest: /etc/network/interfaces.new
+            content: "{{ (_prefix_source.content | b64decode) | replace(proxmox_prefix_pilot_before, proxmox_prefix_pilot_after) }}"
+            owner: root
+            group: root
+            mode: "0644"
+            force: false
+          register: _prefix_storage_stage
+          no_log: true
+          when: proxmox_prefix_pilot_node == 'storage'
+
+        - name: Require storage staging to create its own new pending file
+          ansible.builtin.assert:
+            that:
+              - _prefix_storage_stage.changed
+            quiet: true
+          when: proxmox_prefix_pilot_node == 'storage'
 
         - name: Read the staged file without displaying it
           ansible.builtin.slurp:
@@ -341,23 +539,23 @@
             that:
               - >-
                 ((_prefix_staged.content | b64decode).splitlines()
-                 | map('trim') | reject('match', '^#') | reject('equalto', '') | list)
+                 | map('trim') | reject('match', '^#') | reject('equalto', '') | sort | list)
                 ==
                 (((_prefix_source.content | b64decode)
                   | replace(proxmox_prefix_pilot_before, proxmox_prefix_pilot_after)).splitlines()
-                 | map('trim') | reject('match', '^#') | reject('equalto', '') | list)
+                 | map('trim') | reject('match', '^#') | reject('equalto', '') | sort | list)
             fail_msg: Staged directives differ beyond the reviewed CIDR; activation is refused.
             quiet: true
 
         - name: Parse all original interfaces including the manual physical NIC
           ansible.builtin.command:
-            argv: [ifquery, -i, "{{ proxmox_prefix_pilot_state_dir }}/interfaces.before", -o, json, lo, nic0, vmbr0]
+            argv: "{{ ['ifquery', '-i', proxmox_prefix_pilot_state_dir ~ '/interfaces.before', '-o', 'json'] + proxmox_prefix_pilot_target.interfaces }}"
           register: _prefix_original_parsed
           changed_when: false
 
         - name: Parse all staged interfaces without applying them
           ansible.builtin.command:
-            argv: [ifquery, -i, /etc/network/interfaces.new, -o, json, lo, nic0, vmbr0]
+            argv: "{{ ['ifquery', '-i', '/etc/network/interfaces.new', '-o', 'json'] + proxmox_prefix_pilot_target.interfaces }}"
           register: _prefix_staged_parsed
           changed_when: false
 
@@ -368,7 +566,7 @@
         - name: Require the reviewed parsed interface set
           ansible.builtin.assert:
             that:
-              - "((_prefix_original_parsed.stdout | from_json) | map(attribute='name') | sort) == ['lo', 'nic0', 'vmbr0']"
+              - ((_prefix_original_parsed.stdout | from_json) | map(attribute='name') | sort) == (proxmox_prefix_pilot_target.interfaces | sort)
               - _prefix_original_bridge['config']['address'] == proxmox_prefix_pilot_before
             quiet: true
 
@@ -477,7 +675,7 @@
               - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', proxmox_prefix_pilot_address) | selectattr('prefixlen', 'equalto', 24) | list | length == 1
               - (_prefix_after_pve.stdout | from_json)['cidr'] == proxmox_prefix_pilot_after
               - (_prefix_after_pve.stdout | from_json)['gateway'] == '10.0.10.1'
-              - (_prefix_after_pve.stdout | from_json)['bridge_ports'] == 'nic0'
+              - (_prefix_after_pve.stdout | from_json)['bridge_ports'] == proxmox_prefix_pilot_target.bridge_ports
             quiet: true
 
         - name: Verify the gateway after the prefix change
@@ -498,9 +696,104 @@
               - (_prefix_after_cluster.stdout | from_json) | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
             quiet: true
 
+        - name: Read storage bond parameters after host reload
+          ansible.builtin.slurp:
+            src: "/sys/class/net/{{ proxmox_prefix_pilot_target.bond_interface }}/bonding/{{ item }}"
+          loop: "{{ (proxmox_prefix_pilot_target.bond_parameters | default({})).keys() | list }}"
+          register: _prefix_bond_after
+          no_log: true
+
+        - name: Require storage bond runtime parameters to remain unchanged
+          ansible.builtin.assert:
+            that:
+              - (_prefix_bond_after.results | map(attribute='content') | list) == (_prefix_bond_before.results | map(attribute='content') | list)
+            quiet: true
+
+        - name: Read the NAS interface after the PVE host reload
+          ansible.builtin.command:
+            argv: [ip, -j, address, show, dev, eth0]
+          delegate_to: nas_unraid
+          register: _prefix_nas_after
+          changed_when: false
+          no_log: true
+          when: proxmox_prefix_pilot_node == 'storage'
+
+        - name: Require NAS interface identity and prefix to remain unchanged
+          ansible.builtin.assert:
+            that:
+              - (_prefix_nas_after.stdout | from_json)[0]['ifname'] == (_prefix_nas_before.stdout | from_json)[0]['ifname']
+              - (_prefix_nas_after.stdout | from_json)[0]['address'] == (_prefix_nas_before.stdout | from_json)[0]['address']
+              - ((_prefix_nas_after.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | map(attribute='local') | list) == ((_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | map(attribute='local') | list)
+              - ((_prefix_nas_after.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | map(attribute='prefixlen') | list) == ((_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | map(attribute='prefixlen') | list)
+            quiet: true
+          when: proxmox_prefix_pilot_node == 'storage'
+
         - name: Verify the unchanged compute guest from the controller
           ansible.builtin.command:
             argv: [kubectl, wait, --for=condition=Ready, "node/{{ proxmox_prefix_pilot_guest }}", --timeout=30s]
+          delegate_to: localhost
+          changed_when: false
+          when: proxmox_prefix_pilot_guest | length > 0
+
+        - name: Verify protected guest configurations and power state after the host reload
+          block:
+            - name: Read each protected guest configuration after reload
+              ansible.builtin.command:
+                argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/{{ item.kind }}/{{ item.id }}/config", --output-format, json]
+              loop: "{{ proxmox_prefix_pilot_target.protected_guests }}"
+              register: _prefix_protected_config_after
+              changed_when: false
+              no_log: true
+
+            - name: Require every protected guest configuration to remain identical
+              ansible.builtin.assert:
+                that:
+                  - (item.stdout | from_json) == (_prefix_protected_config_before.results[guest_index].stdout | from_json)
+                quiet: true
+              loop: "{{ _prefix_protected_config_after.results }}"
+              loop_control:
+                index_var: guest_index
+              no_log: true
+
+            - name: Read each protected guest running state after reload
+              ansible.builtin.command:
+                argv: [pvesh, get, "/nodes/{{ proxmox_prefix_pilot_node }}/{{ item.kind }}/{{ item.id }}/status/current", --output-format, json]
+              loop: "{{ proxmox_prefix_pilot_target.protected_guests }}"
+              register: _prefix_protected_status_after
+              changed_when: false
+              no_log: true
+
+            - name: Require protected guests running with unchanged QEMU process identities
+              ansible.builtin.assert:
+                that:
+                  - (item.stdout | from_json)['status'] == 'running'
+                  - item.item.kind != 'qemu' or ((item.stdout | from_json)['pid'] == (_prefix_protected_status_before.results[guest_index].stdout | from_json)['pid'])
+                quiet: true
+              loop: "{{ _prefix_protected_status_after.results }}"
+              loop_control:
+                index_var: guest_index
+              no_log: true
+          when: proxmox_prefix_pilot_target.protected_guests | length > 0
+
+        - name: Read the Technitium daemon identity after edge reload
+          ansible.builtin.command:
+            argv: [pct, exec, "200", --, /run/current-system/sw/bin/systemctl, show, technitium-dns-server.service, --property=MainPID, --value]
+          register: _prefix_dns_pid_after
+          changed_when: false
+          when: proxmox_prefix_pilot_node == 'edge'
+
+        - name: Require the Technitium process to remain running without a restart
+          ansible.builtin.assert:
+            that:
+              - _prefix_dns_pid_after.stdout | trim | int > 0
+              - (_prefix_dns_pid_after.stdout | trim) == (_prefix_dns_pid_before.stdout | trim)
+            quiet: true
+          when: proxmox_prefix_pilot_node == 'edge'
+
+        - name: Verify scoped DNS behavior before confirming the host change
+          ansible.builtin.command:
+            argv: [node, -e, "{{ proxmox_prefix_pilot_dns_probe }}", "{{ item.server }}", "{{ item.domain }}", "{{ item.expected_address }}"]
+          loop: "{{ proxmox_prefix_pilot_target.dns_checks }}"
           delegate_to: localhost
           changed_when: false
 

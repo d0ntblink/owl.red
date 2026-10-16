@@ -225,9 +225,9 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Observed:** after the approved worker pilot and sequential compute batch,
-PVE `cp1`, `cp2`, `cp3`, `worker1` (`.11-.14`) use `/24`. PVE edge/storage,
-Talos guest node addresses, NAS and the operator retain `/16` on the legacy
+**Observed:** after the approved host-only changes, all six PVE management
+addresses (edge `.3`, storage `.4`, compute `.11-.14`) use `/24`. Router
+LAN `.1`, Talos guest node addresses, NAS and the operator retain `/16` on the legacy
 untagged L2. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
@@ -253,7 +253,7 @@ recovery and connectivity requirements.
 
 1. **Inventory and choose the intermediate states.**
   - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The dated refresh returns 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. The approved 2026-10-16 range correction now ends at `.199`; preserve the unchanged 24-hour lease/renewal implications.
-  - `[~]` Record masks, gateways and L2 attachment. All four compute PVE hosts `.11-.14` now use `/24`; edge/storage PVE, four Talos guest node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[~]` Record masks, gateways and L2 attachment. All six PVE management addresses (edge `.3`, storage `.4`, compute `.11-.14`) now use `/24`; router LAN `.1`, four Talos guest node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
   - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`. Initial Wi-Fi was disconnected; a hotspot was connected later, without claiming it became the selected internet path. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
@@ -265,6 +265,11 @@ recovery and connectivity requirements.
   - `[x]` Explicitly approve and run the one-host pilot with private on/off-host preimages and host-local rollback (2026-10-16T01:13:43Z-01:14:15Z). The first stage was safely refused for PVE-generated header/formatting and reverted without reload. Repaired guards compare every non-comment directive and all parsed interface fields except the approved CIDR. The successful PVE task finished `OK`; runtime/persisted `.14/24`, SSH, gateway, six-node quorum and guest readiness passed before lock-protected timer cancellation. No pending file or triggered rollback remains. The guest stays `/16`; the rest of the contraction is not approved by this pilot.
   - `[x]` Extend the same guarded playbook to an explicit compute-only allowlist for `cp1`, `cp2`, `cp3` and the completed worker. Twelve offline cases cover canonical mappings, single-host limits and refused router/storage/cross-host paths. Connected `cp1`/`cp2`/`cp3` previews pass with zero changes, including direct guest API readiness and PDM reachability on `cp1`.
   - `[x]` Approve and apply `cp1` `.11/24`, `cp2` `.12/24`, `cp3` `.13/24` sequentially (2026-10-16T01:39:42Z-01:42:54Z), preserving addresses/gateway/DNS/bridge/VLAN and guest prefixes. Each host's 180-second rollback was confirmed inactive before the next began. Final acceptance at 01:43:58Z shows matching runtime/persisted `/24`, no pending files or rollback, six online/quorate PVE members, all four Kubernetes nodes Ready, three direct API readiness checks passing and PDM TCP reachable. Router, storage, Windows, NAS and guest-version configuration were not changed.
+  - `[x]` Prepare edge PVE management `.3/16` to `.3/24` using the same guarded path with `onboard` and all seven reviewed interface stanzas. Thirteen offline cases and a 19-check, zero-change connected preview pass. Protected router/Technitium guest configs and process identities, TCP ports and explicit DNS checks are required; no router guest interface/power setting is written. Storage was excluded from that scope.
+  - `[x]` Explicitly approve and run only edge PVE management `.3/24` (2026-10-16T02:05:22Z-02:05:58Z), with fresh on/off-host preimages and local rollback. An initial stanza-order-only stage was safely refused and reverted without reload; repaired guards preserve all directive content and full parsed models. Final acceptance confirms runtime/persisted `.3/24`, `onboard`, inactive confirmed timer/no pending file, unchanged router/Technitium guest configs and process identities, healthy DNS/HTTPS, six-node quorum and four Ready Kubernetes nodes. Router `.1/16`, passthrough, guest prefixes, storage and Windows were not changed.
+
+  - `[x]` Prepare storage PVE management `.4/16` to `.4/24` using the same one-host, default-off path with `bond0` and all five reviewed interface stanzas. Fourteen offline cases pass, including bond model/runtime and NAS VM device/PID/network drift refusals. Connected preview at 2026-10-16T16:25:51Z reports `ok=21`, `changed=0`, `failed=0`; NAS remains `.5/16`, HTTPS/SMB TCP responds and VM 101 is running. No storage staging, timer or reload has occurred.
+  - `[x]` Explicitly approve and run only storage PVE management `.4/24` (2026-10-16T16:36:08Z-16:36:52Z), with fresh private on/off-host preimages and local rollback. Initial API staging safely refused added bond-member `auto` flags before timer/reload and was reverted without reload. Storage-only exact-preimage staging preserves those flags; fifteen offline cases pass. Final 16:37:45Z read-back verifies runtime/persisted `/24`, source-only CIDR change, unchanged bond/NAS VM configuration/QEMU PID/`.5/16`/MAC and reachable HTTPS/SMB TCP, six-node quorum, confirmed inactive timer and no pending file/rollback. NAS settings, disks, array, passthrough, USB boot, power and unrelated services were not changed.
 
   **Assessment, not apply approval:** mask-only contraction remains the leading
   option for the observed addresses. The operator-to-PVE `.3` path is on-link
@@ -275,7 +280,7 @@ recovery and connectivity requirements.
   affected AP work, not independent wired preparation. Preserve the API VIP
   `/32`, existing DNS overrides and the native L2 while a scoped IaC/rollback
   procedure is prepared. The approved changes so far are the DHCP range boundary
-  and four compute-host masks; no router mask, VLAN or guest-prefix migration is
+  and six PVE management masks; no router mask, VLAN or guest-prefix migration is
   claimed by those results.
 
 2. **Prepare the serving-state guard and non-disruptive configuration.**

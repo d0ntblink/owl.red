@@ -360,16 +360,18 @@ session. Keep each missing check attached to the component/path it gates.
 
 ## Worker Management-Prefix Pilot
 
-The [compute-prefix playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
-retains the proven worker pilot and explicitly allowlists the other compute
-hosts, one per invocation. It contracts only management `/16` to `/24`, retaining
-address, gateway, resolver, `nic0` bridge port and native VLAN behavior. Router
-and storage hosts are not allowlisted. No Talos guest prefix, API VIP `/32` or
-operator port 22 is changed. A reload can briefly affect selected host/guest
-networking; this is not a zero-interruption guarantee.
+The [PVE prefix playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+covers the completed compute/edge/storage rollout with reviewed single-NIC and
+bond topologies, one host per invocation. It contracts only management `/16` to `/24`, retaining
+address, gateway, resolver, the allowlisted bridge port and native VLAN behavior.
+Every new activation requires its own host-specific approval. NAS and router guest interfaces, Talos guest prefixes, API VIP
+`/32` and operator port 22 are not changed. A reload can briefly affect selected
+host/guest networking; this is not a zero-interruption guarantee.
 
 | Inventory Host | Management Address | Guest / Direct API Check | Additional Check |
 |----------------|--------------------|--------------------------|------------------|
+| `edge_pve` | `10.0.10.3/24` | Protected OPNsense VM 100 / Technitium LXC 200 | Router/Technitium ports, DNS and process identities |
+| `storage_pve` | `10.0.10.4/24` | Protected NAS VM 101 | Bond runtime, unchanged NAS `.5/16` identity, HTTPS/SMB TCP and Technitium DNS |
 | `cp1_pve` | `10.0.10.11/24` | `cp1-talos` / `.21:6443/readyz` | PDM `.31:8443` TCP |
 | `cp2_pve` | `10.0.10.12/24` | `cp2-talos` / `.22:6443/readyz` | None |
 | `cp3_pve` | `10.0.10.13/24` | `cp3-talos` / `.23:6443/readyz` | None |
@@ -377,9 +379,14 @@ networking; this is not a zero-interruption guarantee.
 
 - Controller: the tested Ansible core `2.16.3`, Node.js `24`, Python 3/PyYAML,
   selected `kubectl` context and existing strict-host-key root SSH access to
-  the selected compute host. Direct control-plane API readiness uses that same
+  the selected PVE host. Storage also needs the existing `nas_unraid` root SSH
+  access, working Ansible Python and iproute2 JSON support on NAS; its checks only
+  read `eth0`, never guest settings, disks, array or service/container state.
+  Direct control-plane API readiness uses that same
   kubeconfig/client trust, not a new TLS bypass; PDM uses built-in `wait_for`
-  TCP checks. No new collection, npm package or infrastructure secret is needed.
+  TCP checks. Edge's explicit DNS queries use Node's built-in promise Resolver,
+  not a third-party parser or OS resolver change. No new collection, npm package
+  or infrastructure secret is needed.
 - Target: the verified Proxmox `9.2.3` API/CLI, iproute2, ifupdown2 `ifquery` /
   `ifreload`, systemd `systemd-run` / `systemctl`, util-linux `flock`, Bash and
   GNU coreutils (`sha256sum`, `install`, `rm`, `touch`). No package installation,
@@ -390,11 +397,26 @@ networking; this is not a zero-interruption guarantee.
   Source ownership/mode and current runtime/configured prefix agree. Six PVE
   members must be online/quorate, the gateway reachable and selected guest Ready.
 - Activation: opt-in defaults false. Both host/controller private recovery
-  directories must be new. PVE stages the existing bridge CIDR only, and the
-  staged non-comment directives and complete parsed models must match except
-  that CIDR. PVE's generated header/blank-line formatting is allowed; `ifquery`
-  explicitly includes `lo`, manual `nic0` and `vmbr0` because its default list
-  omits manual interfaces. No timer/reload starts before these checks pass.
+  directories must be new. Compute/edge stage the existing bridge CIDR through
+  PVE. Storage instead rechecks the source against its recovery preimage and
+  creates `/etc/network/interfaces.new` from those exact bytes with only the CIDR
+  replaced; an existing pending file is never overwritten. PVE's storage API
+  serializer was observed to add unapproved `auto` flags to both bond members,
+  so that path is not used for storage staging. All hosts still activate through
+  the PVE network endpoint with the same local rollback and postchecks. The
+  staged non-comment directive content and complete parsed models must match
+  except that CIDR. PVE's generated header, blank lines and stanza ordering are
+  allowed; directive counts/content and parsed per-interface settings are not
+  relaxed. `ifquery`
+  explicitly includes the target's full reviewed interface list because default
+  listing omits manual interfaces. Storage uses `lo obnic0 obnic1 bond0 vmbr0`,
+  with `bond0` active-backup, slaves `obnic0 obnic1`, primary/active `obnic0` and
+  miimon `100`. These runtime parameters and the NAS MAC/IPv4 prefix must remain
+  unchanged, alongside the whole NAS VM configuration and QEMU PID. No bond
+  member failover/reconfiguration or NAS action is attempted to repair a refusal.
+  Compute uses `lo nic0 vmbr0`; edge uses
+  `lo onboard vmbr0 nic0 nic1 nic2 nic3`, with bridge port `onboard`.
+  No timer/reload starts before these checks pass.
   `serial: 1`, fatal-on-error behavior and an exact one-host invocation check
   prevent accidentally starting a multi-host rollout. Use one `--limit` and
   confirm its outcome before launching the next host.
@@ -424,7 +446,7 @@ the PVE API or modify real interfaces.
 The existing credential-free network CI job runs them.
 
 The added scope cases evaluate every host/IP/guest/API mapping and refuse
-router/storage, a wrong management IP, another guest's API address or multiple
+storage, a wrong management IP, another guest's API address or multiple
 hosts. Node-scoped PVE commands must use the selected node, not a stale worker
 path. Extending this allowlist prepares the next batch; it does not approve its
 live activation.
@@ -456,6 +478,41 @@ post-change inspection refused it conservatively; after validating that exact
 empty regular file and testing the narrow exception, the converged read-only
 preview passes `ok=14`, `changed=0`, `failed=0`, `skipped=36`. No additional
 network activation was performed to repair the inspection policy.
+
+### Edge Host Preparation
+
+The edge extension was separately approved and deployed on 2026-10-16 UTC.
+Its preflight showed `.3/16`, `onboard`, the seven declared interface stanzas,
+no pending file or extra includes/SDN zones and both guests running. OPNsense's passed-through
+PCI configuration is read, never written. The playbook compares whole protected
+guest configurations before/after, requires the router QEMU PID unchanged and
+requires Technitium's existing daemon PID unchanged. No guest restart/power
+command is used. Router `.1:443`, Technitium `.30:5380` and explicit external/
+internal DNS checks must pass before confirmation.
+
+All thirteen offline cases pass, including the actual edge model and guest
+assertions against healthy and drifted fixtures. Unintended NIC, passthrough,
+router process, stopped guest or DNS-daemon changes refuse confirmation. The
+include-directory scan also sees symlinks/other entries; only the known empty
+regular `sdn` file is excepted. Edge's preparation preview returned `ok=19`,
+`changed=0`, `failed=0`, `skipped=48`; no mutation ran in that preview.
+
+The first stage was safely refused because PVE moved the unchanged manual NIC
+stanzas before `vmbr0`. Exact hashes and all seven parsed models were inspected,
+then only the owned pending file was reverted without reload. The actual edge
+fixture now reproduces that order: directive multiset plus complete parsed
+models allow reserialization, not an additional setting change. The controlled
+second run completed `ok=62`, `changed=10`, `failed=0` at 02:05:58Z.
+
+At 02:07:02Z, edge is runtime/persisted `.3/24`, gateway/DNS `.1`, bridge
+`onboard`, no pending file, source hash matching staging, confirmation present
+and timer inactive without rollback. Protected guest configurations, router
+QEMU PID and Technitium daemon PID are unchanged, and the LXC retains `.30/24`.
+Router external DNS, Technitium internal DNS, external HTTPS, six-node quorum
+and four Kubernetes Ready nodes pass. Inventory now matches. No router guest,
+passthrough, storage, Windows, VLAN or guest-power change was made. Use
+`--limit edge_pve --check` for inspection; future live operations still require
+their own scope and fresh recovery identity, with default opt-in false.
 
 ## Guarded Dnsmasq Range Preparation
 
