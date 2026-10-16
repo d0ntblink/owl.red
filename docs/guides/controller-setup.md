@@ -360,16 +360,26 @@ session. Keep each missing check attached to the component/path it gates.
 
 ## Worker Management-Prefix Pilot
 
-The [worker-only playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
-prepares `worker1_pve` management `10.0.10.14/16` to `10.0.10.14/24`, retaining
-its address, gateway, resolver, `nic0` bridge port and native VLAN behavior.
-It does not change the Talos guest's own `/16`, API VIP `/32`, router, storage
-host or operator port 22. A reload can briefly affect this host/guest networking;
-this is not a zero-interruption guarantee.
+The [compute-prefix playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+retains the proven worker pilot and explicitly allowlists the other compute
+hosts, one per invocation. It contracts only management `/16` to `/24`, retaining
+address, gateway, resolver, `nic0` bridge port and native VLAN behavior. Router
+and storage hosts are not allowlisted. No Talos guest prefix, API VIP `/32` or
+operator port 22 is changed. A reload can briefly affect selected host/guest
+networking; this is not a zero-interruption guarantee.
+
+| Inventory Host | Management Address | Guest / Direct API Check | Additional Check |
+|----------------|--------------------|--------------------------|------------------|
+| `cp1_pve` | `10.0.10.11/24` | `cp1-talos` / `.21:6443/readyz` | PDM `.31:8443` TCP |
+| `cp2_pve` | `10.0.10.12/24` | `cp2-talos` / `.22:6443/readyz` | None |
+| `cp3_pve` | `10.0.10.13/24` | `cp3-talos` / `.23:6443/readyz` | None |
+| `worker1_pve` | `10.0.10.14/24` | `worker1-talos` Ready | Completed worker pilot |
 
 - Controller: the tested Ansible core `2.16.3`, Node.js `24`, Python 3/PyYAML,
   selected `kubectl` context and existing strict-host-key root SSH access to
-  `worker1`. No new collection, npm package or infrastructure secret is needed.
+  the selected compute host. Direct control-plane API readiness uses that same
+  kubeconfig/client trust, not a new TLS bypass; PDM uses built-in `wait_for`
+  TCP checks. No new collection, npm package or infrastructure secret is needed.
 - Target: the verified Proxmox `9.2.3` API/CLI, iproute2, ifupdown2 `ifquery` /
   `ifreload`, systemd `systemd-run` / `systemctl`, util-linux `flock`, Bash and
   GNU coreutils (`sha256sum`, `install`, `rm`, `touch`). No package installation,
@@ -377,36 +387,59 @@ this is not a zero-interruption guarantee.
 - Preflight: no pending file, active extra included interface definitions or SDN zones;
   only the exact zero-byte regular PVE-generated `interfaces.d/sdn` include
   is accepted in addition to an empty include directory. Other includes refuse.
-  source ownership/mode and current runtime/configured prefix agree. Six PVE
-  members must be online/quorate, the gateway reachable and worker guest Ready.
+  Source ownership/mode and current runtime/configured prefix agree. Six PVE
+  members must be online/quorate, the gateway reachable and selected guest Ready.
 - Activation: opt-in defaults false. Both host/controller private recovery
   directories must be new. PVE stages the existing bridge CIDR only, and the
   staged non-comment directives and complete parsed models must match except
   that CIDR. PVE's generated header/blank-line formatting is allowed; `ifquery`
   explicitly includes `lo`, manual `nic0` and `vmbr0` because its default list
   omits manual interfaces. No timer/reload starts before these checks pass.
+  `serial: 1`, fatal-on-error behavior and an exact one-host invocation check
+  prevent accidentally starting a multi-host rollout. Use one `--limit` and
+  confirm its outcome before launching the next host.
 - Recovery: the tested host-local 180-second timer is armed before PVE reload.
   It validates the preimage and accepts only original/staged source hashes;
   another operator's active/pending edits are not overwritten. On success,
   SSH, PVE task `OK`, runtime/configured `/24`, gateway, cluster quorum and guest
-  readiness must pass before lock-protected confirmation cancels the timer.
+  readiness, selected control-plane API and any attached service check must
+  pass before lock-protected confirmation cancels the timer.
   A blocked or failed rollback still needs operator inspection; do not blindly
   retry or claim the timer is infallible.
 
 ```bash
 ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook \
   -i ansible/inventory/hosts.yml ansible/playbooks/proxmox-prefix-pilot.yml \
-  --limit worker1_pve --check
+  --limit cp1_pve --check
 node --test scripts/proxmox-prefix-pilot.test.mjs
 ```
 
-The connected preview passed with zero changes. All eleven offline cases execute
+Connected previews pass with zero changes for `cp1`, `cp2` and `cp3`; no new
+compute prefix has been changed by those previews. All twelve offline cases execute
 the actual embedded recovery programs or selected Ansible assertions against
 temporary data/fake reloads. They test corruption/drift refusal, reload failure,
 rollback/confirmation races and PVE-header acceptance without permitting another
 directive/model change, plus the exact empty-include exception; they never call
 the PVE API or modify real interfaces.
 The existing credential-free network CI job runs them.
+
+The added scope cases evaluate every host/IP/guest/API mapping and refuse
+router/storage, a wrong management IP, another guest's API address or multiple
+hosts. Node-scoped PVE commands must use the selected node, not a stale worker
+path. Extending this allowlist prepares the next batch; it does not approve its
+live activation.
+
+The owner subsequently approved that batch after confirming why a `/16` PC and
+these same-L2 `/24` hosts can still reach one another. `cp1`, `cp2`, `cp3` were
+changed and confirmed independently on 2026-10-16 UTC, each completing before
+the next invocation. At 01:43:58Z every selected host is runtime/persisted `/24`,
+source matches staging, confirmation exists, timer is inactive, no rollback or
+pending file remains, gateway/DNS and `nic0` bridge membership are unchanged.
+The PVE cluster is six-node online/quorate, all four Kubernetes nodes are Ready,
+each control-plane `/readyz` passes and PDM TCP is reachable. Inventory current
+prefixes now match. No guest prefix, router/storage, Windows networking or
+VLAN changed. Future live invocations still default off and need their own
+reviewed scope; completed host changes are not approval for broader migration.
 
 The owner approved the one-host pilot and it completed on 2026-10-16 UTC:
 worker1 is runtime/persisted `.14/24`, source hashes match, the pending file is

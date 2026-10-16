@@ -745,6 +745,68 @@ additional offline case. All eleven final cases pass. The converged check at
 01:20:13Z passes `ok=14`, `changed=0`, `failed=0`, `skipped=36`; this local
 inspection-policy repair did not stage or reload the live network again.
 
+## Follow-Up: Remaining Compute Prefix Preparation
+
+**Observed:** 2026-10-16T01:31:36Z. The completed worker1 pilot was not repeated.
+Fresh reads show `cp1` `.11/16`, `cp2` `.12/16`, `cp3` `.13/16`, each on
+`vmbr0` over `nic0`, gateway/DNS `.1`, no pending file or extra includes.
+
+The existing playbook now explicitly maps those three inventory hosts and the
+completed worker to their own IP, node, guest and direct API endpoint. One host
+per invocation, default-off activation, per-host rollback and all staged-model
+checks remain. Router/storage and multi-host invocations refuse before changes;
+tests also reject a forged management IP or another control-plane guest's API.
+All node-scoped PVE commands must use the selected node. No new writer or
+package dependency was introduced.
+
+All twelve offline cases pass. Separate connected check-mode runs returned
+`cp1: ok=16, changed=0, failed=0`; `cp2/cp3: ok=15, changed=0, failed=0`.
+Direct selected-guest `/readyz` checks passed with existing Kubernetes trust;
+PDM `.31:8443` was reachable in the `cp1` preview. No timer, pending file or
+network reload was started on those hosts.
+
+Live approval is required for the sequential `.11`, `.12`, `.13` management
+prefix changes. The batch must stop on any failed activation/confirmation;
+router, storage, operator path and guest addresses/prefixes are outside it.
+Private preview evidence is retained outside Git. No live compute change or
+assistant commit/push is claimed by this preparation record.
+
+## Follow-Up: Approved Sequential Compute Prefix Batch
+
+**Observed:** 2026-10-16T01:39:42Z through 01:43:58Z. After discussing the
+operator's `.174/16` and the hosts' proposed `/24` on the same native L2, the
+owner explicitly directed the reviewed sequential `cp1`, `cp2`, `cp3` batch to
+proceed. The already completed worker pilot was not repeated.
+
+| Host | UTC Activation | Result / Preserved Values |
+|------|----------------|---------------------------|
+| `cp1` | 01:39:42-01:40:14 | `.11/16` to `.11/24`; `ok=54`, `changed=10`, `failed=0`; direct guest API and PDM checks passed. |
+| `cp2` | 01:41:02-01:41:40 | `.12/16` to `.12/24`; `ok=52`, `changed=10`, `failed=0`; started only after cp1's final `/24`, confirmation, inactive timer and quorum were independently read back. |
+| `cp3` | 01:42:22-01:42:54 | `.13/16` to `.13/24`; `ok=52`, `changed=10`, `failed=0`; started only after cp2's equivalent read-back. |
+
+Each invocation retained private on/off-host preimages, armed the 180-second
+host-local rollback before the PVE reload, waited for actual task `OK`, checked
+SSH/gateway/quorum/guest/service health, and confirmed under the rollback lock.
+At 01:43:58Z, all three have exactly one runtime IPv4 address and matching PVE
+persisted `/24`, unchanged gateway/DNS `.1` and bridge port `nic0`, active source
+hash matching staging, no pending file, confirmation marker present, no
+rollback/blocked marker and inactive rollback timer. Each connected route is
+`10.0.10.0/24`, not the old `/16`.
+
+All six PVE members remain online and quorate. All four Kubernetes nodes are
+Ready; direct authenticated API `/readyz` checks at `.21`, `.22`, `.23` pass
+using existing trust, and PDM `.31:8443` is TCP-reachable. No guest address,
+prefix or version was modified. No measured zero-interruption claim is made.
+
+The three inventory current-flat prefixes now record 24, alongside the earlier
+worker `.14/24`. Edge/storage PVE, router, NAS and operator were not changed by
+this batch; their older `/16` state is not permission to route overlapping
+target VLANs yet. VLANs, bridge membership, Windows routing, DNS overrides,
+port 22, VM power and passthrough remain untouched. Recovery/activation/acceptance
+records are private outside Git. No retry, recovery restore, assistant commit
+or Git publish occurred. This closes the compute-host prefix batch, not the
+whole subnet migration.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
