@@ -2,9 +2,10 @@ machine:
   network:
     hostname: cp3-talos
     interfaces:
-      - interface: eth0
+      - deviceSelector:
+          hardwareAddr: "02:00:00:00:00:23"
         addresses:
-          - 10.0.10.23/16
+          - 10.0.10.23/24
         routes:
           - network: 0.0.0.0/0
             gateway: 10.0.10.1
