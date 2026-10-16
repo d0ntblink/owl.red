@@ -807,6 +807,133 @@ records are private outside Git. No retry, recovery restore, assistant commit
 or Git publish occurred. This closes the compute-host prefix batch, not the
 whole subnet migration.
 
+## Follow-Up: Edge Host Prefix Preparation
+
+**Observed:** 2026-10-16T01:56:29Z. Edge PVE management remains `.3/16`,
+gateway/DNS `.1`, bridge port `onboard`, root-owned `0644` source, no pending
+file or extra includes/SDN zones. Its reviewed stanzas are `lo`, `onboard`,
+`vmbr0`, `nic0` through `nic3`; all manual NIC stanzas must remain unchanged.
+OPNsense VM 100 and Technitium LXC 200 are running. The router's two passthrough
+PCI entries and the LXC's native `.30/24` network are read-only evidence.
+
+The existing playbook now explicitly allowlists that topology while storage
+stays excluded. It uses the same one-host/default-off scope and guarded local
+rollback, with target-specific full parsed interface comparison. Edge has no
+Kubernetes guest-readiness target: instead it requires both protected guest
+configurations unchanged, running guests, the router QEMU PID unchanged,
+Technitium daemon PID unchanged, `.1:443` / `.30:5380` reachable and scoped
+external/internal DNS responses before confirmation. No guest config, restart,
+power or passthrough mutation is implemented.
+
+All thirteen offline cases pass, including selected actual assertions against
+extra-NIC, passthrough, router PID, stopped-container and DNS-daemon drift.
+The include-policy fixture also rejects a symlink rather than ignoring it.
+The connected edge preview passes `ok=19`, `changed=0`, `failed=0`, `skipped=48`.
+No network staging, rollback timer or host reload ran. Private preview records
+are retained outside Git; existing controller dependencies suffice.
+
+The edge-host management prefix still requires its own explicit live approval.
+It is not the router LAN prefix `.1/16`, and no VLAN is introduced. A PVE reload
+can briefly affect management/LXC traffic even while router guest settings stay
+unchanged. No live edge change, storage operation or assistant commit/push is
+claimed by this preparation record.
+
+## Follow-Up: Approved Edge Management Prefix
+
+**Observed:** 2026-10-16T02:01:06Z through 02:07:02Z. The owner explicitly
+approved only Proxmox edge management `.3/16` to `.3/24`, not OPNsense guest
+LAN `.1/16` or its passed-through NICs, storage/NAS, Windows routing or VLANs.
+
+| Stage | Evidence / Result |
+|-------|-------------------|
+| Safe first refusal | 02:01:06Z-02:01:25Z: staging assertion stopped before timer/reload because PVE moved unchanged manual NIC stanzas before the bridge. Live source hash and runtime `/16` remained intact; only a pending `.3/24` file existed. |
+| Inspection and repair | Exact source/pending hashes, sorted directive content and all seven parsed models showed only the approved CIDR change. The owned pending file was reverted through PVE without reload. The guard now allows stanza ordering while retaining duplicate-sensitive directive content and full parsed interface equality; the edge offline fixture reproduces the actual reserialization. |
+| Successful activation | Fresh identity and preimages; 02:05:22Z-02:05:58Z: `ok=62`, `changed=10`, `failed=0`, `skipped=5`, no rescue. Local 180-second rollback was armed before apply; actual PVE task `OK`, guest/config/PID, service, DNS and quorum checks preceded lock-protected confirmation. |
+| Host acceptance | At 02:07:02Z exactly one runtime IPv4 address `.3/24`, matching persisted PVE CIDR; gateway/DNS `.1`, bridge port `onboard`, new connected `10.0.10.0/24` and no old `/16` route. Source matches staged hash; confirmation exists, timer inactive, no pending file, rollback or blocked marker. |
+| Protected guests | Both guests running; whole guest configuration equality checked by the playbook. Selected passthrough/network/power configuration metadata remains identical on independent read-back; router QEMU PID and Technitium daemon PID unchanged. LXC remains `.30/24`. No guest restart or power command ran. |
+| Service acceptance | Router external DNS, Technitium internal `rancher.owl.red -> .201`, external HTTPS, all six PVE online/quorate and all four Kubernetes nodes Ready. No measured zero-interruption claim is made. |
+| Recovery/evidence | Fresh private on/off-host source preimages, protected before/after metadata, activation/result/acceptance and integrity records retained outside Git. No rollback, full configuration restore, assistant commit or Git publish was performed. |
+
+Edge inventory now records prefix 24, alongside four compute PVE hosts. Storage
+PVE and the appliance/client/guest `/16` transition are still separate. This
+closes only the edge-host management mask, not the router interface mask or
+whole subnet/VLAN rollout. The initial refusal and controlled repair are not
+described as a first-try success, and no unrelated pending file was overwritten.
+
+## Follow-up: Storage Management-Prefix Preparation
+
+Read-only preparation on 2026-10-16, around 16:18-16:26Z, confirms storage PVE
+`.4/16`, gateway `.1`, resolver `.30`, bridge port `bond0` and no pending network
+file, extra includes or SDN zones. This is newer evidence, not a relabeling of the
+02:07Z edge acceptance. The five declared/parsed interfaces are `lo`, `obnic0`,
+`obnic1`, `bond0`, `vmbr0`; the bond is active-backup, both named slaves, miimon
+`100` and primary/active slave `obnic0`.
+
+NAS VM 101 is running with passthrough and USB boot configuration preserved.
+Read-only guest evidence confirms `eth0`, MAC `f8:f2:1e:48:91:40`, `.5/16` and
+reachable TCP 443/445. An initial IPv4-only metadata read omitted the MAC key and
+the collector failed; the corrected full-interface JSON read succeeded. That
+collector error was not a NAS failure. TCP reachability is not a full web/SMB
+functional test, and no array, disk, boot, power or unrelated service read/write
+was needed for this host-only preparation.
+
+The existing default-off playbook now allowlists storage, protects the whole NAS
+VM configuration and QEMU PID, compares every parsed bond/interface setting and
+requires unchanged bond runtime parameters and NAS interface identity/prefix
+before timer confirmation. Fourteen offline cases pass. Connected check mode
+at 16:25:51Z reports `ok=21`, `changed=0`, `failed=0`, `unreachable=0`; private
+evidence is retained outside Git. No storage pending file, rollback timer,
+network reload or live prefix change was created. Storage management activation
+was not yet approved at that preview; NAS itself remains excluded as a mutation
+target.
+
+The owner subsequently approved only storage PVE `.4` management `/24`.
+The first activation attempt at 16:30:24Z-16:30:46Z stopped before timer/reload:
+PVE added `auto obnic0` and `auto obnic1`, which changed both parsed autostart
+flags and correctly failed the directive guard. At 16:33:01Z the owned pending
+file was reverted through PVE after verifying exact active/preimage/pending
+hashes, runtime `/16` and inactive timer; active source and NAS QEMU PID remained
+unchanged. No blind reload or retry was performed.
+
+Storage-only staging now rechecks the saved source, creates a new pending file
+from that exact source with only `.4/16` replaced by `.4/24`, and refuses an
+existing pending file. PVE activation and all model/rollback/acceptance guards
+remain unchanged. Fifteen offline cases pass, including the observed bond
+autostart drift and actual exact-copy/source-drift/pending-collision behavior.
+This is a staging-method repair within the approved host-only scope, not
+permission to change bond member settings or the NAS.
+
+## Follow-up: Approved Storage Management-Prefix Complete
+
+The controlled retry used fresh private host/controller recovery identities and
+the repaired storage-only staging method. From 2026-10-16T16:36:08Z to 16:36:52Z,
+the playbook completed with `ok=69`, `changed=10`, `failed=0`, `rescued=0`.
+The local 180-second rollback was armed before PVE activation; actual PVE task
+`OK`, host, bond, protected NAS VM/interface, DNS and service checks preceded
+lock-protected confirmation and timer cancellation.
+
+Independent acceptance at 16:37:45Z verifies exactly one runtime `.4/24` and
+matching persisted PVE CIDR, source equal to its preimage with only that CIDR
+replaced, connected `10.0.10.0/24` and no old `/16` connected route. Gateway `.1`,
+resolver `.30`, bridge port `bond0`, all bond parameters and both manual member
+autostart flags remain unchanged. NAS VM 101 is still running with the same QEMU
+PID and whole-configuration hash; NAS `eth0` retains MAC `f8:f2:1e:48:91:40` and
+`.5/16`, with SSH and TCP 443/445 reachable. No NAS configuration, disk, array,
+passthrough, USB boot, power or unrelated service change was made.
+
+The source matches the staged hash, confirmation exists, the timer is inactive,
+and no pending file, rollback or blocked marker remains. All six PVE members are
+online/quorate and all four Kubernetes nodes report Ready. Private before/after,
+activation, acceptance and exact source preimage evidence is retained outside
+Git. This is a verified host-only success after a safely refused first stage,
+not a first-try success or a measured zero-interruption claim. No rollback or
+configuration restore was needed.
+
+Inventory now records all six PVE management prefixes as 24. Router, NAS,
+operator and Talos guest prefix changes, plus VLAN routing and the eventual
+DNS/DHCP handoff, remain separately scoped; this does not complete the LAN
+transition. No assistant commit or Git publish was performed.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the
