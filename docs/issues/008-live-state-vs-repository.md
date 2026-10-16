@@ -597,6 +597,154 @@ recovery remain explicit unknowns, not guessed defaults. The screenshot is
 later evidence for console access, not a refresh of every earlier lease or
 host-inventory observation.
 
+## Follow-Up: Range-Fix Preparation And Control-Path Safety
+
+**Observed:** preparation through 2026-10-16 UTC (2026-10-15 local). Fresh GET
+reads at 00:04:47Z still found one Dnsmasq range `.100-.200`, 15 lease records
+and eight reservations, with complete pagination. No lease, reservation, ARP
+entry or requested/allocated Kubernetes load-balancer address at `.200` was
+observed; MetalLB still lists `.200-.250`. These are dated observations, not
+permission to skip another ownership check immediately before any live change.
+
+- Local `terraform init -backend=false -lockfile=readonly -input=false`
+  installed the already-locked `0.24.0` provider without a plan, state refresh
+  or appliance change. Its schema has `opnsense_dnsmasq_host`, not a Dnsmasq
+  range resource. Kea resources do not manage the active Dnsmasq engine.
+- The GET backup-provider/history/download path works. A selected August 2026
+  history XML was saved privately and parsed without printing sensitive
+  contents. It is not a new active export and was not approved for a full-current
+  restore. API range/client preimages are separate; no restore/revert/import
+  or reboot was performed.
+- A [range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml)
+  prepares the existing UUID's end address `.200` to `.199`. Both activation
+  opt-ins default false. Check mode is GET-only; missing objects, observed
+  pre-save drift, address ownership, incomplete pagination or unintended field
+  changes stop the run. These checks do not make separate requests atomic.
+  An approved mutation would save a private preimage, post only the
+  end field, and verify all other returned fields before service activation.
+- All [eight offline cases](../../scripts/opnsense-dhcp-range.test.mjs) pass
+  against loopback HTTP with synthetic credentials. One case exposed a YAML
+  comparison parsed as a truthy mapping; quoting it and checking all assertion
+  shapes fixed that failure before any live execution. An interrupted test
+  call had an unknown result; a local process check found none running and the
+  complete suite was rerun successfully, not inferred to have passed.
+- The vanished temporary CLI was replaced by a checksum-verified user-local
+  `2026.7.0` copy and separate profile; actual router item/API reads work.
+  The installed original CLI was not replaced. A concurrent original-profile
+  change was observed but not attributed/reverted; later status isolation was
+  verified without claiming the earlier whole interval was unchanged.
+
+The owner explicitly warned that internet loss also disconnects the assistant,
+then offered phone hotspot internet with LAN Ethernet retained. The offer is
+not an enabled or verified route. Before a disruptive live step, verify cellular
+rather than home-Wi-Fi uplink, Windows/WSL internet and DNS through it, and local
+Proxmox/router routing through Ethernet. Check relevant IPv4/IPv6 behavior and
+do not silently change metrics, resolvers, gateways or IPv6 policy. Keep port 22
+native and untouched; provide owner-executable recovery, not a promise of
+assistant-led rollback after disconnection.
+
+**No live range mutation was performed.** The reconfigure implementation can
+reload firewall rules as well as interrupt DHCP/DNS. Current export/restore,
+independent connectivity, fresh preflight and explicit approval remain required;
+neither passing tests nor the hotspot offer lifts those gates. No subnet, VLAN,
+client DNS/DHCP authority, NAS or power change was made, and nothing was published
+by the assistant.
+
+## Follow-Up: Approved Dnsmasq Range-Only Deployment
+
+**Observed:** 2026-10-16T00:40:51Z through 00:44:05Z. After the hotspot route
+concern was explained, the owner explicitly directed deployment without
+additional Windows networking changes. The accepted action was the existing
+range end `.200` to `.199`, not a mask/VLAN/client-authority change. Fresh scoped
+API preimages and the demonstrated console access were used for recovery; no
+full-current XML export or independent-hotspot-egress verification is claimed.
+
+| Surface | Result |
+|---------|--------|
+| Fresh preflight | Existing UUID/start/end and full client pagination confirmed; no observed lease, reservation, ARP or Kubernetes allocation at `.200`. Read-only Ansible preview passed. |
+| Activation | Guarded Ansible run 00:40:51Z-00:41:00Z completed `ok=24`, `changed=5`, `failed=0`, no rescue/retry. Fresh local private preimages precede the single-field save; reconfigure ran only after all other range fields matched. |
+| Configured range | `10.0.10.100-10.0.10.199`; only `end_addr` differs from the immediate preimage. MetalLB remains `.200-.250`, so the configured allocation ranges no longer overlap. |
+| Preserved state | Eight reservations and LAN `10.0.10.1/16` unchanged; 15 lease records, no `.200` lease, Dnsmasq running. No subnet/VLAN/lease-time/client-DNS change. |
+| Connectivity | Router external DNS, Technitium internal `rancher.owl.red` and external HTTPS probes passed after activation. No claim of measured zero interruption is made. |
+| Real DHCP acceptance | Probe UTC 00:42:50Z-00:43:05Z: matching transaction `0x46544f0d` at wired `cp1/vmbr0` and Technitium `eth0`; one DISCOVER and one OPNsense offer per capture, zero drops. Mask `/16` and DNS `.1` unchanged; no real client renewal/release or accepted lease. |
+| Recovery evidence | Fresh range/client/interface API snapshots, immediate preimage, scoped inverse instructions, activation log, post-read-back and PCAP/XML/decoded traces retained outside Git, directories `0700` / files `0600`, with integrity hashes. No rollback was executed. |
+
+This closes the DHCP/MetalLB `.200` overlap fix only. The range setter and service
+reconfigure were the only live router operations; neither whole-root Terraform
+apply nor configuration import/restore was used. Windows route metrics and DNS,
+switch port 22, VLANs, NAS and power settings were untouched. Broader subnet
+migration, hardware return-path checks and its own configuration/recovery
+requirements remain separate. No commit/push was made by the assistant.
+
+## Follow-Up: Worker Prefix Pilot Preparation
+
+**Observed:** 2026-10-16 UTC. The completed DHCP overlap fix was not repeated.
+The next proposed pilot is only PVE `worker1` management `10.0.10.14/16` to
+`10.0.10.14/24`, keeping address/gateway/DNS, bridge `nic0` membership and native
+tagging. The router, storage host, operator path and guest configurations are
+outside this pilot.
+
+- Direct reads confirm persisted/runtime `.14/16`, gateway `.1`, one CIDR
+  occurrence, root-owned `0644` source, no pending file or extra include, no SDN
+  zones, six online/quorate PVE nodes, reachable gateway and a Ready worker guest.
+- Installed PVE code shows network apply commits the pending file in a background
+  `srvreload` task and runs `ifreload -a`, with possible SDN/FRR generation.
+  The prepared playbook refuses configured SDN zones and explicitly suppresses
+  FRR regeneration. Only exact one-CIDR staging is accepted; a whole network
+  target or unrelated pending change is not silently applied.
+- A guarded host-local 180-second rollback is prepared, not armed. It verifies
+  the recovery bytes/hashes, refuses another operator's active/pending source,
+  and shares a lock with final confirmation. Recovery snapshots are planned on
+  both the host and controller outside Git. Rollback failures remain observable
+  failures, not a guaranteed-success recovery claim.
+- All [nine offline cases](../../scripts/proxmox-prefix-pilot.test.mjs) pass
+  against temporary files and fake reload/systemctl commands. They cover policy,
+  syntax, exact restoration, confirmation, active/pending drift, damaged
+  preimages, reload failure and concurrent confirmation/rollback.
+- The [connected check-mode preview](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+  completed `ok=14`, `changed=0`, `failed=0`, `skipped=31`; no staging, timer,
+  reload or interface modification ran. Tool requirements and the operator
+  invocation are in the [controller guide](../guides/controller-setup.md#worker-management-prefix-pilot).
+
+Live approval is still required for the management-prefix change. It can briefly
+interrupt the worker host or its guest traffic even though it does not touch
+the internet router. It does not lift broader subnet/VLAN approvals, change the
+Talos guest's `/16` or API VIP `/32`, repeat hotspot-priority questions, or permit
+NAS/power/version operations. No live prefix change is claimed by this record.
+
+## Follow-Up: Approved Worker1 Prefix Pilot
+
+**Observed:** 2026-10-16T01:06:48Z through 01:15:08Z. The owner explicitly
+approved only PVE worker1 management `10.0.10.14/16` to `10.0.10.14/24` with the
+host-local 180-second rollback. Other hosts, router, storage, operator port 22,
+Talos guest configuration, VLANs and DNS were outside the approval.
+
+| Stage | Evidence / Result |
+|-------|-------------------|
+| First staging attempt | At 01:06:48Z-01:07:03Z the raw-byte assertion refused PVE's added generated header and formatting. No timer or network reload started; live source/runtime stayed `/16`. |
+| Disambiguation | Exact active and pending hashes were checked. Standard `ifquery` models showed only the bridge address prefix differed; explicit `lo nic0 vmbr0` selection was necessary because default listing omits manual `nic0`. The inspected owned pending file was reverted through PVE without a reload. |
+| Guard repair | Non-comment directive equality plus complete parsed model equality now permit only the CIDR change while allowing comments/formatting. A loopback test runs the actual assertions and rejects extra directives or manual-NIC drift. All ten final offline cases pass. Byte hashes still guard recovery; a single runtime IPv4 address is required. |
+| Approved activation | Fresh identity, private host/controller preimages, parser checks and armed local rollback preceded the controlled second attempt. Run 01:13:43Z-01:14:15Z completed `ok=50`, `changed=10`, `failed=0`, no rescue. The actual background PVE task completed `OK` before final checks. |
+| Acceptance at 01:15:08Z | Exactly one IPv4 management address `.14/24`; PVE configured CIDR `.14/24`, gateway/DNS `.1`, bridge port `nic0`. Active source matches staged SHA256; no pending file. Confirmation marker exists, timer inactive, no rollback/blocked marker. |
+| Cluster and guest | SSH and gateway checks pass; all six PVE nodes online and cluster quorate. Worker Talos guest remains Ready with its original configuration; its `/16` was not changed. |
+| Inventory and recovery | `worker1_pve` current-flat prefix updated to 24, target VLAN declaration unchanged. Private preimages and activation/post-host records retained outside Git, owner-only. No recovery restore was needed. |
+
+This is the first host mask pilot, not a completed `/16` contraction or VLAN
+deployment. The other five PVE hosts, Talos nodes, NAS and operator keep their
+existing prefixes. No internet-router, Windows routing, DNS, guest-power,
+version, storage or passthrough change was made. The earlier staging refusal
+and controlled repair are recorded rather than described as a first-try success.
+No blind retry, assistant commit or Git publish occurred.
+
+The successful PVE reload also generated a zero-byte regular
+`/etc/network/interfaces.d/sdn` file. A subsequent read-only inspection first
+refused the include; direct filename/hash/directive-count evidence confirmed it
+contains no network definitions. The preflight now allows only that exact empty
+regular file (nonempty or differently named includes still refuse), with an
+additional offline case. All eleven final cases pass. The converged check at
+01:20:13Z passes `ok=14`, `changed=0`, `failed=0`, `skipped=36`; this local
+inspection-policy repair did not stage or reload the live network again.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the

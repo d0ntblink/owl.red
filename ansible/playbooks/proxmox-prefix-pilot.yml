@@ -1,0 +1,473 @@
+---
+- name: Guard the worker1 management-prefix pilot
+  hosts: worker1_pve
+  gather_facts: false
+  become: false
+  vars:
+    proxmox_prefix_pilot_node: worker1
+    proxmox_prefix_pilot_interface: vmbr0
+    proxmox_prefix_pilot_before: 10.0.10.14/16
+    proxmox_prefix_pilot_after: 10.0.10.14/24
+    proxmox_prefix_pilot_apply_confirmed: false
+    proxmox_prefix_pilot_state_dir: ""
+    proxmox_prefix_pilot_controller_dir: ""
+    proxmox_prefix_pilot_unit: ""
+    proxmox_prefix_pilot_rollback_seconds: 180
+    proxmox_prefix_pilot_rollback_script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      state_dir=${1:?}
+      config_path=${2:?}
+      reload_command=${3:?}
+      exec 9>"$state_dir/lock"
+      flock -x 9
+      if [[ -e "$state_dir/confirmed" ]]; then
+        exit 0
+      fi
+      file_digest() {
+        local digest
+        digest=$(sha256sum -- "$1")
+        printf '%s' "${digest%% *}"
+      }
+      read -r before_digest < "$state_dir/before.sha256"
+      read -r staged_digest < "$state_dir/staged.sha256"
+      if [[ "$(file_digest "$state_dir/interfaces.before")" != "$before_digest" ]]; then
+        touch "$state_dir/rollback-blocked"
+        exit 4
+      fi
+      current_digest=$(file_digest "$config_path")
+      if [[ "$current_digest" != "$before_digest" && "$current_digest" != "$staged_digest" ]]; then
+        touch "$state_dir/rollback-blocked"
+        exit 2
+      fi
+      if [[ -e "$config_path.new" && "$(file_digest "$config_path.new")" != "$staged_digest" ]]; then
+        touch "$state_dir/rollback-blocked"
+        exit 3
+      fi
+      install -m 0644 -- "$state_dir/interfaces.before" "$config_path"
+      if [[ -e "$config_path.new" ]]; then
+        rm -- "$config_path.new"
+      fi
+      "$reload_command" -a
+      touch "$state_dir/rolled-back"
+    proxmox_prefix_pilot_confirm_script: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      state_dir=${1:?}
+      config_path=${2:?}
+      timer_unit=${3:?}
+      systemctl_command=${4:?}
+      exec 9>"$state_dir/lock"
+      flock -x 9
+      [[ ! -e "$state_dir/rolled-back" && ! -e "$state_dir/rollback-blocked" ]]
+      read -r staged_digest < "$state_dir/staged.sha256"
+      current_digest=$(sha256sum -- "$config_path")
+      [[ "${current_digest%% *}" == "$staged_digest" ]]
+      install -m 0600 /dev/null "$state_dir/confirmed"
+      "$systemctl_command" stop "$timer_unit.timer"
+  tasks:
+    - name: Require check mode or explicit approval of this one-host pilot
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode or proxmox_prefix_pilot_apply_confirmed | bool
+          - inventory_hostname == 'worker1_pve'
+          - ansible_host == '10.0.10.14'
+          - ansible_play_hosts_all | length == 1
+          - proxmox_prefix_pilot_node == 'worker1'
+          - proxmox_prefix_pilot_interface == 'vmbr0'
+          - proxmox_prefix_pilot_before == '10.0.10.14/16'
+          - proxmox_prefix_pilot_after == '10.0.10.14/24'
+          - proxmox_prefix_pilot_rollback_seconds | int == 180
+        fail_msg: Only the reviewed worker1 prefix pilot is allowed; use --check unless explicitly approved.
+        quiet: true
+
+    - name: Read the owning PVE interface configuration
+      ansible.builtin.command:
+        argv:
+          - pvesh
+          - get
+          - "/nodes/{{ proxmox_prefix_pilot_node }}/network/{{ proxmox_prefix_pilot_interface }}"
+          - --output-format
+          - json
+      register: _prefix_pve
+      changed_when: false
+      check_mode: false
+
+    - name: Read the runtime management address
+      ansible.builtin.command:
+        argv: [ip, -j, address, show, dev, vmbr0]
+      register: _prefix_runtime
+      changed_when: false
+      check_mode: false
+
+    - name: Check for a pre-existing pending network change
+      ansible.builtin.stat:
+        path: /etc/network/interfaces.new
+      register: _prefix_pending
+
+    - name: Inventory included interface files
+      ansible.builtin.find:
+        paths: /etc/network/interfaces.d
+        file_type: file
+        hidden: true
+      register: _prefix_includes
+
+    - name: Read configured SDN zones without changing the cluster
+      ansible.builtin.command:
+        argv: [pvesh, get, /cluster/sdn/zones, --output-format, json]
+      register: _prefix_sdn
+      changed_when: false
+      check_mode: false
+
+    - name: Read cluster membership and quorum
+      ansible.builtin.command:
+        argv: [pvesh, get, /cluster/status, --output-format, json]
+      register: _prefix_cluster
+      changed_when: false
+      check_mode: false
+
+    - name: Capture the exact current interface source without displaying it
+      ansible.builtin.slurp:
+        src: /etc/network/interfaces
+      register: _prefix_source
+      no_log: true
+
+    - name: Read source ownership and permissions
+      ansible.builtin.stat:
+        path: /etc/network/interfaces
+        follow: false
+      register: _prefix_source_metadata
+
+    - name: Refuse unexpected topology or another operator's pending changes
+      ansible.builtin.assert:
+        that:
+          - not _prefix_pending.stat.exists
+          - _prefix_source_metadata.stat.isreg
+          - not _prefix_source_metadata.stat.islnk
+          - _prefix_source_metadata.stat.uid == 0
+          - _prefix_source_metadata.stat.gid == 0
+          - _prefix_source_metadata.stat.mode == '0644'
+          - >-
+            _prefix_includes.matched == 0 or
+            (_prefix_includes.matched == 1 and
+             _prefix_includes.files[0]['path'] == '/etc/network/interfaces.d/sdn' and
+             _prefix_includes.files[0]['size'] == 0 and
+             _prefix_includes.files[0]['isreg'] and
+             not _prefix_includes.files[0]['islnk'])
+          - (_prefix_sdn.stdout | from_json) | length == 0
+          - (_prefix_pve.stdout | from_json)['cidr'] in [proxmox_prefix_pilot_before, proxmox_prefix_pilot_after]
+          - (_prefix_pve.stdout | from_json)['type'] == 'bridge'
+          - (_prefix_pve.stdout | from_json)['bridge_ports'] == 'nic0'
+          - (_prefix_pve.stdout | from_json)['gateway'] == '10.0.10.1'
+          - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
+          - (_prefix_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.14') | map(attribute='prefixlen') | first | int == (_prefix_pve.stdout | from_json)['netmask'] | int
+          - (_prefix_cluster.stdout | from_json) | selectattr('type', 'equalto', 'node') | selectattr('online', 'equalto', 1) | list | length == 6
+          - (_prefix_cluster.stdout | from_json) | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
+        fail_msg: Pilot baseline differs or a pending change already exists; nothing will be staged or activated.
+        quiet: true
+
+    - name: Verify the existing gateway responds before a change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", 10.0.10.1]
+      changed_when: false
+      check_mode: false
+
+    - name: Verify the current worker guest is Ready
+      ansible.builtin.command:
+        argv: [kubectl, get, node, worker1-talos, -o, json]
+      delegate_to: localhost
+      register: _prefix_guest_before
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse an already unhealthy worker guest
+      ansible.builtin.assert:
+        that:
+          - (_prefix_guest_before.stdout | from_json)['status']['conditions'] | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length == 1
+        quiet: true
+
+    - name: Report the one-host prefix-only proposal
+      ansible.builtin.debug:
+        msg:
+          node: "{{ proxmox_prefix_pilot_node }}"
+          interface: "{{ proxmox_prefix_pilot_interface }}"
+          before: "{{ (_prefix_pve.stdout | from_json)['cidr'] }}"
+          proposed: "{{ proxmox_prefix_pilot_after }}"
+          unchanged: IP address, gateway, DNS, physical NIC, bridge membership and VLAN tagging
+          live_activation_requires_explicit_opt_in: true
+          host_local_rollback_seconds: "{{ proxmox_prefix_pilot_rollback_seconds }}"
+
+    - name: Stage and activate only the explicitly approved worker prefix change
+      when:
+        - not ansible_check_mode
+        - (_prefix_pve.stdout | from_json)['cidr'] != proxmox_prefix_pilot_after
+      block:
+        - name: Require unique private recovery destinations and a timer name
+          ansible.builtin.assert:
+            that:
+              - proxmox_prefix_pilot_state_dir is match('^/var/lib/owl-red/prefix-pilot/[A-Za-z0-9_-]+$')
+              - proxmox_prefix_pilot_controller_dir.startswith('/')
+              - proxmox_prefix_pilot_controller_dir | length > 10
+              - proxmox_prefix_pilot_unit is match('^owl-prefix-worker1-[A-Za-z0-9_-]+$')
+              - (_prefix_source.content | b64decode) | regex_findall('10\.0\.10\.14/16') | length == 1
+              - "'10.0.10.14/24' not in (_prefix_source.content | b64decode)"
+            quiet: true
+
+        - name: Refuse a pre-existing host recovery directory
+          ansible.builtin.stat:
+            path: "{{ proxmox_prefix_pilot_state_dir }}"
+          register: _prefix_existing_state
+
+        - name: Require a fresh run identity
+          ansible.builtin.assert:
+            that:
+              - not _prefix_existing_state.stat.exists
+            quiet: true
+
+        - name: Check that controller recovery evidence will not be overwritten
+          ansible.builtin.stat:
+            path: "{{ proxmox_prefix_pilot_controller_dir }}"
+          delegate_to: localhost
+          register: _prefix_existing_controller_state
+
+        - name: Require a new controller recovery directory
+          ansible.builtin.assert:
+            that:
+              - not _prefix_existing_controller_state.stat.exists
+            quiet: true
+
+        - name: Create the private host recovery directory
+          ansible.builtin.file:
+            path: "{{ proxmox_prefix_pilot_state_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+
+        - name: Save the exact current source on the host
+          ansible.builtin.copy:
+            dest: "{{ proxmox_prefix_pilot_state_dir }}/interfaces.before"
+            content: "{{ _prefix_source.content | b64decode }}"
+            owner: root
+            group: root
+            mode: "0600"
+          no_log: true
+
+        - name: Create the private controller recovery directory
+          ansible.builtin.file:
+            path: "{{ proxmox_prefix_pilot_controller_dir }}"
+            state: directory
+            mode: "0700"
+          delegate_to: localhost
+
+        - name: Retain the source outside the affected host
+          ansible.builtin.copy:
+            dest: "{{ proxmox_prefix_pilot_controller_dir }}/interfaces.before"
+            content: "{{ _prefix_source.content | b64decode }}"
+            mode: "0600"
+          delegate_to: localhost
+          no_log: true
+
+        - name: Stage only the management CIDR through the PVE API
+          ansible.builtin.command:
+            argv: [pvesh, set, /nodes/worker1/network/vmbr0, --type, bridge, --cidr, "{{ proxmox_prefix_pilot_after }}"]
+          changed_when: true
+
+        - name: Read the staged file without displaying it
+          ansible.builtin.slurp:
+            src: /etc/network/interfaces.new
+          register: _prefix_staged
+          no_log: true
+
+        - name: Refuse any staged directive change beyond CIDR and formatting
+          ansible.builtin.assert:
+            that:
+              - >-
+                ((_prefix_staged.content | b64decode).splitlines()
+                 | map('trim') | reject('match', '^#') | reject('equalto', '') | list)
+                ==
+                (((_prefix_source.content | b64decode)
+                  | replace(proxmox_prefix_pilot_before, proxmox_prefix_pilot_after)).splitlines()
+                 | map('trim') | reject('match', '^#') | reject('equalto', '') | list)
+            fail_msg: Staged directives differ beyond the reviewed CIDR; activation is refused.
+            quiet: true
+
+        - name: Parse all original interfaces including the manual physical NIC
+          ansible.builtin.command:
+            argv: [ifquery, -i, "{{ proxmox_prefix_pilot_state_dir }}/interfaces.before", -o, json, lo, nic0, vmbr0]
+          register: _prefix_original_parsed
+          changed_when: false
+
+        - name: Parse all staged interfaces without applying them
+          ansible.builtin.command:
+            argv: [ifquery, -i, /etc/network/interfaces.new, -o, json, lo, nic0, vmbr0]
+          register: _prefix_staged_parsed
+          changed_when: false
+
+        - name: Capture the original parsed bridge
+          ansible.builtin.set_fact:
+            _prefix_original_bridge: "{{ (_prefix_original_parsed.stdout | from_json) | selectattr('name', 'equalto', 'vmbr0') | first }}"
+
+        - name: Require the reviewed parsed interface set
+          ansible.builtin.assert:
+            that:
+              - "((_prefix_original_parsed.stdout | from_json) | map(attribute='name') | sort) == ['lo', 'nic0', 'vmbr0']"
+              - _prefix_original_bridge['config']['address'] == proxmox_prefix_pilot_before
+            quiet: true
+
+        - name: Build the one-field expected interface model
+          ansible.builtin.set_fact:
+            _prefix_expected_interfaces: >-
+              {{ ((_prefix_original_parsed.stdout | from_json)
+                   | rejectattr('name', 'equalto', 'vmbr0') | list)
+                 + [(_prefix_original_bridge | combine({'config':
+                      (_prefix_original_bridge['config']
+                       | combine({'address': proxmox_prefix_pilot_after}))}))] }}
+
+        - name: Refuse any other parsed interface change before activation
+          ansible.builtin.assert:
+            that:
+              - ((_prefix_staged_parsed.stdout | from_json) | sort(attribute='name')) == (_prefix_expected_interfaces | sort(attribute='name'))
+            fail_msg: Parsed staged network differs beyond the management address prefix; activation is refused.
+            quiet: true
+
+        - name: Save expected file digests for guarded local recovery
+          ansible.builtin.copy:
+            dest: "{{ proxmox_prefix_pilot_state_dir }}/{{ item.name }}.sha256"
+            content: "{{ item.content }}\n"
+            mode: "0600"
+          loop:
+            - name: before
+              content: "{{ (_prefix_source.content | b64decode) | hash('sha256') }}"
+            - name: staged
+              content: "{{ (_prefix_staged.content | b64decode) | hash('sha256') }}"
+
+        - name: Install the syntax-checked local rollback program
+          ansible.builtin.copy:
+            dest: "{{ proxmox_prefix_pilot_state_dir }}/rollback.sh"
+            content: "{{ proxmox_prefix_pilot_rollback_script }}"
+            mode: "0700"
+            validate: /bin/bash -n %s
+
+        - name: Arm recovery before activating any network change
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - "--unit={{ proxmox_prefix_pilot_unit }}"
+              - "--on-active={{ proxmox_prefix_pilot_rollback_seconds }}s"
+              - --timer-property=AccuracySec=1s
+              - /bin/bash
+              - "{{ proxmox_prefix_pilot_state_dir }}/rollback.sh"
+              - "{{ proxmox_prefix_pilot_state_dir }}"
+              - /etc/network/interfaces
+              - /usr/sbin/ifreload
+          changed_when: true
+
+        - name: Require the rollback timer to be active before the reload
+          ansible.builtin.command:
+            argv: [systemctl, is-active, "{{ proxmox_prefix_pilot_unit }}.timer"]
+          changed_when: false
+
+        - name: Activate the staged network through PVE without FRR regeneration
+          ansible.builtin.command:
+            argv: [pvesh, set, /nodes/worker1/network, --regenerate-frr, "0", --output-format, json]
+          register: _prefix_apply
+          changed_when: true
+
+        - name: Allow the existing SSH transport to reconnect
+          ansible.builtin.wait_for_connection:
+            timeout: 30
+            connect_timeout: 3
+
+        - name: Require a worker1 network-task identifier
+          ansible.builtin.assert:
+            that:
+              - (_prefix_apply.stdout | from_json) is string
+              - (_prefix_apply.stdout | from_json) is match('^UPID:worker1:')
+            quiet: true
+
+        - name: Wait for the actual background reload to stop
+          ansible.builtin.command:
+            argv: [pvesh, get, "/nodes/worker1/tasks/{{ _prefix_apply.stdout | from_json }}/status", --output-format, json]
+          register: _prefix_task_status
+          changed_when: false
+          until: (_prefix_task_status.stdout | from_json)['status'] == 'stopped'
+          retries: 15
+          delay: 2
+
+        - name: Require successful reload completion
+          ansible.builtin.assert:
+            that:
+              - (_prefix_task_status.stdout | from_json)['exitstatus'] == 'OK'
+            quiet: true
+
+        - name: Read the resulting management address
+          ansible.builtin.command:
+            argv: [ip, -j, address, show, dev, vmbr0]
+          register: _prefix_after_runtime
+          changed_when: false
+
+        - name: Read the committed PVE interface
+          ansible.builtin.command:
+            argv: [pvesh, get, /nodes/worker1/network/vmbr0, --output-format, json]
+          register: _prefix_after_pve
+          changed_when: false
+
+        - name: Require the approved runtime and persisted prefix
+          ansible.builtin.assert:
+            that:
+              - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
+              - (_prefix_after_runtime.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.14') | selectattr('prefixlen', 'equalto', 24) | list | length == 1
+              - (_prefix_after_pve.stdout | from_json)['cidr'] == proxmox_prefix_pilot_after
+              - (_prefix_after_pve.stdout | from_json)['gateway'] == '10.0.10.1'
+              - (_prefix_after_pve.stdout | from_json)['bridge_ports'] == 'nic0'
+            quiet: true
+
+        - name: Verify the gateway after the prefix change
+          ansible.builtin.command:
+            argv: [ping, -n, -c, "1", -W, "2", 10.0.10.1]
+          changed_when: false
+
+        - name: Read post-change cluster membership and quorum
+          ansible.builtin.command:
+            argv: [pvesh, get, /cluster/status, --output-format, json]
+          register: _prefix_after_cluster
+          changed_when: false
+
+        - name: Require six online members and maintained quorum
+          ansible.builtin.assert:
+            that:
+              - (_prefix_after_cluster.stdout | from_json) | selectattr('type', 'equalto', 'node') | selectattr('online', 'equalto', 1) | list | length == 6
+              - (_prefix_after_cluster.stdout | from_json) | selectattr('type', 'equalto', 'cluster') | selectattr('quorate', 'equalto', 1) | list | length == 1
+            quiet: true
+
+        - name: Verify the unchanged worker guest from the controller
+          ansible.builtin.command:
+            argv: [kubectl, wait, --for=condition=Ready, node/worker1-talos, --timeout=30s]
+          delegate_to: localhost
+          changed_when: false
+
+        - name: Confirm only while holding the rollback lock
+          ansible.builtin.command:
+            argv:
+              - /bin/bash
+              - -c
+              - "{{ proxmox_prefix_pilot_confirm_script }}"
+              - prefix-confirm
+              - "{{ proxmox_prefix_pilot_state_dir }}"
+              - /etc/network/interfaces
+              - "{{ proxmox_prefix_pilot_unit }}"
+              - /usr/bin/systemctl
+          changed_when: true
+
+        - name: Record the completed one-host pilot
+          ansible.builtin.debug:
+            msg: worker1 is .14/24, reload OK, SSH/gateway/quorum/guest checks passed, rollback cancelled under lock.
+      rescue:
+        - name: Stop and preserve local recovery rather than retrying a network change
+          ansible.builtin.fail:
+            msg: >-
+              Pilot completion was not confirmed. If armed, leave the local rollback
+              timer {{ proxmox_prefix_pilot_unit }} running and inspect actual state.
+              Pre-activation staging may remain. No blind reload, retry, guest restart
+              or overwrite of another operator's file is performed.

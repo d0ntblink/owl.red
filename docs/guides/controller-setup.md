@@ -358,6 +358,118 @@ must be read, not inferred from a lease or a responsive web port. A console
 socket or a linked switch-port label is likewise not a verified recovery
 session. Keep each missing check attached to the component/path it gates.
 
+## Worker Management-Prefix Pilot
+
+The [worker-only playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+prepares `worker1_pve` management `10.0.10.14/16` to `10.0.10.14/24`, retaining
+its address, gateway, resolver, `nic0` bridge port and native VLAN behavior.
+It does not change the Talos guest's own `/16`, API VIP `/32`, router, storage
+host or operator port 22. A reload can briefly affect this host/guest networking;
+this is not a zero-interruption guarantee.
+
+- Controller: the tested Ansible core `2.16.3`, Node.js `24`, Python 3/PyYAML,
+  selected `kubectl` context and existing strict-host-key root SSH access to
+  `worker1`. No new collection, npm package or infrastructure secret is needed.
+- Target: the verified Proxmox `9.2.3` API/CLI, iproute2, ifupdown2 `ifquery` /
+  `ifreload`, systemd `systemd-run` / `systemctl`, util-linux `flock`, Bash and
+  GNU coreutils (`sha256sum`, `install`, `rm`, `touch`). No package installation,
+  reboot or guest power operation is part of the pilot.
+- Preflight: no pending file, active extra included interface definitions or SDN zones;
+  only the exact zero-byte regular PVE-generated `interfaces.d/sdn` include
+  is accepted in addition to an empty include directory. Other includes refuse.
+  source ownership/mode and current runtime/configured prefix agree. Six PVE
+  members must be online/quorate, the gateway reachable and worker guest Ready.
+- Activation: opt-in defaults false. Both host/controller private recovery
+  directories must be new. PVE stages the existing bridge CIDR only, and the
+  staged non-comment directives and complete parsed models must match except
+  that CIDR. PVE's generated header/blank-line formatting is allowed; `ifquery`
+  explicitly includes `lo`, manual `nic0` and `vmbr0` because its default list
+  omits manual interfaces. No timer/reload starts before these checks pass.
+- Recovery: the tested host-local 180-second timer is armed before PVE reload.
+  It validates the preimage and accepts only original/staged source hashes;
+  another operator's active/pending edits are not overwritten. On success,
+  SSH, PVE task `OK`, runtime/configured `/24`, gateway, cluster quorum and guest
+  readiness must pass before lock-protected confirmation cancels the timer.
+  A blocked or failed rollback still needs operator inspection; do not blindly
+  retry or claim the timer is infallible.
+
+```bash
+ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook \
+  -i ansible/inventory/hosts.yml ansible/playbooks/proxmox-prefix-pilot.yml \
+  --limit worker1_pve --check
+node --test scripts/proxmox-prefix-pilot.test.mjs
+```
+
+The connected preview passed with zero changes. All eleven offline cases execute
+the actual embedded recovery programs or selected Ansible assertions against
+temporary data/fake reloads. They test corruption/drift refusal, reload failure,
+rollback/confirmation races and PVE-header acceptance without permitting another
+directive/model change, plus the exact empty-include exception; they never call
+the PVE API or modify real interfaces.
+The existing credential-free network CI job runs them.
+
+The owner approved the one-host pilot and it completed on 2026-10-16 UTC:
+worker1 is runtime/persisted `.14/24`, source hashes match, the pending file is
+absent, confirmation exists and the local timer is inactive without rollback.
+All six PVE nodes remain online/quorate and the worker guest is Ready. The
+inventory's `worker1_pve.current_flat.prefix` now records 24; its Talos guest,
+router and remaining hosts were not changed. The first raw-byte guard refusal
+was inspected/reverted before the controlled parser-guard repair and retry.
+Default live opt-in remains false; this completed pilot is not approval for
+another host or the whole subnet transition.
+
+PVE's successful reload generated a zero-byte `interfaces.d/sdn` file. An initial
+post-change inspection refused it conservatively; after validating that exact
+empty regular file and testing the narrow exception, the converged read-only
+preview passes `ok=14`, `changed=0`, `failed=0`, `skipped=36`. No additional
+network activation was performed to repair the inspection policy.
+
+## Guarded Dnsmasq Range Preparation
+
+The [range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml) and
+its [offline tests](../../scripts/opnsense-dhcp-range.test.mjs) require Ansible
+core `2.16.3`, Python `3.12` with PyYAML/Jinja dependencies and Node.js `24`
+(the tested controller/CI versions). They use built-in Ansible modules and
+Node's standard HTTP/process/file APIs, with no new collection or npm package.
+The test suite uses only loopback HTTP, synthetic credentials and a local
+`printf` replacement for the Kubernetes read; it cannot apply to the router.
+
+```bash
+node --test scripts/opnsense-dhcp-range.test.mjs
+```
+
+Live check mode additionally needs the existing inventory, reachable appliance
+API, `OPNSENSE_API_KEY`/`OPNSENSE_API_SECRET` in the child environment and a
+working selected `kubectl` context for actual service allocations. Preserve
+existing TLS verification except the explicitly reviewed appliance exception.
+The Terraform wrapper's `TF_VAR_*` names do not populate these variables.
+No vault, infrastructure credentials or Kubernetes connection is needed in CI.
+
+Both live activation flags default false. The documented
+[connection/recovery gates](../../terraform/opnsense/README.md#preserve-the-control-connection)
+must be satisfied before lifting them: the offered phone hotspot is not a
+verified fallback until internet/DNS and LAN routes are tested. No silent
+Windows route, resolver or IPv6 changes are part of controller setup.
+
+The owner later explicitly requested the bounded range-only deployment without
+Windows route changes. That one-time activation used fresh affected-field
+preimages and confirmed console access; it did not certify independent hotspot
+egress or a full-current XML export. The playbook completed successfully and
+DHCP/DNS/HTTPS checks passed. Default opt-ins stay false for future invocations;
+the broader subnet migration is not authorized by this outcome.
+
+The temporary tested Bitwarden CLI/profile had disappeared. The same official
+`2026.7.0` archive was reverified against its published SHA256
+`7a35145e205952f7434d2370da359543145ae0c45ba1af0fe9bdd99d40a00180` and is now
+at `~/.local/share/owl-red/tools/bitwarden/2026.7.0/bw`, with a separate copied
+profile at `~/.local/state/owl-red/bitwarden-cli-2026.7.0`. Direct item/API reads
+passed again; scripts do not automatically use this binary or profile unless
+explicitly configured. The installed original CLI was not replaced. An original
+profile change was observed during setup and was not attributed or reverted;
+do not claim the original stayed byte-identical for that whole interval.
+The subsequent isolated status check left it unchanged. Protect profiles and
+sessions as before; do not persist master passwords or session keys in files.
+
 ## Non-Mutating Validation
 
 ```bash

@@ -141,7 +141,7 @@ review supported existing objects and the remaining manual-floor evidence first.
 ### 0.2 Import Existing Config
 - `[~]` Authenticated API survey completed for interfaces/routes, DHCP/DNS, aliases, automation filter search, NAT and portal (2026-10-14). Dnsmasq is the live LAN DHCP authority; full classic filter semantics, automatic outbound-NAT mode and IPv6 advertisement/client behavior remain unverified.
 - `[ ]` Carry the existing Plex WAN TCP `32400` -> NAS `32400` rule into the ownership/exposure review; do not silently remove it or assume ADR 012 is already enforced
-- `[ ]` Reconcile the live DHCP pool ending at `.200` with MetalLB's `.200-.250` pool before address allocation/migration; capture current reservations and actual operator/device NIC identities for rollback
+- `[x]` Remove the live DHCP/MetalLB allocation overlap (2026-10-16 UTC): approved range-only Ansible activation changed DHCP `.100-.200` to `.100-.199`, leaving MetalLB `.200-.250`. Fresh range/client preimages are retained privately; API, service, DNS/HTTPS and DISCOVER/OFFER checks pass. Remaining device-identity gaps stay tracked in Phase 1.5.
 - `[ ]` Export the affected configuration privately; verify the restore method, real operator path and independent router recovery before a disruptive router change
 - `[ ]` Import any existing API-managed objects found by that survey, or freshly verify that the empty module is a no-op
 
@@ -167,7 +167,7 @@ Historical checks below were completed on 2026-06-19, not revalidated in October
 - `[ ]` Test each VLAN segment for correct connectivity
 
 ### 0.5 Ongoing
-- `[ ]` API-backed OPNsense changes go through `terraform/opnsense/`; the ADR 016 manual floor remains WebUI-managed and documented, with no overlapping ownership
+- `[ ]` API-backed OPNsense changes use `terraform/opnsense/` where the locked provider supports the object. The Dnsmasq range has a documented range-only Ansible exception; the ADR 016 manual floor remains WebUI-managed, with no overlapping ownership.
 - `[ ]` Add OPNsense to `scripts/terraform-run.sh` workflow documentation
 
 ---
@@ -225,7 +225,8 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Observed:** PVE, Talos and NAS use `/16` on the legacy untagged L2. Technitium
+**Observed:** after the approved one-host pilot, worker1 PVE `.14` uses `/24`;
+the other five PVE hosts, Talos and NAS retain `/16` on the legacy untagged L2. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
 zero leases were observed. Those are not five operational VLANs.
@@ -233,13 +234,33 @@ The legacy connected network is `10.0.0.0/16`, which contains every target `/24`
 Do not route those targets onto separate L2 domains while relying on legacy
 hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
 
+**Control connection:** disruptive router work can disconnect the assistant.
+The owner offers a cellular hotspot while keeping LAN Ethernet connected, but
+internet/DNS egress through that hotspot and local Ethernet routes must be
+verified before any such live step. Do not change host routing automatically
+or treat console access alone as preserved assistant connectivity. Preparation
+and offline tests do not require enabling the hotspot.
+
+For the bounded range-only deployment below, the owner explicitly requested
+proceeding without Windows route changes after the route-selection concern was
+explained. The hotspot was connected, but independent egress was not claimed.
+Fresh affected-field preimages and the demonstrated router console were the
+scoped recovery basis; no full-current XML export or restore rehearsal is
+claimed. This decision does not approve a subnet/VLAN change or remove its own
+recovery and connectivity requirements.
+
 1. **Inventory and choose the intermediate states.**
-  - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The 2026-10-15 GET-only refresh returns all 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. DHCP still ends at `.200`, overlapping the live MetalLB pool; preserve the 24-hour lease/renewal implications.
-  - `[~]` Record masks, gateways and L2 attachment. Six PVE hosts, four Talos node IPs, NAS and the active operator NIC use `/16`; Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The dated refresh returns 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. The approved 2026-10-16 range correction now ends at `.199`; preserve the unchanged 24-hour lease/renewal implications.
+  - `[~]` Record masks, gateways and L2 attachment. Worker1 PVE `.14` now uses `/24`; the other five PVE hosts, four Talos node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
   - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`; Wi-Fi is disconnected despite a retained address. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
+  - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
+  - `[x]` Apply the explicitly approved overlap fix after fresh ownership/preimage checks (2026-10-16T00:40:51Z-00:41:00Z). The field-only save and Dnsmasq reconfigure passed; only `end_addr` differs, all eight reservations and LAN `.1/16` are unchanged, service/DNS/HTTPS and a correlated zero-drop DHCP offer check pass. Scoped recovery artifacts are retained; no Windows route change or automatic rollback was made.
+  - `[ ]` Before a broader router interface/subnet change, retain the applicable current configuration export and exact recovery procedure, and address its control-connection risk. The August history download is not a certified full-current export. The range-only owner's proceed decision does not approve the broader migration; Dnsmasq reconfigure can also reload firewall rules.
   - `[ ]` Approve in-place contraction on the existing L2 if practical; otherwise document a non-overlapping temporary subnet and its bidirectional routes/renumbering. Do not silently change the final allocation plan or assume a staged overlapping router configuration is safe.
   - `[ ]` Define each change's exact previous/new values, acceptable interruption, checks, rollback trigger and inverse operation. Test recovery access for the affected component before changing its management path.
+  - `[x]` Prepare the isolated worker-host pilot `.14/16` to `.14/24` through the [guarded Ansible playbook](ansible/playbooks/proxmox-prefix-pilot.yml), with no router/storage/operator-path change. Eleven final offline cases cover rollback/locking, actual staged-model assertions and only the verified zero-byte PVE-generated SDN include. Initial and converged connected previews make zero changes. Future live activation still defaults off.
+  - `[x]` Explicitly approve and run the one-host pilot with private on/off-host preimages and host-local rollback (2026-10-16T01:13:43Z-01:14:15Z). The first stage was safely refused for PVE-generated header/formatting and reverted without reload. Repaired guards compare every non-comment directive and all parsed interface fields except the approved CIDR. The successful PVE task finished `OK`; runtime/persisted `.14/24`, SSH, gateway, six-node quorum and guest readiness passed before lock-protected timer cancellation. No pending file or triggered rollback remains. The guest stays `/16`; the rest of the contraction is not approved by this pilot.
 
   **Assessment, not apply approval:** mask-only contraction remains the leading
   option for the observed addresses. The operator-to-PVE `.3` path is on-link

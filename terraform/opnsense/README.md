@@ -63,12 +63,12 @@ the ready lane for the VLAN transition (§1); forward-looking drafts sit in `pla
 
 ## DHCP Range And Recovery Preparation
 
-The audited serving engine is Dnsmasq, not Kea. Its LAN range ends at
-`10.0.10.200`, overlapping the MetalLB pool that starts there. The minimal
-candidate is to retain the start address and change only the range end to
-`10.0.10.199`, matching the target allocation. Refresh both systems before
-review: a source edit or a smaller future range does not resolve an address
-already leased or allocated.
+The serving engine is Dnsmasq, not Kea. The approved 2026-10-16 range-only
+deployment changed its LAN pool from `10.0.10.100-10.0.10.200` to
+`10.0.10.100-10.0.10.199`, removing the overlap with MetalLB's unchanged
+`.200-.250` pool. Only the existing range end was edited. Refresh both systems
+before future work: a source edit or a smaller future range does not resolve
+an address already leased or allocated.
 
 Do not apply Kea resources to this Dnsmasq instance or infer provider support
 from the existence of an appliance API. Verify the locked provider's schema
@@ -84,9 +84,104 @@ or put it in Git. Keep local trusted copies owner-only and protect copies
 leaving that trusted controller. A backup download is not a restore rehearsal;
 do not invoke revert/import or reboot merely to test it.
 
-This candidate leaves LAN `10.0.10.1/16`, VLANs, client DNS/DHCP authority,
+This change leaves LAN `10.0.10.1/16`, VLANs, client DNS/DHCP authority,
 existing reservations and lease timing unchanged. Any required Dnsmasq service
 reconfiguration and its interruption risk need explicit review and approval.
+
+### Guarded Range Playbook
+
+The locked `0.24.0` schema was inspected locally: it supports
+`opnsense_dnsmasq_host`, not Dnsmasq ranges. The prepared
+[range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml) is the
+specific Ansible exception permitted by ADR 016; no Terraform resource owns
+this range and no second writer is introduced. Its reviewed one-time deployment
+completed below; unattended activation is neither configured nor approved.
+
+The playbook reads only the reviewed existing UUID, checks complete lease/
+reservation evidence and actual Kubernetes service allocations, and refuses
+observed ownership of `.200`. Missing objects are refused before the API's
+upsert-capable setter. It records a fresh private JSON preimage before posting
+only `range.end_addr`; every other returned range field must remain identical
+before reconfigure. Coordinate other router operators: these requests are not
+an atomic transaction lock.
+
+Preview only, with `OPNSENSE_API_KEY` and `OPNSENSE_API_SECRET` supplied through
+the child process environment:
+
+```bash
+ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook \
+  -i ansible/inventory/hosts.yml ansible/playbooks/opnsense-dhcp-range.yml \
+  --limit opnsense --check -e opnsense_range_validate_certs=false
+```
+
+The certificate exception is limited to the known self-signed appliance.
+The Terraform wrapper's `TF_VAR_*` values are not aliases for these variables.
+Without `--check`, both `opnsense_range_apply_confirmed` and
+`opnsense_range_recovery_verified` must be explicitly true. Keep them false
+during preparation. Live execution also requires a new private recovery
+directory. On failure, the playbook stops without retrying or automatically
+restoring `.200` into the overlapping pool.
+
+OPNsense 26.1.9's Dnsmasq reconfigure path can reload firewall rules as well
+as interrupt DHCP/DNS. A saved API value and a running service are not complete
+wire/client acceptance; verify connectivity and runtime behavior separately.
+The [eight offline cases](../../scripts/opnsense-dhcp-range.test.mjs) use a
+loopback fake API and synthetic credentials, never the router.
+
+### Preserve The Control Connection
+
+The assistant depends on the same internet connection: a WAN disruption can
+remove its ability to diagnose or recover. Console access alone does not
+preserve that connection. The owner offers a phone hotspot while leaving LAN
+Ethernet connected. The hotspot was connected, but the observed default route
+still preferred Ethernet; independent hotspot egress was not established.
+
+Before approving any disruptive live action, ask the owner to enable the
+hotspot using cellular data, not the home Wi-Fi uplink. Verify Windows and WSL
+internet/DNS access actually use it and that local Proxmox/router traffic still
+uses Ethernet. Check relevant IPv4/IPv6 routes and DNS dependencies; interface
+presence alone is not proof. Do not silently change route metrics, gateways,
+DNS or IPv6 policy. Keep switch port 22/native L2 untouched and give the owner
+an executable local recovery procedure rather than relying on the assistant
+remaining online. No router reconfigure is authorized by the hotspot offer.
+
+For this range-only change, the owner subsequently explicitly requested
+deployment without adjusting Windows networking. That instruction approved
+the existing one-field change and its known reconfigure risk, not a silent
+route/DNS modification or a broader network migration. The deployment used
+fresh scoped API preimages and demonstrated console access; it did not claim
+that the hotspot had become the selected internet route.
+
+### Backup Verification Boundary
+
+The GET backup API downloads saved history, not a newly generated active
+export. The selected history entry was from August 2026; it was downloaded
+privately and XML-validated, but was not certified as a full-current restore
+image. No revert/import/restore was executed. Before a broader router-interface
+or subnet change, retain a current export through System, Configuration,
+Backups and review its restore procedure. Do not restore the older history wholesale to undo this
+single-field change. The actual range-only execution used fresh affected-state
+API preimages and a recorded field-only inverse, not a claimed full-current
+XML export. Applicable current-export/restore requirements remain open for
+the broader interface/subnet migration.
+
+### Approved Deployment Result
+
+Activation ran from 2026-10-16T00:40:51Z to 00:41:00Z through the guarded
+playbook: `ok=24`, `changed=5`, `failed=0`, no rescue or retry. The changed count
+includes the public preview message and local recovery files, not five router
+settings. Only `range.end_addr` changed to `.199`, followed by the reviewed
+Dnsmasq reconfigure; every other returned range field remained identical.
+
+At 00:42:20Z, Dnsmasq was running, eight reservations and LAN `.1/16` were
+unchanged, 15 lease records were retained and no `.200` lease was present.
+Router external DNS, Technitium internal DNS and external HTTPS checks pass.
+A DISCOVER-only probe at 00:42:50Z-00:43:05Z received only OPNsense offers;
+both captures correlate transaction `0x46544f0d`, contain two packets with zero
+drops, and retain mask `255.255.0.0` / DNS `.1`. This proves responsiveness and
+authority, not exhaustive allocation-boundary testing. No real device lease was
+accepted or released. Fresh recovery, API and packet evidence are retained
+privately outside Git; no rollback or full configuration restore was needed.
 
 ## Running
 ```
