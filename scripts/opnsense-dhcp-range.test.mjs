@@ -37,7 +37,8 @@ async function scenario(options = {}) {
   const inventory = path.join(directory, 'inventory.ini');
   fs.writeFileSync(inventory, '[network_edge]\nopnsense ansible_host=127.0.0.1\n', { mode: 0o600 });
   const range = { interface: { lan: { selected: 1, value: 'LAN' } }, start_addr: '10.0.10.100',
-    end_addr: options.converged ? '10.0.10.199' : '10.0.10.200', subnet_mask: '', lease_time: '',
+    end_addr: options.uncorrectedPool ? '10.0.10.200' : options.converged || options.mask ? '10.0.10.199' : '10.0.10.200',
+    subnet_mask: options.currentMask ?? (options.maskConverged ? '255.255.255.0' : ''), lease_time: '',
     constructor: {}, nosync: '0' };
   const requests = [];
   const server = http.createServer(async (request, response) => {
@@ -50,13 +51,18 @@ async function scenario(options = {}) {
     if (request.method === 'GET' && request.url === `/api/dnsmasq/settings/getRange/${uuid}`) {
       payload = options.missing ? {} : { range };
     } else if (request.url.startsWith('/api/dnsmasq/leases/search')) {
-      const rows = options.leaseConflict ? [{ address: '10.0.10.200' }] : [];
+      const rows = options.leaseConflict ? [{ address: '10.0.10.200' }]
+        : options.outsideLease ? [{ address: '10.0.20.10' }] : [];
       payload = { rows, total: options.incomplete ? rows.length + 1 : rows.length };
     } else if (request.url.startsWith('/api/dnsmasq/settings/searchHost')) {
-      payload = { rows: [], total: 0 };
+      const rows = options.outsideReservation ? [{ ip: '10.0.20.11', hwaddr: '02:00:00:00:00:11' }] : [];
+      payload = { rows, total: rows.length };
     } else if (request.method === 'POST' && request.url === `/api/dnsmasq/settings/setRange/${uuid}`) {
-      if (!options.ignoredSave) range.end_addr = body.range.end_addr;
-      if (options.extraChange) range.subnet_mask = '255.255.255.0';
+      if (!options.ignoredSave) Object.assign(range, body.range);
+      if (options.extraChange) {
+        if (options.mask) range.lease_time = '300';
+        else range.subnet_mask = '255.255.255.0';
+      }
       payload = { result: 'saved' };
     } else if (request.method === 'POST' && request.url === '/api/dnsmasq/service/reconfigure') {
       payload = { status: options.failedActivation ? 'failed' : 'ok' };
@@ -81,6 +87,8 @@ async function scenario(options = {}) {
       opnsense_range_recovery_dir: recovery,
       opnsense_range_services_command: ['/usr/bin/printf', '%s', JSON.stringify(services)],
       ansible_python_interpreter: '/usr/bin/python3' };
+    if (options.mask) variables.opnsense_range_field = 'subnet_mask';
+    Object.assign(variables, options.variables);
     const args = ['-i', inventory, 'ansible/playbooks/opnsense-dhcp-range.yml',
       '--extra-vars', JSON.stringify(variables)];
     if (options.check) args.push('--check');
@@ -163,4 +171,49 @@ test('activation failures stop without retrying or automatic rollback', async ()
   assert.equal(result.requests.filter(request => request.method === 'POST').length, 2);
   assert.equal(result.range.end_addr, '10.0.10.199');
   assert.ok(result.output.includes('No automatic rollback'));
+});
+
+test('mask preview and converged mask use GET only without recovery artifacts', async () => {
+  for (const options of [{ mask: true, check: true, approved: false }, { mask: true, maskConverged: true }]) {
+    const result = await scenario(options);
+    assert.equal(result.code, 0, result.output);
+    assert(result.requests.every(request => request.method === 'GET'));
+    assert.equal(result.snapshot, undefined);
+  }
+});
+
+test('approved mask reconciliation changes only subnet_mask and preserves corrected pool and lease timing', async () => {
+  const result = await scenario({ mask: true });
+  assert.equal(result.code, 0, result.output);
+  assert.deepEqual(result.requests.filter(request => request.method === 'POST'), [
+    { method: 'POST', path: `/api/dnsmasq/settings/setRange/${uuid}`, body: { range: { subnet_mask: '255.255.255.0' } } },
+    { method: 'POST', path: '/api/dnsmasq/service/reconfigure', body: {} },
+  ]);
+  assert.equal(result.snapshot.range.subnet_mask, '');
+  assert.equal(result.range.end_addr, '10.0.10.199');
+  assert.equal(result.range.lease_time, '');
+});
+
+test('mask reconciliation refuses outside clients and stops on unexpected saved-field drift', async () => {
+  for (const options of [{ outsideLease: true }, { outsideReservation: true }, { ignoredSave: true }, { extraChange: true }]) {
+    const result = await scenario({ mask: true, ...options });
+    assert.notEqual(result.code, 0, result.output);
+    if (options.outsideLease || options.outsideReservation) assert(result.requests.every(request => request.method === 'GET'));
+    else assert(!result.requests.some(request => request.path.endsWith('/reconfigure')));
+  }
+});
+
+test('mask values are fixed and the corrected pool and expected old mask are required', async () => {
+  for (const options of [
+    { variables: { opnsense_range_field: 'lease_time' } },
+    { variables: { opnsense_range_desired_value: '255.255.0.0' } },
+    { variables: { opnsense_range_expected_value: '255.255.0.0' } },
+    { uncorrectedPool: true },
+    { currentMask: '255.255.254.0' },
+  ]) {
+    const result = await scenario({ mask: true, ...options });
+    assert.notEqual(result.code, 0, result.output);
+    assert(result.requests.every(request => request.method === 'GET'));
+    if (options.variables) assert.deepEqual(result.requests, []);
+  }
 });

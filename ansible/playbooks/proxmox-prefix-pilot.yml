@@ -316,7 +316,7 @@
           - (_prefix_nas_before.stdout | from_json)[0]['ifname'] == 'eth0'
           - (_prefix_nas_before.stdout | from_json)[0]['address'] == 'f8:f2:1e:48:91:40'
           - (_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('family', 'equalto', 'inet') | list | length == 1
-          - (_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.5') | selectattr('prefixlen', 'equalto', 16) | list | length == 1
+          - (_prefix_nas_before.stdout | from_json)[0]['addr_info'] | selectattr('local', 'equalto', '10.0.10.5') | selectattr('prefixlen', 'equalto', 24) | list | length == 1
         quiet: true
       when: proxmox_prefix_pilot_node == 'storage'
 

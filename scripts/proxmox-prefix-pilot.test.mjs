@@ -312,10 +312,10 @@ test('storage guards preserve bond, NAS VM devices/process and guest network ide
       const guestItem = { kind: 'qemu', id: '101' };
       const resultFor = value => ({ results: [{ item: guestItem, stdout: JSON.stringify(value) }] });
       const nas = [{ ifname: 'eth0', address: 'f8:f2:1e:48:91:40', addr_info: [
-        { family: 'inet', local: '10.0.10.5', prefixlen: 16 },
+        { family: 'inet', local: '10.0.10.5', prefixlen: 24 },
       ] }];
       const changedNas = structuredClone(nas);
-      if (variant === 'nas-prefix-drift') changedNas[0].addr_info[0].prefixlen = 24;
+      if (variant === 'nas-prefix-drift') changedNas[0].addr_info[0].prefixlen = 16;
       if (variant === 'nas-mac-drift') changedNas[0].address = 'f8:f2:1e:48:91:41';
       const definition = [{ hosts: 'localhost', connection: 'local', gather_facts: false,
         vars: { proxmox_prefix_pilot_node: 'storage', proxmox_prefix_pilot_target: target,

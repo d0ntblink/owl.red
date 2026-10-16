@@ -10,6 +10,16 @@
     opnsense_range_start: 10.0.10.100
     opnsense_range_expected_end: 10.0.10.200
     opnsense_range_desired_end: 10.0.10.199
+    opnsense_range_field: end_addr
+    opnsense_range_changes:
+      end_addr:
+        before: 10.0.10.200
+        after: 10.0.10.199
+      subnet_mask:
+        before: ""
+        after: 255.255.255.0
+    opnsense_range_expected_value: "{{ opnsense_range_changes[opnsense_range_field]['before'] }}"
+    opnsense_range_desired_value: "{{ opnsense_range_changes[opnsense_range_field]['after'] }}"
     opnsense_range_apply_confirmed: false
     opnsense_range_recovery_verified: false
     opnsense_range_recovery_dir: ""
@@ -39,6 +49,10 @@
           - opnsense_range_start == '10.0.10.100'
           - opnsense_range_expected_end == '10.0.10.200'
           - opnsense_range_desired_end == '10.0.10.199'
+          - opnsense_range_field in ['end_addr', 'subnet_mask']
+          - opnsense_range_changes == {'end_addr':{'before':'10.0.10.200','after':'10.0.10.199'},'subnet_mask':{'before':'','after':'255.255.255.0'}}
+          - opnsense_range_expected_value == opnsense_range_changes[opnsense_range_field]['before']
+          - opnsense_range_desired_value == opnsense_range_changes[opnsense_range_field]['after']
         fail_msg: Use --check for inspection; activation requires explicit change and recovery approval.
         quiet: true
 
@@ -65,6 +79,8 @@
           - _range_before.json['range']['start_addr'] == opnsense_range_start
           - _range_before.json['range']['end_addr'] in [opnsense_range_expected_end, opnsense_range_desired_end]
           - _range_before.json['range']['interface']['lan']['selected'] | int == 1
+          - _range_before.json['range'][opnsense_range_field] in [opnsense_range_expected_value, opnsense_range_desired_value]
+          - opnsense_range_field != 'subnet_mask' or _range_before.json['range']['end_addr'] == opnsense_range_desired_end
         fail_msg: Existing range, start/end or LAN binding differs; no upsert or replacement is allowed.
         quiet: true
 
@@ -89,6 +105,27 @@
         fail_msg: Client evidence is incomplete or .200 already appears in a lease/reservation; stop for conflict review.
         quiet: true
 
+    - name: Require observed IPv4 clients to fit the proposed mask
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import ipaddress,json,sys
+            evidence=json.load(sys.stdin)
+            target=ipaddress.ip_network('10.0.10.0/24')
+            addresses=[row['address'] for row in evidence['leases']['rows']]
+            addresses.extend(address.strip() for row in evidence['reservations']['rows']
+                             if row.get('hwaddr') or row.get('client_id')
+                             for address in row['ip'].split(','))
+            assert all(ipaddress.ip_address(address).version != 4 or
+                       ipaddress.ip_address(address) in target for address in addresses)
+        stdin: "{{ {'leases': _range_client_reads.results[0].json, 'reservations': _range_client_reads.results[1].json} | to_json }}"
+      changed_when: false
+      check_mode: false
+      no_log: true
+      when: opnsense_range_field == 'subnet_mask'
+
     - name: Read actual Kubernetes service allocations without changing the cluster
       ansible.builtin.command:
         argv: "{{ opnsense_range_services_command }}"
@@ -106,21 +143,24 @@
         fail_msg: .200 is already requested or allocated by a Kubernetes service; stop for conflict review.
         quiet: true
 
-    - name: Report only the intended range-end change
+    - name: Report only the intended single range-field change
       ansible.builtin.debug:
         msg:
           uuid: "{{ opnsense_range_uuid }}"
           start_unchanged: "{{ opnsense_range_start }}"
           before_end: "{{ _range_before.json['range']['end_addr'] }}"
           desired_end: "{{ opnsense_range_desired_end }}"
+          field: "{{ opnsense_range_field }}"
+          before_value: "{{ _range_before.json['range'][opnsense_range_field] }}"
+          desired_value: "{{ opnsense_range_desired_value }}"
           check_only: "{{ ansible_check_mode }}"
           activation_note: Dnsmasq reconfigure can interrupt DHCP/DNS and reload firewall rules.
-      changed_when: _range_before.json['range']['end_addr'] != opnsense_range_desired_end
+      changed_when: _range_before.json['range'][opnsense_range_field] != opnsense_range_desired_value
 
     - name: Save and reconcile only when live change is approved and needed
       when:
         - not ansible_check_mode
-        - _range_before.json['range']['end_addr'] != opnsense_range_desired_end
+        - _range_before.json['range'][opnsense_range_field] != opnsense_range_desired_value
       block:
         - name: Require a new absolute private recovery directory
           ansible.builtin.assert:
@@ -172,14 +212,12 @@
             fail_msg: Range changed after preflight; do not create, overwrite or retry it.
             quiet: true
 
-        - name: Change only the existing range end
+        - name: Change only the explicitly selected existing range field
           ansible.builtin.uri:
             url: "{{ opnsense_range_api_url }}/api/dnsmasq/settings/setRange/{{ opnsense_range_uuid }}"
             method: POST
             body_format: json
-            body:
-              range:
-                end_addr: "{{ opnsense_range_desired_end }}"
+            body: "{{ {'range': {opnsense_range_field: opnsense_range_desired_value}} }}"
           register: _range_saved
           changed_when: true
           no_log: true
@@ -200,8 +238,8 @@
         - name: Require only the reviewed field to differ before reconfigure
           ansible.builtin.assert:
             that:
-              - _range_after.json['range']['end_addr'] == opnsense_range_desired_end
-              - "(_range_after.json['range'] | combine({'end_addr': _range_before.json['range']['end_addr']})) == _range_before.json['range']"
+              - _range_after.json['range'][opnsense_range_field] == opnsense_range_desired_value
+              - "(_range_after.json['range'] | combine({opnsense_range_field: _range_before.json['range'][opnsense_range_field]})) == _range_before.json['range']"
             fail_msg: Saved range differs beyond the reviewed end address; service activation is refused.
             quiet: true
 
