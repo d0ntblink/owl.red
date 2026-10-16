@@ -27,10 +27,12 @@ still share the host, power and other failure points.
 - Replace OPNsense with one VyOS VM on the existing edge host. Keep direct PCI
   passthrough for WAN/LAN; do not introduce Proxmox bridges or SR-IOV into the
   production router data path. HA is deferred, not a migration prerequisite.
-- Use VyOS Stream with an explicitly pinned image and verified published
-  integrity/authenticity information. Stream is not LTS; do not assume that
-  rolling documentation describes the selected image. Record the release,
-  feature support, update policy and recovery image before deployment.
+- Use an explicitly pinned VyOS rolling build with verified published
+  integrity/authenticity information. The owner selected rolling on 2026-10-16,
+  superseding the earlier Stream/Suricata deferral. Accept its development-release
+  risk without following a moving `latest` image or automatically upgrading.
+  Record exact build, feature support, update policy and recovery image before
+  deployment; a channel change is not approval for a live router change.
 - Terraform owns the new VM's lifecycle and hardware declaration, following
   [ADR 007](007-terraform-vs-ansible-boundaries.md). Use a separate resource/VM ID;
   never turn the existing OPNsense resource into VyOS or recreate VM 100. The
@@ -89,9 +91,29 @@ still share the host, power and other failure points.
 
 ### Services And Observability
 
-- Prefer supported native VyOS functions, including Suricata, over an external
-  container without a demonstrated benefit. Verify the selected image and choose
-  IDS versus inline IPS deliberately; an alert is not proof of a packet drop.
+- Prefer supported native VyOS functions over an external container without a
+  demonstrated benefit. The signature-verified Stream `2026.03` ISO lacked
+  Suricata files/schema; the owner subsequently selected rolling to obtain native
+  Suricata. Verify the chosen binary's service and rules support, not just rolling
+  documentation. Qualify IDS first; inline IPS and new production blocking remain
+  separate approved changes. An alert is not proof of a packet drop.
+- CrowdSec is a requested security capability, not a claim of an installed native
+  VyOS service. Qualify log collection/parsers, the Security Engine/local API and
+  a remediation component separately. Prefer an external engine and private
+  [Blocklist Mirror](https://docs.crowdsec.net/u/bouncers/blocklist-mirror/) consumed
+  by native VyOS remote groups over a second agent rewriting router nftables.
+  This is an integration candidate until the selected build's fetch, revocation,
+  expiry and failure behavior is tested. Keep management/recovery sources safe,
+  cover IPv4/IPv6, limit list size and expose no API key in Git or the dashboard.
+  Cached remote lists can outlive expired decisions when refresh fails; define a
+  bounded stale-data policy and recovery before enabling automatic blocking.
+- Scope network remediation to traffic whose real source IP the router can see.
+  Cloudflare Tunnel hides the visitor source at that layer; protect web traffic
+  at a compatible proxy/Cloudflare remediation point with a verified trusted
+  real-client-IP chain. Never ban a connector, gateway or Cloudflare range because
+  it appeared as the peer. Cloudflare remediation needs its own scoped account
+  IaC, permissions and plan/quota/failure-mode review, not public exposure of LAPI.
+  Detection, dashboard visibility and actual enforcement have separate acceptance.
 - Keep [ADR 013](013-technitium-single-resolver-all-vlans.md)'s final Technitium
   DNS/DHCP design. OPNsense serves until the router swap; VyOS provides the agreed
   interim client services afterward. Technitium DHCP stays disabled until the
@@ -101,6 +123,22 @@ still share the host, power and other failure points.
   Review the existing Plex exception explicitly; do not silently remove it or
   assume Tunnel replaces every non-HTTP protocol. Connector placement remains a
   separate service decision, not a required router plugin.
+- Keep Anubis as an optional future anti-bot evaluation for anonymous/public
+  browser endpoints, not a deployment decision or migration gate. Cloudflare
+  Access authentication may make it unnecessary for private applications;
+  Tunnel transport alone is not equivalent to anti-bot protection. Evaluate the
+  actual Cloudflare bot controls and legitimate API/webhook/automation access
+  before introducing a second challenge layer.
+- Keep filtering layered: Technitium handles ad/tracker and malicious-domain
+  DNS lists; VyOS handles explicitly selected IP/CIDR feeds such as Spamhaus DROP
+  and a conservative FireHOL selection. Do not load email DNSBL query results or
+  a domain list as an IP feed, stack overlapping lists without review, or apply
+  bogon/private-range feeds blindly to LAN/management traffic. Define direction,
+  IPv4/IPv6 coverage, exclusions, refresh/staleness, size and false-positive
+  rollback before enabling them. DNS filtering does not replace packet policy,
+  detect all malicious traffic or reliably remove same-domain video ads; mail
+  spam needs mail-service filtering. These requirements are not a claim that
+  Spamhaus/FireHOL feeds are already declared or deployed.
 - Select a proven guest captive-portal enforcement engine and placement before
   guest activation. A web container or DHCP option 114 alone does not enforce
   access. Do not burden the weak WAP with the portal service or reuse an
@@ -110,8 +148,10 @@ still share the host, power and other failure points.
   the replacement: filter time, source/destination, port/protocol, interface/VLAN,
   verdict and rule identity; relate rules to the deployed configuration revision.
   Enable relevant explicit/default deny logging for IPv4/IPv6 and distinguish
-  firewall drops, Suricata alerts and IPS drops. Bound log volume without changing
-  verdicts; absent events do not prove traffic was allowed.
+  firewall drops from Suricata alerts/IPS drops and CrowdSec decisions/enforcement.
+  Do not claim protection from an untested parser, empty ruleset or unapplied
+  decision. Bound log volume without changing verdicts; absent events do not
+  prove traffic was allowed.
 - Prefer an existing log UI/backend such as Grafana/Loki before building a custom
   frontend. A future SIEM can consume the same events; it is not a prerequisite.
   The UI gets query-only access, never router write credentials. Retain local

@@ -1,0 +1,119 @@
+---
+vyos_recorded_baseline:
+  source: retained-opnsense-pre-save-export
+  captured_at: "2026-10-16T20:45:30Z"
+  sha256: f53c7f99353f296cac7f80659ccaa5a27c955d5096f5561e910de6c027d4ada8
+  reference_only: true
+  router:
+    host: edge.pve.owl.red
+    existing_vmid: 100
+    hostname: edge.owl.red
+    wan:
+      recorded_interface: igc0
+      recorded_mac: e0:d4:e8:ef:2b:f2
+      ipv4: dhcp
+      dhcp_hostname: edge.owl.red
+      dhcp_client_id: ""
+      block_private: true
+      block_bogons: true
+      ipv6: dhcp6
+      recorded_pd_length: "0"
+    lan:
+      recorded_interface: ixl1
+      recorded_mac: 6c:fe:54:70:08:31
+      address: 10.0.10.1/16
+      pending_saved_prefix: 24
+      pending_apply_sent: false
+      ipv6_mode: idassoc6
+      ipv6_track_interface: wan
+      ipv6_prefix_id: "0"
+  dhcp:
+    subnet: 10.0.10.0/24
+    start: 10.0.10.100
+    stop: 10.0.10.199
+    lease_seconds: 86400
+    gateway: 10.0.10.1
+    dns: 10.0.10.1
+    reservations:
+      - hostname: switch.owl.red
+        ip: 10.0.10.2
+        mac: 48:8f:5a:0c:d1:82
+        client_id: "01:48:8f:5a:0c:d1:82"
+      - hostname: ipmi.owl.red
+        ip: 10.0.10.6
+        mac: ac:1f:6b:4b:b5:e7
+        client_id: "ac:1f:6b:4b:b5:e7"
+      - hostname: cp1.k8s.owl.red
+        ip: 10.0.10.21
+        mac: "02:00:00:00:00:21"
+        client_id: ""
+      - hostname: cp2.k8s.owl.red
+        ip: 10.0.10.22
+        mac: "02:00:00:00:00:22"
+        client_id: ""
+      - hostname: cp3.k8s.owl.red
+        ip: 10.0.10.23
+        mac: "02:00:00:00:00:23"
+        client_id: ""
+      - hostname: worker1.k8s.owl.red
+        ip: 10.0.10.24
+        mac: "02:00:00:00:00:24"
+        client_id: ""
+      - hostname: nas.pve.owl.red
+        ip: 10.0.10.4
+        mac: ac:1f:6b:47:87:f0
+        client_id: ""
+      - hostname: nas.owl.red
+        ip: 10.0.10.5
+        mac: f8:f2:1e:48:91:40
+        client_id: ""
+  dns:
+    listener_port: 53
+    dnssec: true
+    public_forwarding_enabled: false
+    local_domain_backend: dnsmasq
+    local_domain_backend_port: 53053
+    lease_name_registration: false
+    static_name_registration: false
+  ntp_servers:
+    - 0.opnsense.pool.ntp.org
+    - 1.opnsense.pool.ntp.org
+    - 2.opnsense.pool.ntp.org
+    - 3.opnsense.pool.ntp.org
+  policy:
+    lan_ipv4_to_any: true
+    lan_ipv6_to_any: true
+    outbound_nat: automatic
+    plex:
+      protocol: tcp
+      wan_port: 32400
+      address: 10.0.10.5
+      port: 32400
+      reflection: purenat
+  production_blockers:
+    - Resolve the saved-but-unapplied LAN change and agree the rollback prefix.
+    - Verify WAN DHCP identity, runtime IPv6 DUID, delegation and RA behavior.
+    - Define lease-safe Dnsmasq-to-Kea allocation and client-ID matching.
+    - Verify recursive DNS and local-name behavior without an early resolver handoff.
+    - Verify Plex reflection and automatic firewall/NAT semantics on the native path.
+    - Qualify boot-time firewall ordering, native boot and physical NIC handoff.
+
+vyos_lab:
+  hostname: owl-vyos-lab
+  domain: lab.owl.invalid
+  user: owl-ansible
+  wan_interface: eth0
+  wan_mac: "02:76:79:00:00:01"
+  lan_interface: eth1
+  lan_mac: "02:76:79:00:00:02"
+  subnet: 192.0.2.0/24
+  address: 192.0.2.1/24
+  gateway: 192.0.2.1
+  dhcp_start: 192.0.2.100
+  dhcp_stop: 192.0.2.199
+  lease_seconds: 86400
+  nas_address: 192.0.2.5
+  nas_mac: "02:76:79:00:00:05"
+  ntp_servers:
+    - 0.pool.ntp.org
+    - 1.pool.ntp.org
