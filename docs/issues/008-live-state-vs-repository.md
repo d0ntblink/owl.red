@@ -934,6 +934,74 @@ operator and Talos guest prefix changes, plus VLAN routing and the eventual
 DNS/DHCP handoff, remain separately scoped; this does not complete the LAN
 transition. No assistant commit or Git publish was performed.
 
+## Follow-up: Talos Guest Network-Only Preparation
+
+Read-only follow-up on 2026-10-16 confirms all four guests `.21-.24` run Talos
+`1.8.1`, each with one MAC-selected interface and one `/16` management address,
+gateway `.1` and DNS `.1`/`1.1.1.1`. The control-plane configs retain VIP `.20`.
+The system CLI is `1.13.0`; a user-local official `1.8.1` binary was downloaded
+and verified against its release checksum, without replacing the system CLI.
+
+The worker bootstrap patch used `eth0`, unlike the live MAC selector; its
+selector was corrected without changing its current `/16` bootstrap address.
+A network-only strategic-merge preview then demonstrated address-list append
+behavior, leaving both masks. No live write occurred. The separate one-shot
+JSON Patch and default-preview controller now test exact node identity and old
+list before replacement. The real matched patch engine and complete candidate
+comparison prove only the selected CIDR changes; no DNS/gateway/version/install
+image/other machine or cluster field is regenerated from Terraform.
+
+All four connected controller previews pass: server-side no-reboot dry-run,
+unchanged stored config, runtime `/16`/gateway/boot identity, four Ready nodes,
+VIP plus three direct API readiness checks and three voting etcd members. An
+additional worker preview passes the explicit exactly-one `.20/32` runtime VIP
+check. Four offline tests pass; CI coverage was added but not run remotely.
+Private full-config/preimage/candidate evidence remains outside Git with
+owner-only permissions. No Talos configuration, reboot, upgrade or live guest
+prefix change has been applied; the rolling activation awaits its scoped
+approval. Requirements and try/no-reboot recovery semantics are recorded in
+the [controller guide](../guides/controller-setup.md#guarded-talos-guest-management-prefix).
+
+## Follow-up: Approved Talos Guest Masks Complete
+
+The owner explicitly approved `.21-.24` guest management `/24`, worker first
+then control planes sequentially, without reboot/version change. The controller
+used fresh owner-only preimage/candidate evidence for each node and native
+three-minute `try` before the no-reboot confirmation. Completion times on
+2026-10-16 are worker 17:02:08Z, cp1 17:02:38Z, cp2 17:02:48Z and cp3 17:02:59Z.
+Every node passed whole-configuration equality except the one CIDR, runtime
+`/24`, unchanged boot identity/version/runtime gateway, four Ready nodes, API
+VIP plus three direct readiness endpoints, exactly one runtime `.20/32` VIP and
+three expected voting etcd members before confirmation, then config/runtime/
+health read-back again. No reboot, upgrade, reset, drain, guest power action or
+automatic rollback occurred.
+
+Terraform's four node CIDRs, standalone bootstrap patches and inventory now
+record `/24`; the bootstrap interfaces use the verified MAC selectors rather
+than the obsolete `eth0` assumption. The older Talos generation pin is unchanged,
+and no Terraform root apply or state refresh ran. That root can still propose
+older generated fields, so live/source/version/state drift must be reviewed
+before a future apply. Five final offline cases and `terraform fmt -check` for
+the edited file pass; the new workflow was not executed remotely.
+
+All six PVE management and four Talos guest addresses now use `/24` on the
+existing native L2. Router LAN `.1`, NAS `.5`, operator/client masks, switch/AP
+VLAN paths and DNS/DHCP authority were not changed. This closes another mask
+batch, not the VLAN rollout; the next coordinated work is remaining legacy
+masks/router transition and an isolated switch/router VLAN pilot. Existing
+appliance/AP unknowns apply to their affected paths rather than unrelated
+network work. No assistant commit or Git publish was performed.
+
+Independent cross-node acceptance at 17:08:19Z, beyond every trial window,
+confirms all four stored and runtime `/24` prefixes and complete config equality
+to the saved preimage with only its CIDR replaced. Boot identities and Talos
+`1.8.1` remain unchanged; all four Kubernetes nodes are Ready on `v1.31.1`.
+Technitium internal DNS resolves `rancher.owl.red` to `.201`, whose TCP 443 is
+reachable. All private run directories/files have verified `0700`/`0600`
+permissions and fourteen evidence files per node are hashed in an integrity
+manifest. No additional network write was made for this acceptance. The CI
+job's YAML and shell syntax pass locally; remote CI/full hook suites were not run.
+
 ## Suggested Next Work
 
 Current sequencing and acceptance criteria live in the

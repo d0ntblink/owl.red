@@ -226,8 +226,8 @@ completion of unrelated dashboard certificates or every Fleet repair.
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
 **Observed:** after the approved host-only changes, all six PVE management
-addresses (edge `.3`, storage `.4`, compute `.11-.14`) use `/24`. Router
-LAN `.1`, Talos guest node addresses, NAS and the operator retain `/16` on the legacy
+addresses (edge `.3`, storage `.4`, compute `.11-.14`) and all four Talos guest
+node addresses (`.21-.24`) use `/24`. Router LAN `.1`, NAS and the operator retain `/16` on the legacy
 untagged L2. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
@@ -253,7 +253,7 @@ recovery and connectivity requirements.
 
 1. **Inventory and choose the intermediate states.**
   - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The dated refresh returns 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. The approved 2026-10-16 range correction now ends at `.199`; preserve the unchanged 24-hour lease/renewal implications.
-  - `[~]` Record masks, gateways and L2 attachment. All six PVE management addresses (edge `.3`, storage `.4`, compute `.11-.14`) now use `/24`; router LAN `.1`, four Talos guest node IPs, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` is a `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[~]` Record masks, gateways and L2 attachment. All six PVE management addresses (edge `.3`, storage `.4`, compute `.11-.14`) and all four Talos guests `.21-.24` now use `/24`; router LAN `.1`, NAS and operator retain `/16`. Technitium and PDM already use `/24`; API VIP `.20` remains a verified `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
   - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`. Initial Wi-Fi was disconnected; a hotspot was connected later, without claiming it became the selected internet path. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
@@ -271,6 +271,9 @@ recovery and connectivity requirements.
   - `[x]` Prepare storage PVE management `.4/16` to `.4/24` using the same one-host, default-off path with `bond0` and all five reviewed interface stanzas. Fourteen offline cases pass, including bond model/runtime and NAS VM device/PID/network drift refusals. Connected preview at 2026-10-16T16:25:51Z reports `ok=21`, `changed=0`, `failed=0`; NAS remains `.5/16`, HTTPS/SMB TCP responds and VM 101 is running. No storage staging, timer or reload has occurred.
   - `[x]` Explicitly approve and run only storage PVE management `.4/24` (2026-10-16T16:36:08Z-16:36:52Z), with fresh private on/off-host preimages and local rollback. Initial API staging safely refused added bond-member `auto` flags before timer/reload and was reverted without reload. Storage-only exact-preimage staging preserves those flags; fifteen offline cases pass. Final 16:37:45Z read-back verifies runtime/persisted `/24`, source-only CIDR change, unchanged bond/NAS VM configuration/QEMU PID/`.5/16`/MAC and reachable HTTPS/SMB TCP, six-node quorum, confirmed inactive timer and no pending file/rollback. NAS settings, disks, array, passthrough, USB boot, power and unrelated services were not changed.
 
+  - `[x]` Prepare the four Talos guest management-mask candidates `.21-.24/16 -> /24` using the [default-preview controller](scripts/talos-prefix-pilot.mjs), exact live configurations and checksum-verified matching `talosctl 1.8.1`. Four offline cases pass; all four connected no-reboot server previews pass with no changes. JSON Patch tests role/hostname/MAC/old address list before replacement; strategic merge would append `/24` to `/16` and is not used. Runtime gateway, four Ready nodes, API VIP plus three direct APIs, three voting etcd members and the VIP `/32` pass. The mixed Terraform `1.7.5` generation pin is not applied or changed.
+  - `[x]` Approve and apply the Talos guest masks one at a time, worker first then cp1/cp2/cp3 (confirmations 2026-10-16T17:02:08Z-17:02:59Z). Each native three-minute `try` was confirmed without reboot after whole-config equality except CIDR, runtime `/24`, unchanged boot identity/version/gateway, four Ready nodes, three direct/API VIP readiness, exactly one `.20/32` and three voting etcd members. Terraform node CIDRs, bootstrap MAC-selector patches and current inventory now match `/24`; five offline tests and the touched Terraform format check pass. No whole-root apply, state refresh, Talos/Kubernetes upgrade, DNS/gateway/VIP change or guest power operation ran. The older generation pin/state drift still requires review before any future Terraform apply; router/NAS/operator masks, VLANs and DNS/DHCP authority remain separate.
+
   **Assessment, not apply approval:** mask-only contraction remains the leading
   option for the observed addresses. The operator-to-PVE `.3` path is on-link
   in the captured inventory, and the owner has now shown the router VM's actual
@@ -280,8 +283,8 @@ recovery and connectivity requirements.
   affected AP work, not independent wired preparation. Preserve the API VIP
   `/32`, existing DNS overrides and the native L2 while a scoped IaC/rollback
   procedure is prepared. The approved changes so far are the DHCP range boundary
-  and six PVE management masks; no router mask, VLAN or guest-prefix migration is
-  claimed by those results.
+  six PVE management masks and four Talos guest masks; no router/NAS/operator
+  mask, VLAN or DNS/DHCP authority migration is claimed by those results.
 
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.

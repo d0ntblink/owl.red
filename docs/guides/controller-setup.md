@@ -514,6 +514,88 @@ passthrough, storage, Windows, VLAN or guest-power change was made. Use
 `--limit edge_pve --check` for inspection; future live operations still require
 their own scope and fresh recovery identity, with default opt-in false.
 
+## Guarded Talos Guest Management Prefix
+
+The [Talos prefix controller](../../scripts/talos-prefix-pilot.mjs) defaults to
+preview and accepts exactly one of `worker1-talos`, `cp1-talos`, `cp2-talos`,
+`cp3-talos`. It is a bounded existing-node migration, not a bootstrap or version
+upgrade. The mixed Terraform root still generates Talos `1.7.5` configuration
+while the live nodes run `1.8.1`; do not run that whole root to change masks.
+All four guest masks were approved and completed on 2026-10-16 UTC; accepted
+CIDRs/MAC selectors are reconciled into its node map, bootstrap patches and
+current inventory. Terraform state was not refreshed or applied. Review its
+older generated fields and live/source/version/state differences before any
+future root apply; source alignment is not a claim of Terraform convergence.
+
+Requirements:
+
+- Controller: Node.js `24`, Python 3/PyYAML, the existing `owl-k8s` Talos context,
+  `admin@owl-k8s` kubeconfig and authenticated direct access to all four nodes,
+  API VIP `.20` and the three control-plane APIs. No new token, collection, npm
+  dependency, SSH access or OS resolver change is needed.
+- Matching official Linux/amd64 `talosctl 1.8.1`, SHA-256
+  `c44180a3a4e91325a820464a9bff5ba3e5e86840ca8faa1d2f2e1340ecdd9271`.
+  Default executable is
+  `~/.local/share/owl-red/tools/talos/1.8.1/talosctl`; `TALOSCTL_BINARY` may select
+  another path, but the same checksum is enforced. The installed system `1.13.0`
+  CLI is not replaced or used by this migration controller.
+- All four Kubernetes nodes Ready, API VIP and all three direct `/readyz`
+  endpoints passing, exactly three expected etcd voting members and exactly one
+  live `.20/32` VIP. Run only one node/operation at a time, worker first; do not
+  run another Talos configuration writer during the trial.
+
+The controller derives a candidate from the exact live machine configuration,
+uses Talos's actual JSON Patch implementation and compares the complete parsed
+candidate with a one-address-list replacement. Role, hostname, MAC selector,
+single interface/address, gateway, DNS and control-plane VIP are checked. A
+strategic merge appends address lists and is not suitable for this contraction.
+The [worker migration patch](../../talos/patches/management-prefix-worker1.yaml)
+is a reviewable one-shot equivalent, not the bootstrap template. Already `/24`,
+unexpected interfaces/addresses or identity drift refuse rather than guessing.
+
+```bash
+node --test scripts/talos-prefix-pilot.test.mjs
+node scripts/talos-prefix-pilot.mjs --node worker1-talos
+```
+
+The preview command above is for the reviewed before-state, not an instruction
+to repeat the completed migration: all four accepted guests now `/24` correctly
+fail its one-shot `/16` precondition. For ordinary inspection use authenticated
+`talosctl get` address/route resources, not another migration invocation.
+
+Only after explicit scope approval, add `--apply-confirmed`. Every invocation
+uses a new owner-only evidence directory under
+`~/.local/state/owl-red/talos-prefix/`. Full before/candidate machine configs
+contain secret material: directories are `0700`, files `0600`; never publish
+them, print them into chat or put them in Git. Preview runs server-side
+`no-reboot --dry-run` and verifies the stored configuration stayed unchanged.
+
+Live activation uses `--mode try --timeout 3m`, which applies immediately or
+fails if a reboot would be needed. Talos reverts unless another configuration
+update confirms it. Before confirming the identical candidate with
+`--mode no-reboot`, require runtime `/24`, unchanged gateway/boot identity/link,
+whole-config equality, four Ready nodes, direct/API VIP readiness, `/32` VIP and
+three voting members; leave at least one minute of the recovery interval. Then
+read back config/runtime/health again. Talos/Kubernetes versions, install image,
+DNS, gateway, VIP and all other machine/cluster fields are not changed.
+
+On failure, stop and inspect the private phase/evidence plus actual state; never
+blindly retry or apply another update while relying on automatic recovery.
+An unknown confirmation outcome is not proof the trial remains armed, and a
+confirmed change is not automatically reverted. Inspect the saved preimage and
+any concurrent drift before an approved inverse change. No reboot, upgrade,
+reset, drain, guest power command or broad Terraform apply is part of this lane.
+The offline CI job uses the checksum-pinned CLI and fake local configs without
+cluster credentials; a local pass is not a remote workflow result.
+
+Worker confirmation completed at 17:02:08Z, then cp1/cp2/cp3 at 17:02:38Z,
+17:02:48Z and 17:02:59Z. All four report only the management CIDR changed, same
+boot identity and Talos version, four Ready nodes, API/direct readiness and three
+voting members. Runtime VIP remains exactly one `.20/32`; no reboot, upgrade or
+rollback was needed. Five final offline cases and the touched Terraform format
+check pass. Router/NAS/client masks, VLAN paths and service-authority handoff
+were not changed, and no assistant Git commit/publish occurred.
+
 ## Guarded Dnsmasq Range Preparation
 
 The [range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml) and

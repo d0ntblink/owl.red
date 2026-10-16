@@ -47,13 +47,13 @@ locals {
   nameservers      = ["10.0.10.1", "1.1.1.1"]
 
   control_planes = {
-    "cp1-talos" = { node = "cp1", vmid = 601, ip = "10.0.10.21/16", mac = "02:00:00:00:00:21", cores = 2, memory = 10240 }
-    "cp2-talos" = { node = "cp2", vmid = 602, ip = "10.0.10.22/16", mac = "02:00:00:00:00:22", cores = 2, memory = 10240 }
-    "cp3-talos" = { node = "cp3", vmid = 603, ip = "10.0.10.23/16", mac = "02:00:00:00:00:23", cores = 2, memory = 10240 }
+    "cp1-talos" = { node = "cp1", vmid = 601, ip = "10.0.10.21/24", mac = "02:00:00:00:00:21", cores = 2, memory = 10240 }
+    "cp2-talos" = { node = "cp2", vmid = 602, ip = "10.0.10.22/24", mac = "02:00:00:00:00:22", cores = 2, memory = 10240 }
+    "cp3-talos" = { node = "cp3", vmid = 603, ip = "10.0.10.23/24", mac = "02:00:00:00:00:23", cores = 2, memory = 10240 }
   }
 
   workers = {
-    "worker1-talos" = { node = "worker1", vmid = 604, ip = "10.0.10.24/16", mac = "02:00:00:00:00:24", cores = 4, memory = 12288 }
+    "worker1-talos" = { node = "worker1", vmid = 604, ip = "10.0.10.24/24", mac = "02:00:00:00:00:24", cores = 4, memory = 12288 }
   }
 
   all_vms = merge(local.control_planes, local.workers)
