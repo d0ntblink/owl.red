@@ -225,12 +225,13 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Observed:** after the approved host-only changes, all six PVE management
+**Observed:** after the approved host/client changes, all six PVE management
 addresses (edge `.3`, storage `.4`, compute `.11-.14`) and all four Talos guest
 node addresses (`.21-.24`) use `/24`. NAS `.5` now uses `/24` after the approved
-DHCP mask/renewal step; the active range advertises `/24`. Router LAN `.1` and
-operator Ethernet `.174` still use `/16` on the legacy untagged L2 at the
-20:24Z read-back; other client masks await verification. Technitium
+DHCP mask/renewal step; the active range advertises `/24`. Operator Ethernet
+`.174` is also `/24` after its separately approved 20:32Z renewal. Router LAN
+`.1` remains `/16` on the legacy untagged L2; other client masks await
+verification. Technitium
 has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
 10-50 disabled after the approved guard rollout and daemon-persistence check;
 zero leases were observed. Those are not five operational VLANs.
@@ -255,7 +256,7 @@ recovery and connectivity requirements.
 
 1. **Inventory and choose the intermediate states.**
   - `[~]` Capture live OPNsense prefix, routes, DHCP engine, pool, leases, reservations, DNS options and service bindings. The dated refresh returns 15 leases and eight reservations, all current LAN lease/ARP addresses inside `10.0.10.0/24`; the owner reports old outside-range entries are historical. This does not prove absence of every offline/static client. The approved 2026-10-16 range correction now ends at `.199`; preserve the unchanged 24-hour lease/renewal implications.
-  - `[~]` Record masks, gateways and L2 attachment. All six PVE management addresses (edge `.3`, storage `.4`, compute `.11-.14`), four Talos guests `.21-.24` and NAS `.5` now use `/24`; router LAN `.1` and operator Ethernet `.174` remain `/16` at the 20:24Z check. Dnsmasq now advertises `/24`; other clients are not yet verified renewed. Technitium and PDM already use `/24`; API VIP `.20` remains a verified `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
+  - `[~]` Record masks, gateways and L2 attachment. All six PVE management addresses (edge `.3`, storage `.4`, compute `.11-.14`), four Talos guests `.21-.24`, NAS `.5` and operator Ethernet `.174` now use `/24`; router LAN `.1` remains `/16`. Dnsmasq advertises `/24`; other clients are not yet verified renewed. Ethernet renewal preserves the address/NIC/gateway/DNS/metrics and passes management/internet checks at 20:33Z. Technitium and PDM already use `/24`; API VIP `.20` remains a verified `/32`, not a node-mask error. Storage PVE and the operator already use Technitium DNS directly. Storage-management `.6`, power-strip `.9` settings and the device behind AP-labelled port 18 remain unverified. See the [dated assessment](docs/issues/008-live-state-vs-repository.md#follow-up-mask-inventory-and-recovery-assessment).
   - `[x]` Identify the active operator NIC as USB Ethernet `84:3a:5b:87:91:dd`, `.174/16`, gateway `.1`, DNS `.30`. Initial Wi-Fi was disconnected; a hotspot was connected later, without claiming it became the selected internet path. Owner identifies switch port 22 (`cab-trunk`) as the protected current path. Do not change its native PVID 1/untagged behavior or assume a disabled spare port is a usable recovery port.
   - `[x]` Verify router VM 100's console menu through PVE at literal `10.0.10.3:8006` (user screenshot, 2026-10-15). OPNsense `26.1.9` shows LAN `ixl1` at `10.0.10.1/16` and the interactive menu. No console option was selected as part of this check; affected-configuration restore and outage recovery are not thereby rehearsed.
   - `[x]` Prepare the narrow Dnsmasq range-end candidate `.200` to `.199` with default-deny activation, fresh private preimages and eight passing loopback-only cases. Locked provider `0.24.0` supports Dnsmasq hosts but not ranges; the [Ansible playbook](ansible/playbooks/opnsense-dhcp-range.yml) is the documented surgical exception, not a whole-root Terraform apply.
@@ -285,9 +286,9 @@ recovery and connectivity requirements.
   affected AP work, not independent wired preparation. Preserve the API VIP
   `/32`, existing DNS overrides and the native L2 while a scoped IaC/rollback
   procedure is prepared. Completed approvals cover the DHCP range boundary and
-  advertised mask, six PVE masks, four Talos masks and NAS DHCP mask acceptance.
-  No router/operator mask, VLAN or DNS/DHCP authority migration is claimed by
-  those results.
+  advertised mask, six PVE masks, four Talos masks, NAS DHCP mask acceptance and
+  the separately approved operator Ethernet renewal. No router mask, VLAN or
+  DNS/DHCP authority migration is claimed by those results.
 
 2. **Prepare the serving-state guard and non-disruptive configuration.**
   - `[x]` Prepare and offline-test explicit scope lifecycle/read-back reconciliation, disabled intent for all five scopes and the default-false Nix activation lock (20 regression cases). Existing addresses, masks, DNS and lease values are unchanged; missing scopes fail before API writes rather than being created enabled.
@@ -304,7 +305,8 @@ recovery and connectivity requirements.
   - `[x]` Establish the NAS addressing authority (2026-10-16T19:50:45Z): `.5/16` is dynamic on `eth0`, persisted `USE_DHCP[0]="yes"`, routes are DHCP-managed and resolver is `.1`; HTTPS/SMB TCP responds. Keep `network.cfg` in its manual lane, do not create a standalone static-mask/DNS writer, and coordinate NAS/operator lease renewal with the active router/DHCP transition. No NAS service, lease or configuration change was made.
   - `[x]` Prepare an explicit Dnsmasq range-mask candidate, empty to `255.255.255.0`, using the same guarded one-object Ansible exception. Twelve offline cases pass; connected check mode at 20:00:38Z reports only the proposed change (`ok=10`, `changed=1`, `failed=0`) with no save/reconfigure. All 15 returned leases and eight current reservations fit the retained `/24`, including matching NAS MAC/reservation. Before-wire packet review at 20:07:05Z verifies correlated transaction `0x15fb973f`, one DISCOVER/OPNsense OFFER on both capture paths, zero drops, `/16`, gateway/DNS `.1`, lease 86400; no lease accepted or released. NAS config-hash/boot/network evidence and the exact inverse are retained/documented.
   - `[x]` Explicitly approve and apply only the DHCP mask (2026-10-16T20:16:44Z-20:16:55Z; `ok=25`, `changed=5`, `failed=0`). Complete model comparison shows exactly one `subnet_mask` change. Post-wire transaction `0x2d9ce05d` is correlated on both capture paths with zero drops, `/24`, correct broadcast and unchanged gateway/DNS/lease timing; only OPNsense offers. Approved NAS normal IPv4 renewal reaches `.5/24`; a kernel default-route deletion during prefix replacement was detected, and only the exact saved default route was restored at 20:20:44Z. Controlled stable-`/24` renewal passes at 20:22:08Z with gateway retained, unchanged NAS config hash/boot/MAC/IPv6/daemon/non-eth0 routes and working NAS/external HTTPS. No release/rebind/service restart or persistent NAS edit occurred. Final 20:24:49Z router LAN remains `.1/16`, all eight reservations unchanged, DNS healthy and four Kubernetes nodes Ready; operator Ethernet remains DHCP `.174/16`, read only.
-  - `[ ]` Coordinate remaining client renewals, including a separately approved operator Ethernet renewal; do not silently change Windows routing/DNS or claim all existing leases have `/24`. Preserve `.1/16` and the unchanged authority until the later scoped router/interface cutover is ready.
+  - `[x]` Separately approve and request only operator Ethernet IPv4 renewal (20:32:14Z): `.174/16 -> .174/24`, with unchanged address/NIC/gateway/DNS/interface and route metrics. No release, NIC reset, IPv6 or hotspot-routing change. At 20:33:26Z router/edge/storage/NAS ports and external HTTPS pass; private before/after evidence retained.
+  - `[ ]` Verify other client/static-appliance masks and coordinate any remaining renewals; do not claim every existing lease has `/24`. Preserve `.1/16` and the unchanged authority until the later scoped router/interface cutover is ready.
   - `[ ]` For the in-place strategy, plan OPNsense pool/prefix and client lease renewal together; a shortened lease only takes effect after renewal. Handle static masks and clients outside the retained `/24` explicitly, without overlapping active allocations.
   - `[ ]` Change approved host/client masks and the legacy router prefix in the documented order while retaining the current untagged management L2, addresses and OPNsense DNS/DHCP authority. Account for routes and firewall rules which derive from the old prefix.
   - `[ ]` Check both directions to the operator, gateway, PVE quorum, Talos/etcd/API VIP, ingress VIP and NAS after each bounded batch. Stop and restore the affected previous values on failure; do not proceed to VLAN tagging to fix an unresolved mask problem.

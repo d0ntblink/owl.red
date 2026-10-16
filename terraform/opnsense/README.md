@@ -201,6 +201,14 @@ still DHCP `.174/16`; no Windows setting or renewal action was made. Other
 leases are not thereby certified `/24`. Full hook/remote CI runs were not
 performed; twelve local range/mask cases and the updated storage/NAS guard pass.
 
+The owner then separately approved only operator Ethernet IPv4 renewal. At
+20:32:14Z normal `ipconfig.exe /renew Ethernet` accepts `.174/24` with unchanged
+NIC/address/gateway/DNS and interface/route metrics. No release, reset, IPv6 or
+hotspot-routing change occurred. At 20:33:26Z router/edge/storage/NAS TCP and
+external HTTPS are reachable. This supersedes only the dated operator `/16`
+observation above; router LAN is still `/16`, and other clients/appliances are
+not yet all verified `/24`. No broader router/interface/VLAN approval is implied.
+
 Scoped inverse: stop and inspect actual configured/runtime state, then, only
 after recovery approval and drift checks against the saved range, POST only
 `{"range":{"subnet_mask":""}}` to the same existing range setter. Read back
