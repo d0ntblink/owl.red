@@ -219,6 +219,42 @@ configuration, the old `.200` range end or a stale lease map as an automatic
 reaction. A saved history download is not a certified full-current export for
 the later LAN-interface change.
 
+### Router LAN Mask Cutover
+
+Preparation on 2026-10-16 now includes a genuine current WebUI export, not just
+backup history: 72,671 bytes, SHA-256
+`f53c7f99353f296cac7f80659ccaa5a27c955d5096f5561e910de6c027d4ada8`, retained
+owner-only outside Git. It verifies LAN `.1/16`, DHCP `/24` and the corrected
+`.100-.199` pool. A read-only live LAN form check at 20:52Z found no pending
+interface Apply; changing `subnet` from `16` to `24` leaves every other form
+value, including IPv6 `idassoc6`, unchanged. No literal legacy `/16` network
+references were found in that export. Derived LAN firewall/NAT networks will
+follow the narrower interface; this is intentional and needs runtime acceptance.
+
+The bounded change stays in the existing manual WebUI lane:
+`/interfaces.php?if=lan`, same static IPv4 `10.0.10.1` on `ixl1`, prefix only
+`16 -> 24`. Preserve WAN, IPv6 configuration, DHCP/DNS authority/options, switch
+ports/native L2 and all host/client addresses. Refuse another operator's pending
+interface changes. Save first, compare the saved configuration against the
+preimage, and Apply only if no unapproved setting changed. The Apply resets LAN,
+refreshes routing/firewall and restarts the WebUI; brief network/service loss is
+possible. It is not an automatically reverting trial or a zero-outage change.
+
+Before activation, require explicit approval and the available router console
+through literal edge PVE `.3:8006`; the operator and PVE are already `/24` on
+the same native L2. Exact inverse is prefix `24 -> 16` through the same LAN
+form, then Apply, preserving all other fields. Do not restore a whole stale
+configuration or edit `config.xml` directly. If a request outcome is unknown,
+read actual persisted/runtime state before deciding on recovery, never retry it
+blindly. Saved export and console access are not a restore rehearsal.
+
+Acceptance: runtime and persisted `.1/24`, connected `10.0.10.0/24` without the
+old `/16` connected route, unchanged WAN/IPv6 configuration and DHCP range/
+reservations, working operator/PVE/NAS access, DNS/internet, Kubernetes/API VIP
+and an OPNsense-only `/24` DHCP offer. Reuse the completed host/client checks
+unless their state changed. Other appliance masks remain path-specific work
+before their cross-VLAN access; this step does not move them or enable VLANs.
+
 ### Preserve The Control Connection
 
 The assistant depends on the same internet connection: a WAN disruption can
