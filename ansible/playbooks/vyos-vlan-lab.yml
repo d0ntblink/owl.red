@@ -6,6 +6,7 @@
     - ../../vyos/baseline.yml
   vars:
     vyos_vlan_pilot_apply_allowed: false
+    vyos_vlan_pilot_commands: "{{ lookup('template', playbook_dir ~ '/../templates/vyos-vlan20-commands.j2') }}"
     vyos_vlan_pilot_owned_paths:
       - interfaces ethernet eth1 vif 20
       - firewall group network-group OWL_VLAN20_NONPUBLIC
@@ -87,40 +88,7 @@
         source /opt/vyatta/etc/functions/script-template
         configure
         if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
-        set interfaces ethernet eth1 vif 20 address {{ vyos_vlan_pilot.address | quote }} &&
-        set interfaces ethernet eth1 vif 20 description {{ vyos_vlan_pilot.marker | quote }} &&
-        set firewall group network-group {{ vyos_vlan_pilot.nonpublic_group }} description {{ vyos_vlan_pilot.marker | quote }} &&
-        {% for network in vyos_vlan_pilot.nonpublic_networks %}
-        set firewall group network-group {{ vyos_vlan_pilot.nonpublic_group }} network {{ network | quote }} &&
-        {% endfor %}
-        set firewall ipv4 forward filter rule 3000 description {{ vyos_vlan_pilot.marker | quote }} &&
-        set firewall ipv4 forward filter rule 3000 inbound-interface name eth1.20 &&
-        set firewall ipv4 forward filter rule 3000 source address {{ vyos_vlan_pilot.subnet | quote }} &&
-        set firewall ipv4 forward filter rule 3000 destination group network-group {{ vyos_vlan_pilot.nonpublic_group }} &&
-        set firewall ipv4 forward filter rule 3000 action drop &&
-        set firewall ipv4 forward filter rule 3000 log &&
-        set firewall ipv4 forward filter rule 3010 description {{ vyos_vlan_pilot.marker | quote }} &&
-        set firewall ipv4 forward filter rule 3010 inbound-interface name eth1.20 &&
-        set firewall ipv4 forward filter rule 3010 outbound-interface name eth0 &&
-        set firewall ipv4 forward filter rule 3010 source address {{ vyos_vlan_pilot.subnet | quote }} &&
-        set firewall ipv4 forward filter rule 3010 action accept &&
-        {% for rule, protocol in [(3000, 'tcp_udp'), (3010, 'icmp')] %}
-        set firewall ipv4 input filter rule {{ rule }} description {{ vyos_vlan_pilot.marker | quote }} &&
-        set firewall ipv4 input filter rule {{ rule }} inbound-interface name eth1.20 &&
-        set firewall ipv4 input filter rule {{ rule }} source address {{ vyos_vlan_pilot.subnet | quote }} &&
-        set firewall ipv4 input filter rule {{ rule }} destination address {{ vyos_vlan_pilot.gateway | quote }} &&
-        set firewall ipv4 input filter rule {{ rule }} protocol {{ protocol }} &&
-        set firewall ipv4 input filter rule {{ rule }} action accept &&
-        {% if rule == 3000 %}
-        set firewall ipv4 input filter rule {{ rule }} destination port 53 &&
-        {% endif %}
-        {% endfor %}
-        set nat source rule 3000 description {{ vyos_vlan_pilot.marker | quote }} &&
-        set nat source rule 3000 outbound-interface name eth0 &&
-        set nat source rule 3000 source address {{ vyos_vlan_pilot.subnet | quote }} &&
-        set nat source rule 3000 translation address masquerade &&
-        set service dns forwarding allow-from {{ vyos_vlan_pilot.subnet | quote }} &&
-        set service dns forwarding listen-address {{ vyos_vlan_pilot.gateway | quote }} || builtin exit 1
+        {{ vyos_vlan_pilot_commands }} || builtin exit 1
         if /bin/cli-shell-api sessionChanged; then
           commit
           if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi

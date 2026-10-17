@@ -1,0 +1,34 @@
+---
+- name: Reconcile only the reviewed wired VLAN-20 membership
+  hosts: switch_swos
+  gather_facts: false
+  vars_files:
+    - ../switch_configs/css326.yml
+  vars:
+    vlan20_pilot_allowed: false
+    vlan20_phase: prepare
+    vlan20_members: "{{ (vlans | selectattr('vlan_id', 'equalto', 20) | first).member_ports }}"
+  tasks:
+    - name: Require the explicit pilot scope and safe native operator path
+      ansible.builtin.assert:
+        that:
+          - vlan20_pilot_allowed | bool
+          - ansible_connection == 'local'
+          - ansible_host == '10.0.10.2'
+          - vlan20_members == [2, 25]
+          - (vlans | selectattr('vlan_id', 'equalto', 20) | first).learning is sameas true
+          - vlan20_phase in ['prepare', 'apply', 'rollback']
+
+    - name: Preserve or reconcile the single VLAN membership with private recovery
+      swos_vlan20:
+        host: "{{ ansible_host }}"
+        username: "{{ swos_username }}"
+        password: "{{ swos_password }}"
+        phase: "{{ vlan20_phase }}"
+        members: "{{ vlan20_members }}"
+        recovery_directory: "{{ vlan20_recovery_directory }}"
+      register: vlan20_switch_result
+
+    - name: Report scoped switch result
+      ansible.builtin.debug:
+        msg: "{{ vlan20_switch_result | dict2items | rejectattr('key', 'equalto', 'invocation') | list | items2dict }}"

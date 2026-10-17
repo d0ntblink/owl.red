@@ -117,12 +117,38 @@ configuration on rerun, compiled rule IDs and a synthetic DNS query pass.
 No pilot DHCP scope or IPv6 delegation is enabled. This is not the final
 VLAN-20 application-service allowlist or a production promotion workflow.
 
-Physical tagging, packet-level isolation and WAN/client acceptance remain open.
-The proposed wired probe uses a disposable namespace on existing `cp1` rather
-than a client move or new production bridge. Switch API authentication currently
-returns HTTP 401; correct the existing Bitwarden login before reading/staging
-its exact port/VLAN diff. Do not apply the full switch target map, touch operator
-port 22 or transfer Technitium authority as part of this pilot.
+## Accepted Wired VLAN Pilot
+
+VLAN 20 is now accepted on the bounded cp1-to-router path. Native `eth1.20` is
+`10.0.20.1/24`; switch VLAN 20 has only ports 2/25 and MAC learning enabled.
+Existing native management/PVIDs and operator port 22 remain unchanged. The
+temporary static client was removed after passing gateway-MAC/ping, DNS, verified
+HTTPS and denials for NAS HTTPS/router SSH. All four Kubernetes nodes were Ready
+and cp1 management was unchanged before confirmation. IPv6 and DHCP were not
+tested or enabled for this pilot; no real clients or AP/SSID paths moved.
+
+[vyos-vlan20.yml](../ansible/playbooks/vyos-vlan20.yml) is the production
+`trial`/`confirm`/`rollback` owner. It consumes the same
+[command template](../ansible/templates/vyos-vlan20-commands.j2) as the lab and
+uses `commit-confirm 5 no-prompt`, with private recovery preimages. Confirmation
+and boot-config save follow acceptance, never precede it.
+[swos-vlan20.yml](../ansible/playbooks/swos-vlan20.yml) and its
+[module](../ansible/library/swos_vlan20.py) preserve the complete preimage,
+refuse unrelated drift and change only the reviewed row's membership/learning.
+Both require `vlan20_pilot_allowed=true` and a fresh private
+`vlan20_recovery_directory` under `~/.local/state/owl-red/vlan20-wired-*`.
+
+The [probe](../ansible/files/vlan20-probe.sh) runs only as root on cp1, using
+a temporary tagged namespace on physical `nic0`, not a new bridge. It cleans up
+on exit. Earlier failed trials were rolled back; coordinated capture identified
+disabled switch learning as the return-path blocker. Keep its exact accepted
+state in Git; do not reset the active overlay by loading the bootstrap candidate.
+Evidence is `~/.local/state/owl-red/vlan20-wired-n8rR1M`.
+
+This remains a pilot, not the final VLAN-20 service allowlist or full switch
+segmentation. Do not apply the full switch target map or transfer Technitium
+authority as part of it. Remaining DHCP/client, AP/SSID and IPv6 work has separate
+acceptance gates.
 
 ## Layered Security Requirements
 

@@ -127,6 +127,42 @@ test('VLAN lab overlay refuses missing approval, production identities and alloc
   }
 });
 
+test('production VLAN pilot refuses missing approval and changed host/operator boundaries offline', () => {
+  const inventory = path.join(temporary, 'vlan-production-inventory.json');
+  fs.writeFileSync(inventory, JSON.stringify({
+    all: {
+      hosts: {
+        edge_router: {
+          ansible_connection: 'local', ansible_host: '10.0.10.1', vm_id: 103, platform: 'vyos',
+        },
+        switch_swos: {
+          ansible_connection: 'local', ansible_host: '10.0.10.2', swos_username: 'admin',
+        },
+      },
+    },
+  }));
+  const attempts = [
+    { owner: 'vyos', extra: {} },
+    { owner: 'vyos', extra: { vlan20_pilot_allowed: true, vm_id: 102 } },
+    { owner: 'vyos', extra: { vlan20_pilot_allowed: true, ansible_host: '127.0.0.1' } },
+    { owner: 'swos', extra: {} },
+    { owner: 'swos', extra: { vlan20_pilot_allowed: true, vlan20_members: [2, 22, 25] } },
+  ];
+  for (const { owner, extra } of attempts) {
+    const result = spawnSync(ansible, [
+      '-i', inventory, `ansible/playbooks/${owner}-vlan20.yml`,
+      '--extra-vars', JSON.stringify(extra),
+    ], {
+      cwd: repository,
+      encoding: 'utf8',
+      env: { ...process.env, ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg') },
+    });
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /TASK \[Require/);
+    assert.doesNotMatch(result.stdout, /TASK \[(Verify native identity|Preserve or reconcile)/);
+  }
+});
+
 test('candidate parses with the authenticated release library and uses its actual CLI paths', {
   skip: !process.env.VYOS_NATIVE_ROOT && 'Set VYOS_NATIVE_ROOT to the verified image extraction',
 }, () => {
