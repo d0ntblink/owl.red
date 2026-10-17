@@ -165,7 +165,7 @@ ports:
     assigned_to: edge.pve.owl.red     # direct → edge.pve eth0 VLAN 10 mgmt
 
   - port: 25
-    name: "sfp1-opn"
+    name: "sfp1-vyos"
     enabled: true
     assigned_to: edge.owl.red         # AQUA DAC → X710 iX11 — 10G LAN trunk (active)
 

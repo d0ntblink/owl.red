@@ -223,6 +223,7 @@ RouterOS/NETCONF collection. The requirements are:
 |----------|-------------------|----------------------|
 | All Ansible modules | Ansible's `ansible.module_utils` | Available through the installed Ansible environment; normal remote modules also need target Python unless they use `raw`. |
 | Local SwOS modules | `mikrotik-swos==1.3.2` is the tested library; module documentation also specifies `requests>=2.25.0` | Install into the interpreter that executes the local module, with CSS326 workarounds supplied by the repository's modules. |
+| SwOS password-only recovery | The same SwOS/requests environment plus `cryptography` with ARC4 support; controller encoder verified with `48.0.0` | [Recovery playbook](../../ansible/playbooks/swos-restore-password.yml) and [module](../../ansible/library/swos_password.py). Both older and newer ARC4 import layouts are supported. This implements the device's legacy wire encoding, not modern transport encryption. |
 | Local YAML validation | PyYAML (`yaml`) | Install in the selected controller venv if running the documented YAML parser checks. Pre-commit also manages its own hook environments. |
 | Unraid drift/recapture | SSH; Python 3 for Ansible `fetch` recapture | Core `raw` reads do not need NAS Python. Do not install packages or change NAS services merely to perform a network survey. |
 | Technitium Ansible configuration | Target Python 3; Nix commands on the NixOS LXC | The Nix module provides Python for Ansible. Its install role runs `nixos-rebuild switch`, so it is not a build-only check. Channel updates require explicit `technitium_update_nix_channels=true`; the default is false. |
@@ -296,6 +297,31 @@ remains mutating even when credential lookup itself is read-only.
 | [ansible/scripts/fix-e1000e-eee.sh](../../ansible/scripts/fix-e1000e-eee.sh) | Ansible plus target SSH/Python/root, ethtool/systemd and verified NIC identity | Applies runtime/boot NIC settings; can affect the management link. |
 | [ansible/scripts/fix-grub-kernel-params.sh](../../ansible/scripts/fix-grub-kernel-params.sh) | Ansible plus target SSH/Python/root, GRUB/update-grub and reviewed hardware/kernel parameters | Changes target boot configuration; not a tool-installation validation command. |
 | [ansible/library/swos.py](../../ansible/library/swos.py), [ansible/library/swos_info.py](../../ansible/library/swos_info.py), [ansible/library/swos_set_port_names.py](../../ansible/library/swos_set_port_names.py) | Ansible module utilities, tested `mikrotik-swos` `1.3.2`, `requests>=2.25.0`; local execution interpreter and switch credentials | Info module reads; setter/config modes write. Repository CSS326 compatibility code is required; another package installation does not replace these modules. |
+
+### SwOS Reset Credential Recovery
+
+For an explicitly approved admin-access reset, use
+[swos-restore-password.yml](../../ansible/playbooks/swos-restore-password.yml),
+not a full switch configuration apply. The target is fixed to `.2`/`admin`,
+with serial `CAC90C5B5282` and qualified SwOS `2.18`. It changes only the native
+password endpoint; identity, addresses, port states and VLAN settings remain
+separate owners. The UI accepts at most 15 ASCII characters; do not truncate or
+replace the existing vault value silently.
+
+Supply `SWOS_PASSWORD` from the existing Bitwarden switch login only in the
+child environment. `SWOS_CURRENT_PASSWORD` is blank only immediately after the
+owner's reset. Never place either value in Git, command arguments or chat. Use
+the selected controller venv/interpreter and explicitly set
+`swos_password_restore_allowed=true`; the default refuses writes. Check mode
+reads/validates without posting. A successful live change verifies the desired
+login and rejects the previous login. A transport error has an unknown outcome
+until authenticated read-back; do not blindly retry a password POST.
+
+This device uses native HTTP/Digest and legacy ARC4 password encoding. Keep the
+operation on the private management LAN, not an internet-exposed endpoint.
+The verified recovery on 2026-10-17 preserved all per-port VLANs, VLAN membership,
+enable/autoneg settings and operator port 22. The binary backup is private,
+owner-only controller state; it must not be committed.
 
 ### Proxmox-Local And LXC Scripts
 
