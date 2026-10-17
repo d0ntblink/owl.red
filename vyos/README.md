@@ -100,6 +100,30 @@ profiles, repository output and non-Ed25519 bootstrap keys fail before rendering
 Do not use the lab candidate as a production boot file. It uses synthetic MACs,
 the documentation subnet and no production DHCP reservations or live IPv6 setup.
 
+## First VLAN Lab Qualification
+
+[vyos-vlan-lab.yml](../ansible/playbooks/vyos-vlan-lab.yml) applies the
+[source profile](baseline.yml)'s conservative VLAN-20 overlay only to VM 102
+through its existing pinned loopback connection. It requires
+`-e vyos_vlan_pilot_apply_allowed=true`; it refuses production identities,
+endpoints and changed allocations before connecting. No VM lifecycle or switch
+operation is included. It saves a mode-`0600` native boot-config preimage in a
+fresh private controller directory before committing.
+
+The isolated lab has `eth1.20` at `10.0.20.1/24`, DNS/ping access to that gateway,
+scoped WAN masquerade and forwarding with nonpublic destinations denied. The
+original lab management interface is unchanged. Native commit/save, unchanged
+configuration on rerun, compiled rule IDs and a synthetic DNS query pass.
+No pilot DHCP scope or IPv6 delegation is enabled. This is not the final
+VLAN-20 application-service allowlist or a production promotion workflow.
+
+Physical tagging, packet-level isolation and WAN/client acceptance remain open.
+The proposed wired probe uses a disposable namespace on existing `cp1` rather
+than a client move or new production bridge. Switch API authentication currently
+returns HTTP 401; correct the existing Bitwarden login before reading/staging
+its exact port/VLAN diff. Do not apply the full switch target map, touch operator
+port 22 or transfer Technitium authority as part of this pilot.
+
 ## Layered Security Requirements
 
 These are requested capabilities and qualification tasks, not deployed services:

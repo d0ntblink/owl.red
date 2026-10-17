@@ -298,7 +298,10 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.2 VLAN Access Rules on Switch (`switch.owl.red`)
 - Audit baseline: all ports were Optional/PVID 1 and every VLAN listed only disabled port 5. Port names alone do not establish working trunks or access VLANs.
+- `[!]` Restore authenticated SwOS API reads before any switch write (2026-10-17): the direct-LAN Digest-auth GET returns HTTP 401 with the Password Manager login, including after a vault-cache sync. The installed library uses Digest auth; a subprocess-only private-LAN proxy exclusion did not resolve it. Verify/update the switch login in Bitwarden, not in Git or chat. No port/VLAN write or physical map acceptance is claimed.
 - `[ ]` Reconcile `ansible/switch_configs/css326.yml` with actual cabling; the audit found edge management on SW24, not the historical SW05. Record PVID, ingress receive mode, VLAN membership and egress tagging at each switch/router/PVE/LXC/AP boundary.
+- `[~]` Prepare a wired VLAN-20 pilot without moving real clients or relying on the offline AP. Fresh `cp1` reads show `.11/24`, `vmbr0` VLAN filtering disabled and the required namespace/probe utilities installed; a disposable tagged client is feasible, not yet created. Verify switch membership and native return paths first; preserve operator port 22 and all existing native management traffic.
+- `[x]` Qualify the native VLAN-20 overlay on isolated lab VM 102 (2026-10-17) through [the opt-in lab playbook](ansible/playbooks/vyos-vlan-lab.yml) and [source profile](vyos/baseline.yml). Native commit/save and rerun comparison pass; `eth1.20` is `.20.1/24`, original `.192.0.2.1` management remains reachable, the four compiled input/forwarding rule IDs exist, and DNS on the new gateway returns synthetic NAS `.192.0.2.5`. Four focused offline tests pass, including early refusal of production targets. This is not a physical-path, packet-isolation, WAN, DHCP or IPv6 qualification; no production activation occurred.
 - `[ ]` Save the SwOS configuration privately and test a designated physical recovery/access port before changing filtering or management VLAN. CSS326 has no serial console; reset is disruptive last-resort recovery, not an ordinary rollback.
 - `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
 - `[ ]` Confirm the actual AP trunk carries VLANs 20/30/40/50 to the matching router paths without disrupting legacy management. SW18 is a recorded location to verify, not proof of current cabling.
@@ -313,20 +316,23 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Observed:** after the approved host/client changes, all six PVE management
-addresses (edge `.3`, storage `.4`, compute `.11-.14`) and all four Talos guest
-node addresses (`.21-.24`) use `/24`. NAS `.5` now uses `/24` after the approved
-DHCP mask/renewal step; the active range advertises `/24`. Operator Ethernet
-`.174` is also `/24` after its separately approved 20:32Z renewal. Router LAN
-`.1` was last verified running `/16` on the legacy untagged L2; a later Save
-persisted `/24` but was stopped before Apply. Resolve that paused baseline in
-Phase 0.6 before any router restart. Other client masks await verification. Technitium
-has one untagged `10.0.10.30/24` NIC and five `/24` scope definitions, with VLAN
-10-50 disabled after the approved guard rollout and daemon-persistence check;
-zero leases were observed. Those are not five operational VLANs.
-The legacy connected network is `10.0.0.0/16`, which contains every target `/24`.
-Do not route those targets onto separate L2 domains while relying on legacy
-hosts' `/16` on-link behavior. Mask contraction is distinct from VLAN tagging.
+**Current baseline (2026-10-17):** fresh native reads confirm VyOS `eth1` at
+`10.0.10.1/24`, one connected native-LAN `/24`, a WAN default route and active
+DHCP/DNS. No target VLAN route is present. The retired router's saved `/24`
+transaction is historical, not a pending operation or restart prerequisite.
+
+Accepted host/client changes already cover all six PVE addresses (edge `.3`,
+storage `.4`, compute `.11-.14`), four Talos guests `.21-.24`, NAS `.5` and
+operator Ethernet `.174` at `/24`; do not repeat those migrations. Remaining
+client/static-appliance masks still need verification before moving or depending
+on those clients. The switch's existing native PVID and operator port 22 remain
+unchanged. Technitium retains one untagged `.30/24` NIC; its five target scopes
+were disabled by the accepted lifecycle guard and are not operational VLANs.
+Keep scope activation and the DNS/DHCP handoff separate from a wired-path pilot.
+
+Any remaining client `/16` treats contained target `/24`s as on-link. Prove each
+pilot's client and return paths explicitly; do not infer subnet readiness from
+the router prefix alone. Mask contraction remains distinct from VLAN tagging.
 
 **Control connection:** disruptive router work can disconnect the assistant.
 The owner offers a cellular hotspot while keeping LAN Ethernet connected, but
