@@ -1,0 +1,44 @@
+---
+- name: Install only an explicitly selected isolated VyOS router VM
+  hosts: edge_pve
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_pipelining: true
+    vyos_image: "{{ lookup('file', playbook_dir ~ '/../../vyos/image.json') | from_json }}"
+    vyos_lab_install_allowed: false
+    vyos_install_vm_id: 102
+    vyos_lab_candidate: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/vyos-rolling-3OiqJ9/rendered/candidate.config"
+  tasks:
+    - name: Require explicit isolated install scope
+      ansible.builtin.assert:
+        that:
+          - vyos_lab_install_allowed | bool
+          - ansible_host == '10.0.10.3'
+          - vyos_image.verified is sameas true
+          - vyos_image.channel == 'rolling'
+          - vyos_install_vm_id | int in [102, 103]
+        fail_msg: This installer is restricted to isolated VMs 102 or 103 on edge.
+
+    - name: Install the native image on the selected blank guest disk
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "{{ lookup('file', playbook_dir ~ '/../files/vyos-lab-install.py') }}"
+        stdin: "{{ {'vm_id': vyos_install_vm_id | int, 'password': lookup('env', 'VYOS_LAB_PASSWORD'), 'release': vyos_image.release, 'candidate': lookup('file', vyos_lab_candidate), 'boot_scripts': {'vyos-preconfig-bootup.script': lookup('file', playbook_dir ~ '/../files/vyos-boot-guard-pre.sh'), 'vyos-postconfig-bootup.script': lookup('file', playbook_dir ~ '/../files/vyos-boot-guard-post.sh')} if vyos_install_vm_id | int == 103 else {}} | to_json }}"
+        stdin_add_newline: false
+      no_log: true
+      register: vyos_lab_install_result
+      failed_when: false
+
+    - name: Require successful native installation
+      ansible.builtin.assert:
+        that:
+          - vyos_lab_install_result.rc == 0
+        fail_msg: "{{ (vyos_lab_install_result.stdout | from_json).reason | default('Native installation stopped; inspect the selected guest disk before retrying') }}"
+
+    - name: Report only the non-secret outcome
+      ansible.builtin.debug:
+        msg: "Native installation completed on isolated VM {{ vyos_install_vm_id }}; cold boot and stored-credential acceptance remain."

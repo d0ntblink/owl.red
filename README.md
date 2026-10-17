@@ -12,6 +12,10 @@ credentials and validation. Tool installation does not authorize infrastructure 
 
 ## Observed State (2026-10-14)
 
+Current update (2026-10-17 UTC): VyOS VM 103 is the active `/24` router and VM 102
+is the permanent isolated lab. The retired router VM, its 64-GB disk and installer
+ISO have been deleted. The dated audit below is historical, not live authority.
+
 The [live audit](docs/issues/008-live-state-vs-repository.md) distinguishes
 deployed state from the target tables below. All six PVE hosts, eight guests and
 four Talos nodes were online, and all 26 confirmed reservations matched Git.
@@ -22,7 +26,7 @@ there was no shared-storage/PVC setup or registered PVE backup coverage.
 
 Follow the [roadmap execution order](ROADMAP.md#execution-order) and its
 change-scoped [acceptance gates](ROADMAP.md#stabilization-gates). Keep client
-DNS/DHCP on OPNsense while preparing the network; handoff waits for supporting
+DNS/DHCP on VyOS while preparing the network; handoff waits for supporting
 VLAN paths and Technitium interfaces plus an approved coordinated change. Resolve
 legacy `/16` overlap before routing the contained target `/24`s; management-mask
 contraction and management VLAN tagging are different steps.
@@ -53,7 +57,7 @@ reservations do not configure switch-port or WiFi VLAN membership. The canonical
 
 | IP | Hostname | Device | Purpose |
 |----|----------|--------|---------|
-| `10.0.10.1` | `edge.owl.red` | OPNsense VM | VLAN 10 gateway, firewall, captive portal |
+| `10.0.10.1` | `edge.owl.red` | VyOS VM 103 | Active native-LAN gateway/firewall, interim DHCP/DNS; VLANs and guest portal remain planned |
 | `10.0.10.2` | `switch.owl.red` | MikroTik CSS326 | Switch management |
 | `10.0.10.3` | `edge.pve.owl.red` | CSE-523L Proxmox | Router node PVE host |
 | `10.0.10.4` | `storage.pve.owl.red` | RSV-L4500U Proxmox | Storage node PVE host |
@@ -109,12 +113,13 @@ Access rule: these service VIPs are intended for LAN clients. They only work whe
 
 Router placement rule: `edge.owl.red` is pinned to `edge.pve.owl.red` because it uses physical PCIe NIC passthrough (`hostpci`). Do not plan routine live or offline migration of this VM.
 
-Selected replacement: [ADR 022](docs/decisions/022-vyos-router-replacement.md)
-chooses one pinned VyOS rolling VM on the same host with direct WAN/LAN PCI passthrough,
-the same gateway IP and no HA requirement. OPNsense remains live until the staged
-replacement passes its separately approved cutover. The tables above are not
-claims of a deployed VyOS router; follow [the roadmap](ROADMAP.md) for preparation,
-the paused OPNsense rollback baseline and later VLAN/DNS-DHCP work.
+Accepted replacement (2026-10-17 UTC): [ADR 022](docs/decisions/022-vyos-router-replacement.md)
+is deployed as VM 103, pinned rolling VyOS with direct WAN/LAN PCI passthrough
+and gateway `10.0.10.1/24`. The old router VM 100, its 64-GB virtual disk and
+unused installer ISO were explicitly retired. The separate permanent `edge-lab.owl.red`
+VM 102 uses 2 vCPU/4 GB and private virtual networking, not production passthrough.
+The five target VLANs and Technitium authority handoff are not completed by this
+router swap; follow [the roadmap](ROADMAP.md) for those later batches.
 
 ---
 
@@ -143,7 +148,7 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | `SW18` | `PP33` | `ap.owl.red` | 802.1Q trunk `10/20/30/40/50` | No link in 2026-10-14 audit |
 | `SW22` | `PP35` | `Network Cabinet` | 802.1Q trunk `10/20/30/40/50` | Active |
 | `SW24` | `PP36` | `edge.pve.owl.red` eth0 | VLAN 10 management | Active |
-| `SFP+1` | `PP16 to PP37` | `edge.owl.red` SFP+ passthrough | 10G OPNsense uplink path | Active |
+| `SFP+1` | `PP16 to PP37` | `edge.owl.red` SFP+ passthrough | 10G VyOS uplink path | Active |
 | `SFP+2` | `PP39` | `nas.owl.red` SFP+ (Unraid) | 10G storage uplink | Active |
 
 ---
@@ -159,14 +164,15 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | Motherboard | Asus PRIME B365M |
 | RAM | 32 GB (4 × 8 GB) |
 | Hypervisor | Proxmox VE — `edge.pve.owl.red` `10.0.10.3` |
-| OPNsense VM | `edge.owl.red` `10.0.10.1` — pinned; PCIe NIC passthrough, do not migrate |
+| Router VM | VyOS VM 103, `edge.owl.red` `10.0.10.1/24`; pinned PCIe passthrough, do not migrate |
+| Non-production lab | VyOS VM 102, `edge-lab.owl.red`, 2 vCPU/4 GB, private virtual networking |
 
 | Interface | Hardware | MAC | Role | Speed |
 |-----------|----------|-----|------|-------|
 | `eth0` | onboard NIC | `3c:7c:3f:25:50:6a` | Proxmox management, VLAN 10 → SW24 | 1G |
-| `igb0` | passthrough Intel i226-V | `e0:d4:e8:ef:2b:f2` | WAN uplink | 2.5G |
+| `eth0` (VyOS) | passthrough Intel i226-V | `e0:d4:e8:ef:2b:f2` | WAN uplink | 2.5G |
 | `iX10` | Intel X710 SFP+ port 0 | `6c:fe:54:70:08:30` | Spare / future path | 10G |
-| `iX11` | Intel X710 SFP+ port 1 | `6c:fe:54:70:08:31` | 10G LAN trunk → SW SFP+1 | 10G |
+| `eth1` (VyOS) | Intel X710 SFP+ port 1 | `6c:fe:54:70:08:31` | 10G LAN trunk → SW SFP+1 | 10G |
 
 ### Switch : MikroTik CSS326-24G-2S+RM
 

@@ -5,17 +5,38 @@
 Accepted (2026-10-16). Architecture and preparation are approved; this is not
 approval to stop the live router, transfer PCI devices or activate the replacement.
 
+Deployed after separate bounded approval and acceptance (2026-10-17 UTC): VM 103
+is active `edge.owl.red`; VM 102 remains the permanent lightweight
+`edge-lab.owl.red`. The operational rollout used native CLI diagnostics; the external
+read-only dashboard remains a follow-up, not a protection claimed by the cutover.
+
 Supersedes [ADR 016](016-opnsense-terraform.md) for the future router architecture.
-Its existing OPNsense ownership rules remain applicable until the accepted cutover.
+The old ownership rules are historical, not a second live configuration lane.
 
-## Context
+### Retirement
 
-OPNsense configuration currently has a Terraform/API lane and a manual floor.
+Explicitly approved and completed on 2026-10-17 after fresh native service,
+IPv4/IPv6 default-route and verified HTTPS checks: VM 100 and its 64-GB virtual
+disk were deleted, followed by its unreferenced installer ISO, completed cutover
+recovery unit/directories and generated provider cache. No VM-100 disk remains.
+Production VM 103 and lab VM 102 remain running. Removed source includes the old
+provider/VM scaffold, drafts, wrappers, migration-only controllers/tests and
+superseded interactive host installers. Decisions, documentation and guides are
+retained, with obsolete procedures marked historical. No Git history was rewritten.
+
+Recovery now uses the pinned VyOS image, private native configuration backup,
+stored VyOS credentials and PVE console access. The old-router inverse is no
+longer available and must not be replayed. The native profile and saved runtime
+use generic NTP pool servers, not the retired platform's vendor pool.
+
+## Historical Context
+
+The pre-replacement OPNsense configuration had a Terraform/API lane and a manual floor.
 The desired replacement must make router configuration reproducible from Git,
 without sacrificing working access or quick blocked-connection troubleshooting.
 The dashboard is for read-only diagnosis, not configuration editing.
 
-The current router is VM 100 on `edge.pve.owl.red`. Its recorded WAN is an Intel
+The pre-replacement router was VM 100 on `edge.pve.owl.red`. Its recorded WAN was an Intel
 i226-V and its LAN trunk uses an Intel X710, passed through directly. A PCI
 function cannot belong to two running VMs. Two routers on the same host would
 still share the host, power and other failure points.
@@ -144,8 +165,8 @@ still share the host, power and other failure points.
   access. Do not burden the weak WAP with the portal service or reuse an
   OPNsense-specific CAPPORT API. Account for IPv6 and legitimate HTTPS portal
   discovery instead of intercepting arbitrary HTTPS.
-- Require an OPNsense-like read-only blocked-connection workflow before accepting
-  the replacement: filter time, source/destination, port/protocol, interface/VLAN,
+- Provide an OPNsense-like read-only blocked-connection workflow after the
+  CLI-first router rollout: filter time, source/destination, port/protocol, interface/VLAN,
   verdict and rule identity; relate rules to the deployed configuration revision.
   Enable relevant explicit/default deny logging for IPv4/IPv6 and distinguish
   firewall drops from Suricata alerts/IPS drops and CrowdSec decisions/enforcement.

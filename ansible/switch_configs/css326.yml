@@ -38,7 +38,7 @@ ports:
   # SW16:  PP32 → pdu.owl.red    VLAN 10 access
   # SW18:  PP33 → ap.owl.red     802.1Q trunk all VLANs, 1G
   # SW22:  PP36 → network cabinet 802.1Q trunk all VLANs
-  # SW23:  direct → edge.owl.red igb0 (OPNsense WAN) — not a LAN port
+  # SW23:  direct → edge.owl.red eth0 (VyOS WAN) — not a LAN port
   # SW24:  direct → edge.pve eth0 VLAN 10 mgmt
   # SFP+1: DAC → edge.owl.red X710 iX11  (10G LAN trunk, active)
   # SFP+2: DAC → nas.owl.red 82599ES iX10 (10G storage uplink, active)
@@ -157,7 +157,7 @@ ports:
   - port: 23
     name: "rtr-wan"
     enabled: true
-    assigned_to: edge.owl.red         # direct → OPNsense igb0 WAN uplink
+    assigned_to: edge.owl.red         # direct → VyOS eth0 WAN uplink
 
   - port: 24
     name: "edge.pve-mgmt"

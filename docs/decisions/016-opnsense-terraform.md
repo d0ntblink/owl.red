@@ -4,9 +4,10 @@
 
 Accepted (2026-06-19); superseded for the future router architecture by
 [ADR 022: VyOS Router Replacement](022-vyos-router-replacement.md) (2026-10-16).
-The ownership rules below remain the interim lane for the live OPNsense router
-until its replacement is accepted. Historical context is retained; this does
-not authorize new OPNsense feature work or retirement of the current router.
+Retired (2026-10-17): the replacement is accepted and the owner explicitly
+approved deletion of VM 100 and its disk. The provider/module, drafts, runner,
+VM scaffold and migration-only tests are removed. The decision below is retained
+as history only; it is not an active implementation or command reference.
 
 ## Context
 

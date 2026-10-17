@@ -10,15 +10,15 @@ baseline_facts_output_dir: "{{ artifact_root }}/facts"
 validation_output_dir: "{{ artifact_root }}/validation"
 
 backup_artifacts_required:
-  - path: "{{ playbook_dir }}/../artifacts/backups/opnsense/config.xml"
-    description: OPNsense XML backup
+  - path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.local/state/owl-red/vyos-production/config.boot"
+    description: Private VyOS production boot configuration
   - path: "{{ playbook_dir }}/../artifacts/backups/swos/switch_swos.backup"
     description: SwOS backup file
 
 management_tcp_checks:
-  - name: opnsense_web
+  - name: vyos_ssh
     host: 10.0.10.1
-    port: 443
+    port: 22
     required: true
   - name: switch_swos_web
     host: 10.0.10.2

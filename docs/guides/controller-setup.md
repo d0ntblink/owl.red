@@ -91,6 +91,36 @@ libc/libm/libpcre2-8 libraries to load its real `libvyosconfig.so.0`. Missing th
 fixture is a reported skip, not release acceptance. See the
 [preparation workflow](../../vyos/README.md) for extraction and commands.
 
+### VyOS Credential Creation
+
+Use separate `vyos-lab-admin-password` and `vyos-production-admin-password`
+Password Manager login items, with controlled mirrors in the existing
+`owl-red-infra` Secrets Manager project. Password Manager is the human recovery
+source; never rotate the mirror independently or create Kubernetes mappings for
+these router credentials. Store item/secret UUIDs and activation status in Git,
+not passwords. A prepared production credential is not an active router login.
+
+The accepted deployment now uses the production credential on VM 103
+`edge.owl.red`; VM 102 `edge-lab.owl.red` keeps its separate credential. Both
+stores have current role/connection notes and verified unchanged values. The
+native install workflow uses Ansible, OpenSSH, the existing PVE tools
+and Node `util.parseEnv`; it needs no additional network collection. Guarded
+bootstrap and boot-guard files are under `ansible/files/` and `ansible/playbooks/`.
+Do not rerun a completed single-use handoff or reinstall a partitioned guest.
+
+Creating the Secrets Manager mirror without putting the value in process
+arguments requires the official Python SDK, pinned for this controller:
+
+```bash
+.venv/bin/python -m pip install --no-input bitwarden-sdk==2.1.0
+```
+
+Use the existing private `env.secret` token through process memory/environment,
+never shell-source that file or print SDK/vault responses containing values.
+The installed `bws secret create` accepts its value as a positional argument,
+so do not use it for these password writes. Read back both stores and compare
+in memory before configuring the guest; record only references and success.
+
 ## Ubuntu And WSL Installation
 
 Run package installation directly in an interactive local terminal when sudo
@@ -220,7 +250,7 @@ or the complete collection set.
 |------|---------------------|-----------------|
 | Proxmox guest roots | `bpg/proxmox` `0.66.1` | Each root's Terraform declarations; committed locks where present. Existing scaffold guests still need state/import review. |
 | Talos in the cluster root | `siderolabs/talos` `0.6.1` | [Cluster root](../../terraform/proxmox/technitium/main.tf) and its lockfile. The source/ISO Talos `1.7.5` pin is not the audited live `1.8.1` version or a talosctl requirement. |
-| OPNsense configuration | `browningluke/opnsense`, constraint `~> 0.11`, locked `0.24.0` | [OPNsense root](../../terraform/opnsense/main.tf) and its lockfile. Check the installed router API/engine before assuming resource coverage. |
+| VyOS native configuration | Ansible core, OpenSSH, Jinja, the pinned image/native CLI | [Native configuration](../../vyos/config.boot.j2) and [profiles](../../vyos/baseline.yml); Terraform owns the VM, not a second router configuration writer. |
 | Unraid settings API | `sullivtr/graphql` `2.6.1` | [Unraid root](../../terraform/unraid/main.tf), lockfile and the installed GraphQL schema. Destructive/operational mutations are outside this lane. |
 | Technitium OS/sync | NixOS module, `writeShellApplication`, Git/curl/jq runtime inputs | [Nix configuration](../../nix/hosts/technitium/configuration.nix); [local checks](../../nix/hosts/technitium/check.nix) pin an official NixOS 25.11 archive and unpacked SHA256 for validation. This does not update/pin the running host's channel; `stateVersion = "25.11"` is not a channel lock. |
 | Tablet controller tools | Nixpkgs `nixos-26.05`; `android-tools`, Bash, coreutils, curl, GnuPG, OpenSSH, jq | [Tablet flake](../../nix/android-tablet/flake.nix). Use `nix --extra-experimental-features 'nix-command flakes' develop ./nix/android-tablet`; review locking/fetches before accepting input changes. |
@@ -250,7 +280,6 @@ remains mutating even when credential lookup itself is read-only.
 | [scripts/owl-controller-bootstrap.sh](../../scripts/owl-controller-bootstrap.sh) | Ansible already on `PATH` or pipx; `bw`/jq and a working session when the SSH key is absent; optional `BW_SSH_KEY_ITEM` | Installs local Ansible and retrieves a private key to `~/.ssh`; not a complete toolchain installer and not an infrastructure smoke-test prerequisite. |
 | [scripts/ansible-run.sh](../../scripts/ansible-run.sh) | Bash/jq plus the command being wrapped; `PROXMOX_PASSWORD_SOURCE=auto|bws|bw`; supplied password or selected `bws` secret ID/token or `bw` item/session; optional `BW_PASSWORD` unlock input | Resolves/injects Proxmox credentials, then executes the command. Ansible SSH-password mode may need sshpass; no permission to run every playbook follows from a successful lookup. |
 | [scripts/terraform-run.sh](../../scripts/terraform-run.sh) | Terraform/jq; supplied `PROXMOX_VE_PASSWORD` or `PROXMOX_ROOT_PASSWORD`, otherwise `bws`, `BWS_ACCESS_TOKEN` and `PROXMOX_ROOT_PASSWORD_BWS_SECRET_ID`; reachable Proxmox API | Uses the selected password-authenticated Proxmox lane, not a universal BW fallback. Review each root/state/plan; runtime root API privilege is not workstation sudo. |
-| [scripts/opnsense-terraform-run.sh](../../scripts/opnsense-terraform-run.sh) | Terraform; supplied `TF_VAR_opnsense_api_key` and `_secret`, otherwise working `bw`/jq, `BW_SESSION` and dedicated item notes; `OPNSENSE_KEY_BW_ITEM` can override the item | Executes the OPNsense configuration root. Mutations need review and change-scoped recovery; no router change is needed to install controller tools. |
 | [scripts/unraid-terraform-run.sh](../../scripts/unraid-terraform-run.sh) | Terraform, OpenSSL, getent, CA certificates; supplied `TF_VAR_unraid_api_key` or working `bw`/`BW_SESSION`; optional `UNRAID_KEY_BW_ITEM`; correct `nas.owl.red` resolution | May create a local CA bundle and contacts NAS TLS before Terraform. Validate the expected appliance certificate/trust independently; do not blindly change client DNS or disable TLS globally. |
 | [scripts/bitwarden-k8s-secrets-sync.sh](../../scripts/bitwarden-k8s-secrets-sync.sh) | kubectl, jq, `bws`, base64, iconv; authorized kubeconfig; `BWS_ACCESS_TOKEN`, `BW_PROJECT_ID`, `BW_ORGANIZATION_ID`; reviewed namespace/type exclusions | Reads Kubernetes secrets, creates/updates Secrets Manager values and replaces generated output. It is a credential migration, not a harmless setup check; controller-owned secrets must stay excluded. |
 | [scripts/check-bitwarden-placeholders.sh](../../scripts/check-bitwarden-placeholders.sh) | Bash, find, grep, sed, tr; repository manifests | Offline, read-only UUID/placeholder guard; cannot prove a referenced secret exists in BWS. |
@@ -271,11 +300,6 @@ remains mutating even when credential lookup itself is read-only.
 
 | Entry point | Requirements and inputs | Side effects / limits |
 |-------------|-------------------------|-----------------------|
-| [scripts/pdm-lxc-ha-bootstrap.sh](../../scripts/pdm-lxc-ha-bootstrap.sh) | Intended Proxmox host/root; `pct`, `pvesm`, `pvecm`, `ha-manager`, jq; quorate cluster; `PDM_CT_OSTEMPLATE`; reviewed storage/network/HA variables; container package/key download access including wget | Creates/starts/configures a container and HA resources; default shared-storage gate must be satisfied for that design. Existing guests belong in reviewed Terraform state, not an unplanned bootstrap rerun. |
-| [ansible/scripts/add-iptag.sh](../../ansible/scripts/add-iptag.sh) | Proxmox/root, Bash, curl, apt, systemd, `qm`/`pct`; legacy helper installs `ipcalc`/`net-tools` | Interactive legacy installer; fetches external helper code and changes services/tags. Prefer the owning Ansible role. |
-| [ansible/scripts/monitor-all.sh](../../ansible/scripts/monitor-all.sh) | Proxmox/root, Bash/curl/systemd, `qm`/`pct`, ping and guest-agent support; interactive input | Legacy installer can configure both VM and container restarts. Do not confuse it with the managed QEMU-only watchdog or run it as a health check. |
-| [ansible/scripts/nic-offloading-fix.sh](../../ansible/scripts/nic-offloading-fix.sh) | Proxmox/root, ethtool, network-interface utilities, curl/apt and systemd | Legacy target NIC/service changes; may install packages and interrupt connectivity. Prefer reviewed Ansible configuration. |
-| [ansible/scripts/post-pve-install.sh](../../ansible/scripts/post-pve-install.sh) | Proxmox/root, interactive whiptail terminal, apt/curl, systemd and trusted package sources | Legacy host bootstrap can change repositories, HA/Corosync, packages and reboot. Never run on the controller or as a generic prerequisite check. |
 | [ansible/files/iptag-main.sh](../../ansible/files/iptag-main.sh) | Deployed Proxmox host/root; Bash, `qm`/`pct`, timeout, ping and GNU utilities; guest-agent/container address access where used | Runtime service writes guest/container tags. Install/configure via its Ansible owner. |
 | [ansible/files/ping-instances.sh](../../ansible/files/ping-instances.sh) | Deployed Proxmox host/root; Bash/`qm`/GNU utilities and QEMU guest-agent ping for explicitly tagged VMs | Managed watchdog can stop/start opted-in VMs; one controller, no LXC monitoring, no implicit router/NAS opt-in. |
 | [nix/hosts/technitium/sync.sh](../../nix/hosts/technitium/sync.sh) | NixOS LXC with Bash/Git/curl/jq/coreutils; repository fetch access; private API token with required settings/zones/DHCP View+Modify permissions; existing declared scopes and explicit host activation policy | Writes Technitium configuration and serving state. Nix embeds the script; no manual copy/run is a substitute for approved IaC rollout and no-offer verification. |
@@ -321,7 +345,7 @@ script to a different serial or assume its recorded address is current.
 - Behind an enterprise/Zscaler TLS proxy, Node-based `bw`/`bws` may need
   `NODE_EXTRA_CA_CERTS` pointing to the trusted local CA. Fix trust, not global
   TLS verification. Appliance self-signed exceptions remain lane-specific.
-- SSH, Proxmox/OPNsense/Unraid APIs and Kubernetes/Talos endpoints must be
+- Pinned VyOS SSH, Proxmox/Unraid APIs and Kubernetes/Talos endpoints must be
   reachable from the actual controller. WSL NAT can require a verified SSH jump;
   it cannot prove DHCP broadcast behavior or VLAN isolation by itself.
 - State files, kubeconfigs, Talos configs, API tokens and SSH private keys remain
@@ -357,7 +381,7 @@ headers as evidence. An evidence-ready result still requires packet review.
   (non-promiscuous) and restrict captures to DHCP UDP ports 67/68.
 - Evidence: retain packet captures outside Git in an owner-only directory
   (`0700`, files `0600`). Match the probe identity/transaction at the observer
-  and require an OPNsense offer as a positive control. Missing probe visibility
+  and require an offer from the current sole authority (VyOS `.1`) as a positive control. Missing probe visibility
   or no offer from any server is inconclusive, not a no-offer pass.
 - Scope: only the tested current untagged LAN is covered. Unattached VLANs,
   client renewal/handoff, and DNS-daemon/LXC restart behavior remain separate
@@ -386,10 +410,10 @@ environments, API tokens or SNMP communities in that evidence.
   Talos JSON output can contain successive JSON objects; use a JSON decoder,
   not a single-object assumption or text extraction. Never dump raw credential
   configs or Kubernetes Secrets to establish network masks.
-- Router: existing dedicated API item and the verified working private Bitwarden
-  CLI/profile. Use documented GET actions and verify returned row counts against
-  reported totals for leases/reservations/ranges. A per-appliance self-signed
-  exception is not permission for a global TLS bypass or legacy TLS downgrade.
+- Router: the pinned VyOS SSH identity and existing deployment key. Read native
+  runtime/service state without exposing the secret-bearing boot configuration.
+  Console recovery credentials remain in both Bitwarden stores; no legacy router
+  API item or global TLS bypass is needed.
 - SwOS: existing `mikrotik-swos==1.3.2`, requests and the repository platform
   override, with bounded GET-only reads. For an ad hoc reader, import
   [swos_info.py](../../ansible/library/swos_info.py) by file location; adding the
@@ -402,9 +426,17 @@ must be read, not inferred from a lease or a responsive web port. A console
 socket or a linked switch-port label is likewise not a verified recovery
 session. Keep each missing check attached to the component/path it gates.
 
-## Worker Management-Prefix Pilot
+## Historical Migration Tooling (Retired)
 
-The [PVE prefix playbook](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+The following prefix and legacy DHCP sections retain completed evidence and
+requirements only. Their one-time playbooks/controllers/tests and CI jobs were
+removed on 2026-10-17 after acceptance. Do not execute their old examples or
+recreate the retired router. Current requirements are above; ordinary changes
+follow [the ownership guide](changing-owl-red.md).
+
+### Worker Management-Prefix Pilot
+
+The [PVE prefix playbook (retired)](controller-setup.md#historical-migration-tooling-retired)
 covers the completed compute/edge/storage rollout with reviewed single-NIC and
 bond topologies, one host per invocation. It contracts only management `/16` to `/24`, retaining
 address, gateway, resolver, the allowlisted bridge port and native VLAN behavior.
@@ -558,9 +590,9 @@ passthrough, storage, Windows, VLAN or guest-power change was made. Use
 `--limit edge_pve --check` for inspection; future live operations still require
 their own scope and fresh recovery identity, with default opt-in false.
 
-## Guarded Talos Guest Management Prefix
+### Guarded Talos Guest Management Prefix
 
-The [Talos prefix controller](../../scripts/talos-prefix-pilot.mjs) defaults to
+The [Talos prefix controller (retired)](controller-setup.md#historical-migration-tooling-retired) defaults to
 preview and accepts exactly one of `worker1-talos`, `cp1-talos`, `cp2-talos`,
 `cp3-talos`. It is a bounded existing-node migration, not a bootstrap or version
 upgrade. The mixed Terraform root still generates Talos `1.7.5` configuration
@@ -593,8 +625,8 @@ uses Talos's actual JSON Patch implementation and compares the complete parsed
 candidate with a one-address-list replacement. Role, hostname, MAC selector,
 single interface/address, gateway, DNS and control-plane VIP are checked. A
 strategic merge appends address lists and is not suitable for this contraction.
-The [worker migration patch](../../talos/patches/management-prefix-worker1.yaml)
-is a reviewable one-shot equivalent, not the bootstrap template. Already `/24`,
+The one-shot worker migration patch has been removed; the accepted CIDR is in
+the [worker bootstrap patch](../../talos/patches/worker1.yaml). Already `/24`,
 unexpected interfaces/addresses or identity drift refuse rather than guessing.
 
 ```bash
@@ -640,10 +672,10 @@ rollback was needed. Five final offline cases and the touched Terraform format
 check pass. Router/NAS/client masks, VLAN paths and service-authority handoff
 were not changed, and no assistant Git commit/publish occurred.
 
-## Guarded Dnsmasq Range Preparation
+### Guarded Dnsmasq Range Preparation
 
-The [range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml) and
-its [offline tests](../../scripts/opnsense-dhcp-range.test.mjs) require Ansible
+The [range-only playbook (retired)](../decisions/016-opnsense-terraform.md) and
+its [offline tests (retired)](../decisions/016-opnsense-terraform.md) require Ansible
 core `2.16.3`, Python `3.12` with PyYAML/Jinja dependencies and Node.js `24`
 (the tested controller/CI versions). They use built-in Ansible modules and
 Node's standard HTTP/process/file APIs, with no new collection or npm package.

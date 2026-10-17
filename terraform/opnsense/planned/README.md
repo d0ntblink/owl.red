@@ -1,5 +1,10 @@
 # `terraform/opnsense/planned/` — staged drafts (NOT loaded by Terraform)
 
+**Retired historical design (2026-10-17).** The draft `.tf` files and parent
+provider root are deleted. This text preserves the original rationale only;
+the activation steps below must not be followed. Native VyOS policy is the
+selected implementation in [ADR 022](../../../docs/decisions/022-vyos-router-replacement.md).
+
 These `.tf` files are **forward-looking drafts** for the VLAN transition (ROADMAP §1).
 Terraform does **not** load subdirectories, so nothing here is part of the active
 `terraform/opnsense` module — `plan`/`apply` will never create these objects. They live

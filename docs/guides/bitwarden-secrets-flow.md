@@ -27,7 +27,7 @@ Mnemonic: **`bw` = humans + Ansible; `bws`/operator = robots + Kubernetes.**
 ## Layer 1 — Password Manager (`bw`) for Ansible
 
 Used for infrastructure credentials Ansible needs at runtime: Proxmox root password,
-NUT passwords, OPNsense API key, WiFi PSK, SSH material, etc. (full list in
+NUT passwords, VyOS recovery credentials, WiFi PSK, SSH material, etc. (full list in
 [ADR 003 "Secret Mapping"](../decisions/003-secrets-bitwarden.md)).
 
 ### How it authenticates

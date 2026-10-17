@@ -47,29 +47,12 @@ jobs:
       - name: Exercise offline packet-capture coordination
         run: node --test scripts/capture-dhcp-authority.test.mjs
 
-  opnsense-range:
-    name: OPNsense range guard (offline only)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install the tested controller version for loopback fixtures
-        run: python -m pip install 'ansible-core==2.16.3'
-      - name: Exercise range guards against a local fake API
-        run: node --test scripts/opnsense-dhcp-range.test.mjs
-      - name: Exercise worker-prefix rollback guards offline
-        run: node --test scripts/proxmox-prefix-pilot.test.mjs
-
-  talos-prefix:
-    name: Talos prefix guard (offline only)
+  vyos-config:
+    name: VyOS configuration renderer (offline only)
     runs-on: ubuntu-24.04
     env:
-      TALOSCTL_BINARY: /tmp/owl-talosctl-1.8.1
+      ANSIBLE_PLAYBOOK: ansible-playbook
+      PYTHON: python3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -78,12 +61,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install the YAML parser for offline config fixtures
-        run: python -m pip install 'PyYAML==6.0.2'
-      - name: Fetch the checksum-pinned matching Talos client
-        run: |
-          curl --fail --silent --show-error --location https://github.com/siderolabs/talos/releases/download/v1.8.1/talosctl-linux-amd64 --output "$TALOSCTL_BINARY"
-          printf '%s  %s\n' 'c44180a3a4e91325a820464a9bff5ba3e5e86840ca8faa1d2f2e1340ecdd9271' "$TALOSCTL_BINARY" | sha256sum --check
-          chmod u+x "$TALOSCTL_BINARY"
-      - name: Exercise guarded prefix patches without cluster credentials
-        run: node --test scripts/talos-prefix-pilot.test.mjs
+      - name: Install the tested controller version for rendering
+        run: python -m pip install 'ansible-core==2.16.3'
+      - name: Exercise current rendering and unsafe-input guards
+        run: node --test scripts/vyos-config.test.mjs

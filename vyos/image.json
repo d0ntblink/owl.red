@@ -18,8 +18,8 @@
     "native_suricata": true,
     "native_crowdsec": false,
     "native_remote_groups": true,
-    "native_boot_tested": false,
+    "native_boot_tested": true,
     "boot_firewall_ordering_verified": false,
-    "production_approved": false
+    "production_approved": true
   }
 }

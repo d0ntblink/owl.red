@@ -1,8 +1,19 @@
-# VyOS Configuration Preparation
+# VyOS Router And Permanent Lab
 
-This directory contains a recorded baseline and an isolated lab candidate, not a
-production router configuration ready to activate. No VM, production PCI device,
-router service, client resolver or VLAN was changed by this preparation.
+VyOS VM 103 is the accepted production router `edge.owl.red`, serving
+`10.0.10.1/24` with the original WAN/LAN PCI devices. VM 102 is the separate
+permanent `edge-lab.owl.red` (2 vCPU, 4 GB RAM), reachable only through Proxmox's
+loopback SSH forward. The old router VM 100, its 64-GB virtual disk and unused
+installer ISO were explicitly deleted after acceptance. Its provider/migration
+tooling and host-local cutover recovery directories are retired. Future recovery
+uses pinned VyOS media, a private boot-config backup and PVE console access.
+
+The final 2026-10-17 handoff passed native IPv4/default IPv6 routing, delegated
+LAN IPv6, verified external HTTPS, DNS, core service and management checks plus
+both transaction-correlated `/24` DHCP observation captures. Earlier failed
+attempts and recovery remain recorded in [the roadmap](../ROADMAP.md).
+The active Terraform defaults now match production; a no-refresh plan against
+the state just written by the accepted apply reports no changes.
 
 ## Image Qualification
 
@@ -23,32 +34,51 @@ Rolling is a development release. Keep the exact pin, qualify changes before
 upgrading, and retain the previous working image and private configuration.
 Do not track `latest`, auto-upgrade nightly or install unreviewed router packages.
 
-Native boot, semantic commit validation and boot-time firewall ordering have not
-been qualified. The manifest records those limits separately from successful
-signature verification. Follow [ADR 022](../docs/decisions/022-vyos-router-replacement.md)
+Native boot and core runtime acceptance are complete. A boot guard keeps IP
+application traffic closed until both native default-deny families exist, with
+only necessary DHCP/IPv6 control traffic permitted early. This is a mitigation,
+not an exhaustive packet-level boot-window certification. IDS rule loading and
+real alert coverage remain separate qualification work. Follow
+[ADR 022](../docs/decisions/022-vyos-router-replacement.md)
 and [Phase 0.6](../ROADMAP.md#06-stage-and-accept-the-vyos-replacement).
 
 ## Configuration Ownership
 
-- [baseline.yml](baseline.yml) records whitelisted non-secret fields from the
-  retained 2026-10-16 pre-Save OPNsense export, plus a separate synthetic lab
-  profile. It is not a fresh runtime survey. Preserve the eight recorded
-  reservations/client IDs and their existing names, including naming drift;
+- [baseline.yml](baseline.yml) holds native production host mappings/generic NTP
+  upstreams and a separate synthetic lab profile. Existing hostnames are retained
+  without an incidental rename. DHCP lease-preservation inputs remain private;
   this is not a second owner of the final Technitium registry.
 - [config.boot.j2](config.boot.j2) renders native VyOS grammar for the lab: DHCP
   WAN, `192.0.2.0/24` LAN, Kea DHCP `.100-.199`, recursive DNS, a sample static
   hostname, NTP, key-only LAN SSH, explicit IPv4/default-deny logging and sample
   Plex DNAT/SNAT policy. It includes passive native Suricata capture on the
   synthetic LAN, address/port variables and EVE alert/anomaly events to syslog.
-  It does not implement Plex reflection or production IPv6 delegation; IPv6 is
-  closed in this lab, not silently disabled for the future production replacement.
+  The production profile adds the current lease-preservation mappings, Plex
+  reflection, DHCPv6-PD and RA. WAN `ipv6 address autoconf` is required by this
+  image to accept the RA-derived default route while forwarding remains enabled.
+  IPv6 is closed only in the synthetic lab profile, not in production.
 - [vyos-render.yml](../ansible/playbooks/vyos-render.yml) runs only on localhost,
   refuses production profiles, fixes the lab identities and writes a private
   candidate outside Git. It has no SSH/API router connection, native commit,
   Proxmox operation or PCI transfer. No external Ansible collection is needed.
-- Terraform will own a separate replacement VM. Native candidate deployment,
-  comparison/drift removal, commit-confirm/confirmation/save and recovery remain
-  future work in the single Ansible configuration lane.
+- [The Terraform root](../terraform/proxmox/vyos-vm/main.tf) owns the lab and
+  separate production VM; Ansible owns native configuration and bootstrap
+  orchestration. Completed migration-only runners are removed. Preserve one
+  config owner and use native candidate/confirmed-commit/save for future work.
+- [Credential references](credentials.json) identify separate lab/production
+  console accounts in Password Manager and Secrets Manager. Passwords and rendered
+  encrypted-password configurations stay outside Git. Automation uses the existing
+  controller SSH key with pinned host keys; the dashboard receives no write keys.
+
+Production bootstrap inputs live at
+`~/.local/state/owl-red/vyos-production/render-input.json` (owner-only), not a
+hard-coded migration-run directory. The production renderer writes a candidate,
+not a live deployment. Refresh lease-preservation/WAN inputs before any future
+replacement; never replay an old snapshot over the running gateway.
+
+Preflight requires a private copy of the current saved native configuration at
+`~/.local/state/owl-red/vyos-production/config.boot` (directory `0700`, file
+`0600`). It contains recovery credentials and must not enter Git or chat.
 
 ## Render Locally
 
@@ -154,12 +184,11 @@ for release compatibility. Even the full check proves grammar and schema paths,
 not native service validators, a successful boot/commit, packet forwarding,
 DHCP offers, WAN/IPv6 operation or persistence after a real native save.
 
-## Before Production Preparation Can Complete
+## Remaining Work
 
-Resolve the paused OPNsense Save and agree the rollback/running prefix. Refresh
-the affected WAN/IPv6 identities, current leases/exclusions, recursive/local DNS
-behavior, automatic rules and Plex reflection. Then qualify native boot/firewall
-ordering, actual IDS rule loading/events and the real hardware path. CrowdSec
-remediation and new IP/DNS blocking need their own scoped qualification and
-approval; no production renderer or deployment is enabled merely by editing the
-image qualification booleans.
+Finish the small, repeatable configuration promotion workflow from lab to
+production, the read-only diagnostic view, application-specific NAT/reflection
+checks and native IDS rules/events. VLAN activation and the final Technitium
+DNS/DHCP handoff are still separate changes. CrowdSec, reputation feeds and new
+automatic blocking need their own scoped qualification/approval; do not infer
+those protections from a configured service or the successful router replacement.

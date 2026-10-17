@@ -17,7 +17,7 @@ second writer. This role is not a network migration or NAS recovery procedure.
 - **File writes are off by default.** Keep `file_lane_enabled=false` unless an affected setting change is separately approved; check mode is not an approved apply. Do not enable the historical `api_enabled` path; Terraform owns that lane.
 - **Secret/lockout guard.** `preflight` asserts no `unraid_cfg_hard_excluded` file (`myservers.cfg`, `network.cfg`, `go`, `super.dat`, `passwd`/`shadow`/`smbpasswd`/`secrets.tdb`) appears in `unraid_cfg_fetch_list` or `unraid_cfg_write_allowlist`.
 - **No NAS Python required for the core paths.** NAS reads use `raw`; GraphQL/Bitwarden run on the controller (`delegate_to: localhost`). Only `fetch`-based recapture needs Python on the NAS (gated on a preflight probe).
-- **`network.cfg` is never written.** Report DNS state without treating `.30` as an immediate target; retain OPNsense client DNS/DHCP until the coordinated network handoff. NAS networking is a manual, change-scoped operation with local console recovery.
+- **`network.cfg` is never written.** Report DNS state without treating `.30` as an immediate target; retain VyOS client DNS/DHCP until the coordinated network handoff. NAS networking is a manual, change-scoped operation with local console recovery.
 
 ## Prerequisites (controller)
 
@@ -52,6 +52,6 @@ approved API settings; do not run both writers against the same setting.
 
 File-lane writes, container defs, SSH/identity/plugin/UPS API writes, NFS enable,
 Tailscale/WG. **DNS is left DHCP-provided by decision**; the active DHCP authority
-controls its advertised resolver. That remains the OPNsense client path during
+controls its advertised resolver. That remains the VyOS client path during
 preparation, with Technitium handoff only after network readiness and approval.
 Disks/array/passthrough/boot/power and unrelated services are outside network work.

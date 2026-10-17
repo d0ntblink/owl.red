@@ -47,7 +47,7 @@ Always run `pre-commit run --files $(git diff --name-only unraid/flash-config/)`
 state. NTP is managed by the API lane. **DNS is DHCP-provided by design** (decision
 2026-06-18) — the role only flags if it's been pinned Static; which resolver DHCP
 advertises is controlled by the active DHCP authority, not pinned on the NAS.
-Keep the OPNsense client path during preparation; Technitium becomes that
+Keep the VyOS client path during preparation; Technitium becomes that
 authority only through the approved handoff in the
 [network sequence](../../ROADMAP.md#execution-order).
 A JSON summary is written to `ansible/artifacts/unraid/drift-report.json` (gitignored).

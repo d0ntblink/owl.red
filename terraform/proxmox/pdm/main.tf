@@ -1,6 +1,6 @@
 # =============================================================================
 # SCAFFOLD — NOT YET IMPORTED. LXC 231 (pdm) exists (bootstrapped by
-# scripts/pdm-lxc-ha-bootstrap.sh) and is HA-managed by Proxmox ha-manager,
+# a retired shell bootstrap) and is HA-managed by Proxmox ha-manager,
 # currently pinned to cp1 (non-shared storage). Before ANY apply:
 #   scripts/terraform-run.sh -chdir=terraform/proxmox/pdm init
 #   scripts/terraform-run.sh -chdir=terraform/proxmox/pdm import \
@@ -24,7 +24,7 @@ provider "proxmox" {}
 resource "proxmox_virtual_environment_container" "pdm" {
   node_name     = "cp1"
   vm_id         = 231
-  description   = "Proxmox Datacenter Manager (PDM). Bootstrapped by scripts/pdm-lxc-ha-bootstrap.sh; HA via ha-manager."
+  description   = "Proxmox Datacenter Manager (PDM). HA via Proxmox ha-manager."
   tags          = ["10.0.10.31", "debian", "infra", "monitor", "pdm"]
   unprivileged  = true
   started       = false # power/HA owned by Proxmox ha-manager, not Terraform

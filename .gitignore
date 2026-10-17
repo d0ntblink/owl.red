@@ -18,8 +18,8 @@ talos/config/worker.yaml
 *.kubeconfig
 kubeconfig
 
-# OPNsense backups - commit only after stripping secrets
-opnsense/backups/*.xml
+# Private appliance backup exports
+**/backups/*.xml
 
 # Generated automation artifacts
 ansible/artifacts/

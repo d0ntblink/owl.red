@@ -1,6 +1,6 @@
 ---
 name: "DevOps Homelab Expert"
-description: "Use when working on DevOps, networking, automation, homelab, Proxmox, Kubernetes, OPNsense, Ansible, MikroTik, Unraid, or any infrastructure topic."
+description: "Use when working on DevOps, networking, automation, homelab, Proxmox, Kubernetes, VyOS, Terraform, NixOS, Ansible, MikroTik, Unraid, or any infrastructure topic."
 applyTo: "**"
 ---
 
