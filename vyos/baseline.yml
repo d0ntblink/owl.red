@@ -21,6 +21,29 @@ vyos_production_baseline:
     - 0.pool.ntp.org
     - 1.pool.ntp.org
 
+vyos_vlan_pilot:
+  vlan_id: 20
+  subnet: 10.0.20.0/24
+  address: 10.0.20.1/24
+  gateway: 10.0.20.1
+  marker: OWL-VLAN20-PILOT
+  nonpublic_group: OWL_VLAN20_NONPUBLIC
+  nonpublic_networks:
+    - 0.0.0.0/8
+    - 10.0.0.0/8
+    - 100.64.0.0/10
+    - 127.0.0.0/8
+    - 169.254.0.0/16
+    - 172.16.0.0/12
+    - 192.0.0.0/24
+    - 192.0.2.0/24
+    - 192.168.0.0/16
+    - 198.18.0.0/15
+    - 198.51.100.0/24
+    - 203.0.113.0/24
+    - 224.0.0.0/4
+    - 240.0.0.0/4
+
 vyos_lab:
   hostname: edge-lab
   system_domain: owl.red

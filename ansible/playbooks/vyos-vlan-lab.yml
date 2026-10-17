@@ -1,0 +1,178 @@
+---
+- name: Qualify the first VLAN policy only on the permanent isolated lab
+  hosts: edge_lab
+  gather_facts: false
+  vars_files:
+    - ../../vyos/baseline.yml
+  vars:
+    vyos_vlan_pilot_apply_allowed: false
+    vyos_vlan_pilot_owned_paths:
+      - interfaces ethernet eth1 vif 20
+      - firewall group network-group OWL_VLAN20_NONPUBLIC
+      - firewall ipv4 forward filter rule 3000
+      - firewall ipv4 forward filter rule 3010
+      - firewall ipv4 input filter rule 3000
+      - firewall ipv4 input filter rule 3010
+      - nat source rule 3000
+  tasks:
+    - name: Refuse unapproved changes and every production endpoint
+      ansible.builtin.assert:
+        that:
+          - vyos_vlan_pilot_apply_allowed | bool
+          - inventory_hostname == 'edge_lab'
+          - vm_id | int == 102
+          - ansible_host == '127.0.0.1'
+          - ansible_port | int == 22102
+          - vyos_lab.lan_interface == 'eth1'
+          - vyos_lab.wan_interface == 'eth0'
+          - vyos_vlan_pilot.vlan_id | int == 20
+          - vyos_vlan_pilot.subnet == '10.0.20.0/24'
+          - vyos_vlan_pilot.address == '10.0.20.1/24'
+          - vyos_vlan_pilot.gateway == '10.0.20.1'
+          - vyos_vlan_pilot.marker == 'OWL-VLAN20-PILOT'
+          - vyos_vlan_pilot.nonpublic_group == 'OWL_VLAN20_NONPUBLIC'
+        fail_msg: This opt-in playbook cannot target the production router or change the pilot allocation.
+
+    - name: Verify actual lab identity and preserve its management address
+      ansible.builtin.raw: hostname && ip -j -4 address show dev eth1
+      register: vyos_vlan_pilot_identity
+      changed_when: false
+      failed_when: >-
+        vyos_vlan_pilot_identity.rc != 0 or
+        not vyos_vlan_pilot_identity.stdout.startswith('edge-lab\r\n') and
+        not vyos_vlan_pilot_identity.stdout.startswith('edge-lab\n') or
+        '192.0.2.1' not in vyos_vlan_pilot_identity.stdout
+
+    - name: Refuse collisions with configuration not owned by this pilot
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        {% for node in vyos_vlan_pilot_owned_paths %}
+        if /bin/cli-shell-api existsActive {{ node }}; then
+          marker=$(/bin/cli-shell-api returnActiveValue {{ node }} description)
+          [[ "$marker" == {{ vyos_vlan_pilot.marker | quote }} ]] || builtin exit 1
+        fi
+        {% endfor %}
+        '
+      changed_when: false
+
+    - name: Create a private controller recovery directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: "{{ lookup('env', 'HOME') }}/.local/state/owl-red"
+        prefix: vyos-vlan-lab-
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      register: vyos_vlan_pilot_recovery
+
+    - name: Read the current saved lab boot configuration privately
+      ansible.builtin.raw: sudo -n cat /config/config.boot
+      register: vyos_vlan_pilot_boot
+      changed_when: false
+      no_log: true
+
+    - name: Retain the private native recovery configuration
+      ansible.builtin.copy:
+        content: "{{ vyos_vlan_pilot_boot.stdout }}"
+        dest: "{{ vyos_vlan_pilot_recovery.path }}/config.boot"
+        mode: "0600"
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      no_log: true
+
+    - name: Commit only the declared lab VLAN overlay
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        set interfaces ethernet eth1 vif 20 address {{ vyos_vlan_pilot.address | quote }} &&
+        set interfaces ethernet eth1 vif 20 description {{ vyos_vlan_pilot.marker | quote }} &&
+        set firewall group network-group {{ vyos_vlan_pilot.nonpublic_group }} description {{ vyos_vlan_pilot.marker | quote }} &&
+        {% for network in vyos_vlan_pilot.nonpublic_networks %}
+        set firewall group network-group {{ vyos_vlan_pilot.nonpublic_group }} network {{ network | quote }} &&
+        {% endfor %}
+        set firewall ipv4 forward filter rule 3000 description {{ vyos_vlan_pilot.marker | quote }} &&
+        set firewall ipv4 forward filter rule 3000 inbound-interface name eth1.20 &&
+        set firewall ipv4 forward filter rule 3000 source address {{ vyos_vlan_pilot.subnet | quote }} &&
+        set firewall ipv4 forward filter rule 3000 destination group network-group {{ vyos_vlan_pilot.nonpublic_group }} &&
+        set firewall ipv4 forward filter rule 3000 action drop &&
+        set firewall ipv4 forward filter rule 3000 log &&
+        set firewall ipv4 forward filter rule 3010 description {{ vyos_vlan_pilot.marker | quote }} &&
+        set firewall ipv4 forward filter rule 3010 inbound-interface name eth1.20 &&
+        set firewall ipv4 forward filter rule 3010 outbound-interface name eth0 &&
+        set firewall ipv4 forward filter rule 3010 source address {{ vyos_vlan_pilot.subnet | quote }} &&
+        set firewall ipv4 forward filter rule 3010 action accept &&
+        {% for rule, protocol in [(3000, 'tcp_udp'), (3010, 'icmp')] %}
+        set firewall ipv4 input filter rule {{ rule }} description {{ vyos_vlan_pilot.marker | quote }} &&
+        set firewall ipv4 input filter rule {{ rule }} inbound-interface name eth1.20 &&
+        set firewall ipv4 input filter rule {{ rule }} source address {{ vyos_vlan_pilot.subnet | quote }} &&
+        set firewall ipv4 input filter rule {{ rule }} destination address {{ vyos_vlan_pilot.gateway | quote }} &&
+        set firewall ipv4 input filter rule {{ rule }} protocol {{ protocol }} &&
+        set firewall ipv4 input filter rule {{ rule }} action accept &&
+        {% if rule == 3000 %}
+        set firewall ipv4 input filter rule {{ rule }} destination port 53 &&
+        {% endif %}
+        {% endfor %}
+        set nat source rule 3000 description {{ vyos_vlan_pilot.marker | quote }} &&
+        set nat source rule 3000 outbound-interface name eth0 &&
+        set nat source rule 3000 source address {{ vyos_vlan_pilot.subnet | quote }} &&
+        set nat source rule 3000 translation address masquerade &&
+        set service dns forwarding allow-from {{ vyos_vlan_pilot.subnet | quote }} &&
+        set service dns forwarding listen-address {{ vyos_vlan_pilot.gateway | quote }} || builtin exit 1
+        if /bin/cli-shell-api sessionChanged; then
+          commit
+          if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+          save /config/config.boot || builtin exit 1
+          printf "OWL_VLAN_PILOT_CHANGED\n"
+        else
+          printf "OWL_VLAN_PILOT_UNCHANGED\n"
+        fi
+        exit
+        '
+      register: vyos_vlan_pilot_commit
+      changed_when: "'OWL_VLAN_PILOT_CHANGED' in vyos_vlan_pilot_commit.stdout"
+      failed_when: >-
+        vyos_vlan_pilot_commit.rc != 0 or
+        'Set failed' in vyos_vlan_pilot_commit.stdout or
+        'Commit failed' in vyos_vlan_pilot_commit.stdout or
+        'OWL_VLAN_PILOT_' not in vyos_vlan_pilot_commit.stdout
+
+    - name: Verify native pilot interface and unchanged lab management
+      ansible.builtin.raw: |
+        ip -j -4 address show dev eth1.20 &&
+        ip -j -4 address show dev eth1 &&
+        systemctl is-active pdns-recursor.service ssh@default.service
+      register: vyos_vlan_pilot_runtime
+      changed_when: false
+      failed_when: >-
+        vyos_vlan_pilot_runtime.rc != 0 or
+        '10.0.20.1' not in vyos_vlan_pilot_runtime.stdout or
+        '192.0.2.1' not in vyos_vlan_pilot_runtime.stdout
+
+    - name: Read the compiled native policy without dumping it
+      ansible.builtin.raw: sudo -n nft -j list table ip vyos_filter
+      register: vyos_vlan_pilot_firewall
+      changed_when: false
+      no_log: true
+
+    - name: Require both native input and forwarding pilot rules
+      ansible.builtin.assert:
+        that:
+          - >-
+            ['ipv4-FWD-filter-3000', 'ipv4-FWD-filter-3010',
+             'ipv4-INP-filter-3000', 'ipv4-INP-filter-3010'] |
+            difference((vyos_vlan_pilot_firewall.stdout | from_json).nftables |
+            selectattr('rule', 'defined') | map(attribute='rule') |
+            selectattr('comment', 'defined') | map(attribute='comment') | list) |
+            length == 0
+
+    - name: Report isolated qualification and its limits
+      ansible.builtin.debug:
+        msg: >-
+          Lab VLAN 20 native configuration is committed and management remains
+          on the original private interface. Recovery: {{ vyos_vlan_pilot_recovery.path }}/config.boot.
+          This does not prove a physical tagged path, packet-level isolation,
+          WAN reachability or IPv6 policy. No production router, switch, DHCP
+          authority, client address or VM lifecycle changed.

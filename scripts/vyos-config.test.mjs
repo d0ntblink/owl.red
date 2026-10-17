@@ -86,6 +86,47 @@ test('unsafe profiles, paths, keys and image qualifications are refused before r
   }
 });
 
+test('VLAN lab overlay refuses missing approval, production identities and allocation changes offline', () => {
+  const inventory = path.join(temporary, 'vlan-lab-inventory.json');
+  fs.writeFileSync(inventory, JSON.stringify({
+    all: {
+      hosts: {
+        edge_lab: {
+          ansible_connection: 'local',
+          ansible_host: '127.0.0.1',
+          ansible_port: 22102,
+          vm_id: 102,
+        },
+      },
+    },
+  }));
+  const attempts = [
+    {},
+    { vyos_vlan_pilot_apply_allowed: true, vm_id: 103 },
+    { vyos_vlan_pilot_apply_allowed: true, ansible_host: '10.0.10.1', ansible_port: 22 },
+    { vyos_vlan_pilot_apply_allowed: true, vyos_vlan_pilot: { vlan_id: 10 } },
+  ];
+  for (const extra of attempts) {
+    const result = spawnSync(ansible, [
+      '-i', inventory,
+      'ansible/playbooks/vyos-vlan-lab.yml',
+      '--extra-vars', JSON.stringify(extra),
+    ], {
+      cwd: repository,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg'),
+        ANSIBLE_NOCOLOR: '1',
+        ANSIBLE_FORCE_COLOR: '0',
+      },
+    });
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /This opt-in playbook cannot target the production router/);
+    assert.doesNotMatch(result.stdout, /TASK \[Verify actual lab identity/);
+  }
+});
+
 test('candidate parses with the authenticated release library and uses its actual CLI paths', {
   skip: !process.env.VYOS_NATIVE_ROOT && 'Set VYOS_NATIVE_ROOT to the verified image extraction',
 }, () => {
