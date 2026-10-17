@@ -182,6 +182,7 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | OS | SwOS `2.18` |
 | Management IP | `10.0.10.2` (`switch.owl.red`) |
 | Management MAC | `48:8f:5a:0c:d1:82` |
+| Admin login | `admin`; existing Bitwarden password applied and verified after access reset, blank login rejected (2026-10-17) |
 | VLAN mode | Target: 802.1Q access/trunk by port; audited ports still Optional/PVID 1, VLAN membership only on disabled port 5 |
 | IaC source | `ansible/switch_configs/css326.yml` |
 
