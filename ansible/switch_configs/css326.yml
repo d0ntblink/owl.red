@@ -182,7 +182,8 @@ vlans:
     name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium LXC
 
   - vlan_id: 20
-    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
+    member_ports: [2, 25]
+    learning: true
     name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
 
   - vlan_id: 30

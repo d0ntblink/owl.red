@@ -1,0 +1,125 @@
+---
+- name: Trial or confirm only the lab-qualified production VLAN-20 overlay
+  hosts: edge_router
+  gather_facts: false
+  vars_files:
+    - ../../vyos/baseline.yml
+  vars:
+    vlan20_pilot_allowed: false
+    vlan20_phase: trial
+    vlan20_commands: "{{ lookup('template', playbook_dir ~ '/../templates/vyos-vlan20-commands.j2') }}"
+    vlan20_owned_paths:
+      - interfaces ethernet eth1 vif 20
+      - firewall group network-group OWL_VLAN20_NONPUBLIC
+      - firewall ipv4 forward filter rule 3000
+      - firewall ipv4 forward filter rule 3010
+      - firewall ipv4 input filter rule 3000
+      - firewall ipv4 input filter rule 3010
+      - nat source rule 3000
+  tasks:
+    - name: Require explicit approval and the accepted production identity
+      ansible.builtin.assert:
+        that:
+          - vlan20_pilot_allowed | bool
+          - inventory_hostname == 'edge_router'
+          - vm_id | int == 103
+          - ansible_host == '10.0.10.1'
+          - platform == 'vyos'
+          - vlan20_phase in ['trial', 'confirm', 'rollback']
+          - vyos_vlan_pilot.vlan_id | int == 20
+          - vyos_vlan_pilot.subnet == '10.0.20.0/24'
+          - vyos_vlan_pilot.address == '10.0.20.1/24'
+          - vyos_vlan_pilot.nonpublic_group == 'OWL_VLAN20_NONPUBLIC'
+          - vyos_vlan_pilot.marker == 'OWL-VLAN20-PILOT'
+
+    - name: Verify native identity and reject ownership collisions
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        [[ $(hostname) == edge ]] || builtin exit 1
+        [[ $(cat /sys/class/net/eth1/address) == 6c:fe:54:70:08:31 ]] || builtin exit 1
+        {% for node in vlan20_owned_paths %}
+        if /bin/cli-shell-api existsActive {{ node }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue {{ node }} description) == OWL-VLAN20-PILOT ]] || builtin exit 1
+        fi
+        {% endfor %}
+        if ! /bin/cli-shell-api existsActive interfaces ethernet eth1 vif 20; then
+          if /bin/cli-shell-api existsActive service dns forwarding allow-from 10.0.20.0/24; then builtin exit 1; fi
+          if /bin/cli-shell-api existsActive service dns forwarding listen-address 10.0.20.1; then builtin exit 1; fi
+        fi
+        '
+      changed_when: false
+
+    - name: Retain the saved native boot configuration privately before trial
+      ansible.builtin.raw: sudo -n cat /config/config.boot
+      register: vlan20_boot
+      changed_when: false
+      no_log: true
+      when: vlan20_phase == 'trial'
+
+    - name: Write the private controller recovery preimage
+      ansible.builtin.copy:
+        content: "{{ vlan20_boot.stdout }}"
+        dest: "{{ vlan20_recovery_directory }}/router-before.config.boot"
+        mode: "0600"
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      no_log: true
+      when: vlan20_phase == 'trial'
+
+    - name: Commit the exact shared overlay under five-minute native rollback
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        {{ vlan20_commands }} || builtin exit 1
+        if /bin/cli-shell-api sessionChanged; then
+          commit-confirm 5 no-prompt || builtin exit 1
+          if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+          printf "OWL_VLAN20_TRIAL_ARMED\n"
+        else
+          printf "OWL_VLAN20_UNCHANGED\n"
+        fi
+        exit
+        '
+      register: vlan20_trial
+      changed_when: "'OWL_VLAN20_TRIAL_ARMED' in vlan20_trial.stdout"
+      failed_when: >-
+        vlan20_trial.rc != 0 or 'Set failed' in vlan20_trial.stdout or
+        'Commit failed' in vlan20_trial.stdout or 'OWL_VLAN20_' not in vlan20_trial.stdout
+      when: vlan20_phase == 'trial'
+
+    - name: Confirm accepted trial and persist the native boot configuration
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        [[ $(/bin/cli-shell-api returnActiveValue interfaces ethernet eth1 vif 20 description) == OWL-VLAN20-PILOT ]] || builtin exit 1
+        confirm || builtin exit 1
+        save /config/config.boot || builtin exit 1
+        printf "OWL_VLAN20_CONFIRMED\n"
+        exit
+        '
+      when: vlan20_phase == 'confirm'
+
+    - name: Remove only the owned overlay after an unsuccessful pilot
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api existsActive interfaces ethernet eth1 vif 20; then
+          confirm >/dev/null 2>&1 || true
+          {% for node in vlan20_owned_paths %}
+          delete {{ node }} || builtin exit 1
+          {% endfor %}
+          delete service dns forwarding allow-from 10.0.20.0/24 || builtin exit 1
+          delete service dns forwarding listen-address 10.0.20.1 || builtin exit 1
+          commit
+          if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+          save /config/config.boot || builtin exit 1
+        fi
+        printf "OWL_VLAN20_ROLLED_BACK\n"
+        exit
+        '
+      when: vlan20_phase == 'rollback'

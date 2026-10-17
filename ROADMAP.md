@@ -299,9 +299,10 @@ completion of unrelated dashboard certificates or every Fleet repair.
 ### 1.2 VLAN Access Rules on Switch (`switch.owl.red`)
 - Audit baseline: all ports were Optional/PVID 1 and every VLAN listed only disabled port 5. Port names alone do not establish working trunks or access VLANs.
 - `[x]` Restore authenticated SwOS API reads (2026-10-17): after the owner reset admin access, `admin` with blank password authenticated the expected CSS326 serial/MAC at `.2`. The password-only [Ansible recovery](ansible/playbooks/swos-restore-password.yml) applied the existing Bitwarden value; authenticated read-back passes and blank login returns 401. The source-owned port-25 label is now `sfp1-vyos`; all 26 port enable/autoneg settings, per-port VLANs, VLAN membership and protected port 22 are unchanged. A fresh private authenticated `.swb` backup is retained. The authentication blocker is cleared, not the physical pilot/path acceptance.
-- `[ ]` Reconcile `ansible/switch_configs/css326.yml` with actual cabling; the audit found edge management on SW24, not the historical SW05. Record PVID, ingress receive mode, VLAN membership and egress tagging at each switch/router/PVE/LXC/AP boundary.
+- `[~]` Reconcile `ansible/switch_configs/css326.yml` with actual cabling. Native CSS326 dynamic-host fields confirm cp1 MAC on SW02, VyOS LAN MAC on SFP+1/port 25, operator MAC on SW22 and edge management MAC on SW24. The library's Lite-only host parser returned an empty table; native `adr/prt/vid` reads were used instead. Other switch/AP/PVE/LXC boundaries remain to be verified.
 - `[~]` Fresh API reads after access recovery show switch identity/IP retained, all ports Optional/PVID 1, and target VLAN membership still only on disabled port 5. SW18 now has link, but the AP/device identity and management address behind it remain unverified; this is not SSID/trunk acceptance. Do not apply the stale full target map.
-- `[~]` Prepare a wired VLAN-20 pilot without moving real clients or relying on the offline AP. Fresh `cp1` reads show `.11/24`, `vmbr0` VLAN filtering disabled and the required namespace/probe utilities installed; a disposable tagged client is feasible, not yet created. Verify switch membership and native return paths first; preserve operator port 22 and all existing native management traffic.
+- `[x]` Activate and accept the wired VLAN-20 pilot without moving real clients (2026-10-17). VyOS `eth1.20` is `10.0.20.1/24`; the sole switch-row change is VLAN 20 members `[2,25]` with MAC learning enabled. A temporary static `10.0.20.254/24` namespace on cp1's physical `nic0` passed gateway-MAC/ping, internal/public DNS and verified HTTPS; NAS `.5:443` and router VLAN-gateway SSH timed out as required. Tagged router-side frames were captured, the namespace/interface/resolver files were removed, cp1 native management stayed identical, and all four Kubernetes nodes remained Ready. The five-minute native trial was confirmed and saved. Existing ports/PVIDs, operator 22 and DHCP authority are unchanged. Evidence: `~/.local/state/owl-red/vlan20-wired-n8rR1M`.
+- `[x]` Retain failed-trial recovery evidence honestly: earlier gateway probes failed and both owners were rolled back. Coordinated capture proved the router received tagged ARP and sent replies. The switch's raw VLAN-20 learning bit was disabled; explicitly enabling it restored the return path. No unaccepted trial was left active. This does not qualify IPv6, every inter-VLAN flow, physical access-port filtering or the AP path.
 - `[x]` Qualify the native VLAN-20 overlay on isolated lab VM 102 (2026-10-17) through [the opt-in lab playbook](ansible/playbooks/vyos-vlan-lab.yml) and [source profile](vyos/baseline.yml). Native commit/save and rerun comparison pass; `eth1.20` is `.20.1/24`, original `.192.0.2.1` management remains reachable, the four compiled input/forwarding rule IDs exist, and DNS on the new gateway returns synthetic NAS `.192.0.2.5`. Four focused offline tests pass, including early refusal of production targets. This is not a physical-path, packet-isolation, WAN, DHCP or IPv6 qualification; no production activation occurred.
 - `[ ]` Save the SwOS configuration privately and test a designated physical recovery/access port before changing filtering or management VLAN. CSS326 has no serial console; reset is disruptive last-resort recovery, not an ordinary rollback.
 - `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
@@ -310,7 +311,7 @@ completion of unrelated dashboard certificates or every Fleet repair.
 ### 1.3 VyOS VLAN Firewall Rules
 - **Requires:** Phase 0.6 router acceptance; all target rules remain inactive during the parity replacement
 - `[ ]` Confirm VLAN 10 → all VLANs (admin rule) exists
-- `[ ]` Confirm VLAN 20 → internet + VLAN 10 services only (no lateral)
+- `[~]` VLAN-20 pilot internet/gateway DNS passes, with nonpublic forwarding and router SSH denied in tested flows. Select the final explicit VLAN-10 service allowlist and prove its permitted/denied application flows before moving clients; this conservative pilot is not that completed policy.
 - `[ ]` Confirm VLAN 40 → LAN only, no internet, no lateral movement
 - `[ ]` Confirm VLAN 50 → internet only, no lateral movement
 - `[ ]` Guest VLAN 30 isolation rules (see `README.md` captive portal section)
@@ -318,8 +319,9 @@ completion of unrelated dashboard certificates or every Fleet repair.
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
 **Current baseline (2026-10-17):** fresh native reads confirm VyOS `eth1` at
-`10.0.10.1/24`, one connected native-LAN `/24`, a WAN default route and active
-DHCP/DNS. No target VLAN route is present. The retired router's saved `/24`
+`10.0.10.1/24`, its native-LAN route, a WAN default route and active DHCP/DNS.
+The accepted wired pilot additionally routes VLAN 20 as `10.0.20.1/24`, without
+a DHCP scope or real-client migration. The retired router's saved `/24`
 transaction is historical, not a pending operation or restart prerequisite.
 
 Accepted host/client changes already cover all six PVE addresses (edge `.3`,
@@ -411,8 +413,8 @@ recovery and connectivity requirements.
   - `[ ]` Change only remaining approved host/client masks and, if still required, the legacy router prefix in the documented order while retaining the native management L2, addresses and interim router DNS/DHCP. Account for derived routes/rules; do not rerun completed host/client migrations.
   - `[ ]` Check both directions to the operator, gateway, PVE quorum, Talos/etcd/API VIP, ingress VIP and NAS after each bounded batch. Stop and restore the affected previous values on failure; do not proceed to VLAN tagging to fix an unresolved mask problem.
 4. **Prove VLAN paths after VyOS acceptance, before Technitium handoff.**
-  - `[ ]` Activate one approved test port/VLAN path and matching VyOS gateway/firewall/NAT policy. Use the agreed interim VyOS DHCP/DNS for pilot clients; a static test client is acceptable before client DHCP is staged.
-  - `[ ]` Verify address, `/24`, gateway, expected DHCP server/DNS options, internet policy and return traffic from a real LAN client. WSL reachability alone cannot prove DHCP broadcasts, VLAN membership or isolation.
+  - `[x]` Activate the bounded VLAN-20 tagged path between physical cp1 SW02 and VyOS SFP+1, using the shared lab-qualified native overlay and exact switch-row owner. Native trial confirmed after the disposable static probe passed; no production bridge, client move or DHCP activation.
+  - `[~]` Static wired client `/24`, gateway/MAC, DNS, HTTPS, return traffic and two denied management/private TCP flows pass. DHCP broadcasts/options, IPv6, other VLANs and full policy matrices remain unqualified. WSL reachability was not used as packet proof.
   - `[ ]` Complete the required switch/AP/PVE/LXC paths with Technitium DHCP still guarded; verify scope-local `.30` DNS listeners and firewall exposure. Do not put the same `10.0.10.0/24` address space on both native and tagged router interfaces.
 5. **Approve and perform the DNS/DHCP handoff, then expand.**
   - `[ ]` Reconcile outstanding leases, reservations and pool exclusions for each broadcast domain; keep a rollback lease map so neither authority reissues an address already in use

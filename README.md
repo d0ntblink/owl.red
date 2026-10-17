@@ -121,6 +121,12 @@ VM 102 uses 2 vCPU/4 GB and private virtual networking, not production passthrou
 The five target VLANs and Technitium authority handoff are not completed by this
 router swap; follow [the roadmap](ROADMAP.md) for those later batches.
 
+First wired pilot accepted (2026-10-17): VLAN 20 has a verified tagged path
+between cp1 SW02 and VyOS SFP+1, gateway `10.0.20.1/24`, internet/DNS acceptance
+and tested NAS/router-management denials. The temporary client is removed;
+DHCP authority and existing client/management addresses remain unchanged. This
+does not complete AP/SSID steering, IPv6, full segmentation or client migration.
+
 ---
 
 ## Front Patching
