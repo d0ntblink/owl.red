@@ -615,14 +615,14 @@ permission to skip another ownership check immediately before any live change.
   contents. It is not a new active export and was not approved for a full-current
   restore. API range/client preimages are separate; no restore/revert/import
   or reboot was performed.
-- A [range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml)
+- A [range-only playbook (retired)](../decisions/016-opnsense-terraform.md)
   prepares the existing UUID's end address `.200` to `.199`. Both activation
   opt-ins default false. Check mode is GET-only; missing objects, observed
   pre-save drift, address ownership, incomplete pagination or unintended field
   changes stop the run. These checks do not make separate requests atomic.
   An approved mutation would save a private preimage, post only the
   end field, and verify all other returned fields before service activation.
-- All [eight offline cases](../../scripts/opnsense-dhcp-range.test.mjs) pass
+- All [eight offline cases (retired)](../decisions/016-opnsense-terraform.md) pass
   against loopback HTTP with synthetic credentials. One case exposed a YAML
   comparison parsed as a truthy mapping; quoting it and checking all assertion
   shapes fixed that failure before any live execution. An interrupted test
@@ -697,11 +697,11 @@ outside this pilot.
   and shares a lock with final confirmation. Recovery snapshots are planned on
   both the host and controller outside Git. Rollback failures remain observable
   failures, not a guaranteed-success recovery claim.
-- All [nine offline cases](../../scripts/proxmox-prefix-pilot.test.mjs) pass
+- All [nine offline cases (retired)](../guides/controller-setup.md#historical-migration-tooling-retired) pass
   against temporary files and fake reload/systemctl commands. They cover policy,
   syntax, exact restoration, confirmation, active/pending drift, damaged
   preimages, reload failure and concurrent confirmation/rollback.
-- The [connected check-mode preview](../../ansible/playbooks/proxmox-prefix-pilot.yml)
+- The [connected check-mode preview (retired)](../guides/controller-setup.md#historical-migration-tooling-retired)
   completed `ok=14`, `changed=0`, `failed=0`, `skipped=31`; no staging, timer,
   reload or interface modification ran. Tool requirements and the operator
   invocation are in the [controller guide](../guides/controller-setup.md#worker-management-prefix-pilot).

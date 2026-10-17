@@ -1,5 +1,12 @@
 # terraform/opnsense — OPNsense config as code (Terraform-primary lane)
 
+**Retired historical guide (2026-10-17).** The old VM, disk, provider/module,
+draft resources, wrapper and migration-only tests/playbooks are removed. This
+README is retained as requested documentation, not a runnable Terraform root.
+Do not execute the old examples against `.1`, which is now VyOS. Current
+ownership is in [ADR 022](../../docs/decisions/022-vyos-router-replacement.md)
+and [the change guide](../../docs/guides/changing-owl-red.md).
+
 Manages `edge.owl.red` (OPNsense, `https://10.0.10.1`) firewall / DNS / NAT / VPN config
 declaratively. Run with `scripts/opnsense-terraform-run.sh <plan|apply|...>`, which pulls
 the dedicated least-privilege API key from Bitwarden. Decision:
@@ -92,7 +99,7 @@ reconfiguration and its interruption risk need explicit review and approval.
 
 The locked `0.24.0` schema was inspected locally: it supports
 `opnsense_dnsmasq_host`, not Dnsmasq ranges. The prepared
-[range-only playbook](../../ansible/playbooks/opnsense-dhcp-range.yml) is the
+[range-only playbook (retired)](../../docs/decisions/016-opnsense-terraform.md) is the
 specific Ansible exception permitted by ADR 016; no Terraform resource owns
 this range and no second writer is introduced. Its reviewed one-time deployment
 completed below; unattended activation is neither configured nor approved.
@@ -129,7 +136,7 @@ restoring `.200` into the overlapping pool.
 OPNsense 26.1.9's Dnsmasq reconfigure path can reload firewall rules as well
 as interrupt DHCP/DNS. A saved API value and a running service are not complete
 wire/client acceptance; verify connectivity and runtime behavior separately.
-The [twelve offline cases](../../scripts/opnsense-dhcp-range.test.mjs) use a
+The [twelve offline cases (retired)](../../docs/decisions/016-opnsense-terraform.md) use a
 loopback fake API and synthetic credentials, never the router.
 
 ### DHCP Mask Preparation Before Router Contraction

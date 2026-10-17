@@ -1,0 +1,29 @@
+---
+- name: Align only the permanent lab router identity
+  hosts: edge_lab
+  gather_facts: false
+  vars_files:
+    - ../../vyos/baseline.yml
+  tasks:
+    - name: Require the isolated lab management endpoint
+      ansible.builtin.assert:
+        that:
+          - ansible_host == '127.0.0.1'
+          - ansible_port | int == 22102
+          - vm_id | int == 102
+
+    - name: Apply and save the declared lab hostname
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure &&
+        set system host-name {{ vyos_lab.hostname }} &&
+        set system domain-name {{ vyos_lab.system_domain }} &&
+        commit
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        save /config/config.boot
+        exit'
+
+    - name: Read the accepted lab identity
+      ansible.builtin.raw: hostname -f
+      changed_when: false

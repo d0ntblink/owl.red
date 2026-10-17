@@ -9,6 +9,9 @@ running guests, but not a safe whole-root apply: Technitium has one untagged NIC
 versus five tagged target NICs, and live Talos is 1.8.1 versus the 1.7.5 source/
 ISO pins. Follow [G4](../../ROADMAP.md#stabilization-gates) for the touched root.
 Network work does not authorize NAS VM/passthrough/disk/boot/power changes.
+Current router update (2026-10-17): VyOS production VM 103 and permanent lab VM
+102 are declared in their own root. The old VM 100, its disk, installer ISO and
+scaffold have been explicitly retired.
 
 ## How Terraform is run here
 
@@ -20,7 +23,7 @@ an exhaustive module inventory. The wrapper injects
 ```bash
 scripts/terraform-run.sh -chdir=terraform/proxmox/technitium  plan   # Talos cluster + Technitium LXC
 scripts/terraform-run.sh -chdir=terraform/proxmox/nas         plan   # Unraid NAS VM
-scripts/terraform-run.sh -chdir=terraform/opnsense            plan   # OPNsense config; initialized in June, re-survey before planning changes
+scripts/terraform-run.sh -chdir=terraform/proxmox/vyos-vm     plan   # VyOS production and permanent lab VM lifecycle
 ```
 Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ignored ([ADR 015](../decisions/015-terraform-remote-state-deferred.md)).
 
@@ -28,7 +31,8 @@ Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ig
 
 | VMID | Name | Node | Type | Terraform | Passthrough |
 |------|------|------|------|-----------|-------------|
-| 100 | `edge.owl.red` (OPNsense) | edge | VM | **scaffold** `terraform/proxmox/opnsense-vm/` (import pending) | `hostpci0=01:00`, `hostpci1=04:00` (NICs) |
+| 102 | `edge-lab.owl.red` | edge | VM | `terraform/proxmox/vyos-vm/` (managed) | none; private virtual networking |
+| 103 | `edge.owl.red` (VyOS) | edge | VM | `terraform/proxmox/vyos-vm/` (managed) | `hostpci0=01:00`, `hostpci1=04:00`, declared in Terraform |
 | 101 | `nas.owl.red` (Unraid) | storage | VM | ✅ `terraform/proxmox/nas/nas.tf` (`started=false`, `protection=true`) | 4× `hostpci` + `usb0` |
 | 200 | `technitium` | edge | LXC | ✅ `terraform/proxmox/technitium/technitium-lxc.tf` | none |
 | 231 | `pdm` | cp1 | LXC | **scaffold** `terraform/proxmox/pdm/` (import pending) | none |
@@ -37,7 +41,7 @@ Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ig
 | 603 | `cp3-talos` | cp3 | VM | ✅ `main.tf` | none |
 | 604 | `worker1-talos` | worker1 | VM | ✅ `main.tf` (`workers`) | none |
 
-Every guest is now represented in code. `100`/`231` are **scaffolds** — they must be
+Every current guest is represented in code. `231` remains a **scaffold** and must be
 `terraform import`-ed and shown to produce **no plan diff** before any `apply` (see each file's header).
 
 ## Hardware / USB Passthrough Reference
@@ -55,11 +59,9 @@ qm set 101 -hostpci2 '0000:02:00,pcie=1,rombar=0'   # NVIDIA GTX 1060 6GB (Plex)
 qm set 101 -hostpci3 '0000:06:00,pcie=1,rombar=0'   # Intel 82599ES 10G SFP+
 qm set 101 -usb0     'host=24a9:205a,usb3=1'         # virtual USB license gadget (issue 004)
 ```
-**OPNsense (100), on `edge`:**
-```bash
-qm set 100 -hostpci0 '0000:01:00,pcie=1'             # passthrough NIC (WAN/LAN)
-qm set 100 -hostpci1 '0000:04:00,pcie=1'             # passthrough NIC
-```
+**VyOS (103), on `edge`:** its two exclusive PCI assignments are owned by
+[the VM root](../../terraform/proxmox/vyos-vm/main.tf). They are not a manual
+post-apply step. VM 100 no longer exists; never replay its old `qm set` commands.
 > `edge.owl.red` is **pinned** to `edge` (PCIe NIC passthrough); do not migrate it.
 > `started=false` and `protection=true` are configuration values, not a guarantee
 > that Terraform cannot stop or recreate a guest. Verify installed-provider
@@ -69,7 +71,7 @@ qm set 100 -hostpci1 '0000:04:00,pcie=1'             # passthrough NIC
 ## Add a new Talos node (the easy path)
 
 The cluster uses `for_each` maps in `terraform/proxmox/technitium/main.tf`.
-The example below reflects the legacy `/16`, not an approved migration action.
+The example below uses the accepted native-LAN `/24`, not VLAN activation approval.
 Match the currently approved subnet/version plan and first prove that a reviewed
 plan adds only the new node; existing cluster/LXC drift must not be applied with it.
 
@@ -77,7 +79,7 @@ plan adds only the new node; existing cluster/LXC drift must not be applied with
    and put the Talos ISO on its `local:iso/` (`ansible/playbooks/04-prep-talos-iso.yml` or `pveam`/`wget`).
 2. **Code** — add to `local.workers` (or `local.control_planes`) in `main.tf`:
    ```hcl
-   "worker2-talos" = { node = "worker2", vmid = 605, ip = "10.0.10.25/16", mac = "02:00:00:00:00:25", cores = 4, memory = 12288 }
+   "worker2-talos" = { node = "worker2", vmid = 605, ip = "10.0.10.25/24", mac = "02:00:00:00:00:25", cores = 4, memory = 12288 }
    ```
    The VM, the `talos_machine_configuration_apply`, and (for control planes) the VIP/etcd join all flow
    from that single entry.
@@ -98,7 +100,7 @@ as boilerplate.
 ## Inconsistencies / take note
 
 1. **ROADMAP §13.2 table was stale** — it listed the Talos VMs and the NAS as "needs `.tf`", but `601–604`
-   are in `main.tf` and `101` is `nas.tf`. The only true gaps were `100` (OPNsense) and `231` (PDM), now scaffolded. (ROADMAP updated.)
+   are in `main.tf` and `101` is `nas.tf`. VM 100 has since been retired; only `231` (PDM) still has the noted scaffold/import gap.
 2. **Misleading module name:** `terraform/proxmox/technitium/` provisions the **entire Talos cluster** *and*
    the Technitium LXC — not just Technitium. Consider renaming to `…/cluster` (or splitting the LXC out).
 3. **NAS VM description drift (live):** the on-Proxmox description for VM 101 is stale/contradictory — it
@@ -108,9 +110,8 @@ as boilerplate.
 4. **Power flags are not lifecycle guarantees:** the source uses different `started`
    values for Talos and NAS/router guests. Reconcile actual provider/state behavior
    and review the plan; do not infer "never starts/stops/recreates" from those flags.
-5. **Passthrough is intentionally manual:** even though `terraform-run.sh` uses `root@pam` (which *can* set
-   `hostpci`), passthrough stays as post-apply `qm set` (hardware-specific, set once). Don't add `hostpci` to a `.tf`.
-6. **Talos uses `/16` IPs** (`10.0.10.21/16`) pending the flat-`/16` → per-VLAN-`/24` migration (ROADMAP 1.5).
+5. **Passthrough ownership is guest-specific:** VyOS hardware is declared in Terraform. NAS assignments above remain a protected historical/manual floor; do not move them or add a second writer during network work.
+6. **Talos management uses `/24` IPs** after the completed prefix migration. That does not activate tagged VLANs or authorize an unrelated root apply.
 7. **Talos source/ISO pin is not the live version:** 1.7.5 is recorded in `main.tf`
    and `04-prep-talos-iso.yml`, while the October audit found 1.8.1 running. Reconcile
    boot media, machine configuration, state and live versions before an explicit

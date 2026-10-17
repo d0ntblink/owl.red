@@ -46,7 +46,8 @@
           - vyos_lab.nas_address == '192.0.2.5'
           - vyos_lab.nas_mac == '02:76:79:00:00:05'
           - vyos_lab.domain == 'lab.owl.invalid'
-          - vyos_lab.hostname == 'owl-vyos-lab'
+          - vyos_lab.hostname == 'edge-lab'
+          - vyos_lab.system_domain == 'owl.red'
           - vyos_lab.user == 'owl-ansible'
           - vyos_lab.lease_seconds | int == 86400
           - vyos_lab.ntp_servers == ['0.pool.ntp.org', '1.pool.ntp.org']

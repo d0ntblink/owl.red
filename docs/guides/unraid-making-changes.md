@@ -23,7 +23,7 @@ routes via `.1` and resolver `10.0.10.1`. The physical MAC remains
 `f8:f2:1e:48:91:40`; HTTPS/SMB TCP ports respond.
 
 Do not make a separate static NAS mask/DNS edit or add a `network.cfg` writer.
-Its persistent mask must be handled with the active OPNsense DHCP/LAN transition
+Its persistent mask must be handled with the active VyOS DHCP/LAN transition
 and verified client renewal. Preserve the `.5` reservation and existing DNS
 authority, save the affected router/DHCP state and check NAS reachability after
 that bounded change. This preparation does not stop Docker/network services,
@@ -39,7 +39,7 @@ Only the exact saved runtime default route was restored, then a controlled
 same-`/24` renewal retained it. This was not a zero-interruption or first-try
 acceptance, and no static NAS setting, release/rebind, service restart or disk/
 array/boot/power operation was performed. The owning
-[range guide](../../terraform/opnsense/README.md#dhcp-mask-preparation-before-router-contraction)
+[historical range guide](../../terraform/opnsense/README.md#dhcp-mask-preparation-before-router-contraction)
 records this recovery boundary; the manual `network.cfg` policy is unchanged.
 
 ## The 3 methods
@@ -63,7 +63,7 @@ records this recovery boundary; the manual `network.cfg` policy is unchanged.
 | Change **docker service** settings (image path, networks) | Ansible file-lane (Phase 2) | `docker.cfg` |
 | Add/remove a **docker container** | compose-in-git on Unraid **or** k8s/Fleet (per ADR 002) | not this role |
 | Change the **NAS IP** / bridge | **Manual** (lockout) | Unraid UI (stop Docker first); `network.cfg` snapshot is reference-only |
-| Change the **DNS** the NAS uses | **Manual network policy; keep DHCP-provided DNS** | The active DHCP authority advertises DNS; preserve the OPNsense client path during preparation and transfer to Technitium only at the approved handoff. Do not pin `.30` early. |
+| Change the **DNS** the NAS uses | **Manual network policy; keep DHCP-provided DNS** | The active DHCP authority advertises DNS; preserve the VyOS client path during preparation and transfer to Technitium only at the approved handoff. Do not pin `.30` early. |
 | Add/change the **array**, a **disk**, a **pool**, **parity** | **Manual** ⛔ DRIVE PROTECTION | Unraid UI only — never IaC |
 | Add a **user** | **Manual** ⛔ (secrets) | Unraid UI |
 | Install/remove a **plugin** | **Manual** (future TF plugin-set) | Unraid UI |

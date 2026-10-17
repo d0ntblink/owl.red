@@ -25,10 +25,10 @@ data:
             icon: dns
 
     - Infrastructure:
-        - OPNsense:
-            href: https://edge.owl.red
-            description: Firewall, routing, and policy control
-            icon: opnsense
+        - VyOS Console:
+            href: https://10.0.10.3:8006
+            description: Edge gateway VM 103 on Proxmox
+            icon: mdi-router-network
         - MikroTik Switch:
             href: http://switch.owl.red
             description: CSS326 switching fabric management
@@ -109,9 +109,9 @@ data:
         - DNS UI:
             - abbr: DNS
               href: https://dns.owl.red
-        - OPNsense:
+        - VyOS Console:
             - abbr: FW
-              href: https://edge.owl.red
+              href: https://10.0.10.3:8006
         - Unraid:
             - abbr: NAS
               href: http://nas.owl.red

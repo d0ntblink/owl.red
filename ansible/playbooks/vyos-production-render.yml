@@ -1,0 +1,59 @@
+---
+- name: Render the production bootstrap candidate without deployment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../vyos/baseline.yml
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    vyos_output_dir: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/vyos-production"
+    vyos_input_file: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/vyos-production/render-input.json"
+    vyos_live: "{{ lookup('file', vyos_input_file) | from_json }}"
+    vyos_ssh_key_parts: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/id_ed25519_owl_ansible.pub').split() }}"
+    vyos_router:
+      hostname: edge
+      system_domain: owl.red
+      domain: owl.red
+      user: owl-ansible
+      wan_interface: eth0
+      wan_mac: e0:d4:e8:ef:2b:f2
+      lan_interface: eth1
+      lan_mac: 6c:fe:54:70:08:31
+      subnet: 10.0.10.0/24
+      address: 10.0.10.1/24
+      gateway: 10.0.10.1
+      dhcp_start: 10.0.10.100
+      dhcp_stop: 10.0.10.199
+      lease_seconds: 86400
+      nas_address: 10.0.10.5
+      nas_mac: f8:f2:1e:48:91:40
+      network_name: LAN
+      ipv6_enabled: true
+      dhcp_hostname: edge.owl.red
+      reflection_ip: "{{ vyos_live.wan_ipv4 }}"
+      reservations: "{{ vyos_live.reservations }}"
+      host_mappings: "{{ vyos_production_baseline.host_mappings }}"
+      ntp_servers: "{{ vyos_production_baseline.ntp_servers }}"
+  tasks:
+    - name: Require private isolated production preparation inputs
+      ansible.builtin.assert:
+        that:
+          - vyos_live.production_network_attached is sameas false
+          - vyos_live.source_lease_count | int > 0
+          - vyos_output_dir is match('^' ~ ((lookup('env', 'HOME') ~ '/.local/state/owl-red/') | regex_escape))
+          - "'..' not in vyos_output_dir.split('/')"
+          - vyos_ssh_key_parts[0] == 'ssh-ed25519'
+
+    - name: Create the private production preparation directory
+      ansible.builtin.file:
+        path: "{{ vyos_output_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Render the shared native template without deployment
+      ansible.builtin.template:
+        src: ../../vyos/config.boot.j2
+        dest: "{{ vyos_output_dir }}/candidate.config"
+        mode: "0600"
+      diff: false

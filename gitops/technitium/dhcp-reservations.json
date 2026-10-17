@@ -23,11 +23,11 @@
         },
 
         {
-          "hardwareAddress": "90-E2-BA-0C-44-95",
+          "hardwareAddress": "6C-FE-54-70-08-31",
           "ipAddress": "10.0.10.1",
           "hostName": "edge.owl.red",
-          "comments": "OPNsense VM (VMID 100) on edge.pve — VLAN 10 gateway, firewall. Intel I340-T4 PCIe passthrough NIC.",
-          "macSource": "ARP at 10.0.10.1 via edge.pve (Intel I340-T4 port 0, fully passed through to OPNsense VM); switch port SW19",
+          "comments": "VyOS VM 103 on edge.pve; static native-LAN gateway and firewall, Intel X710 LAN PCI passthrough. Target VLAN activation remains separate.",
+          "macSource": "VyOS eth1 /sys/class/net/eth1/address verified 2026-10-17; X710 LAN port, switch SFP+1",
           "status": "confirmed"
         },
 
@@ -35,7 +35,7 @@
           "hardwareAddress": "3C-7C-3F-25-50-6A",
           "ipAddress": "10.0.10.3",
           "hostName": "edge.pve.owl.red",
-          "comments": "Supermicro CSE-523L-505B — PVE host, router node (OPNsense PCIe passthrough host)",
+          "comments": "Supermicro CSE-523L-505B; PVE host for VyOS production VM 103 and isolated lab VM 102",
           "macSource": "switch port SW05",
           "status": "confirmed"
         },
@@ -250,7 +250,7 @@
           "ipAddress": "10.0.40.10",
           "hostName": "printer.owl.red",
           "comments": "Canon printer (Canon1c2258) — AzureWave WiFi module; local printing only, no internet needed",
-          "macSource": "OPNsense DHCP lease 2026-06-09 (AzureWave Technology Inc.)",
+          "macSource": "Recorded DHCP lease 2026-06-09 (AzureWave Technology Inc.)",
           "status": "confirmed"
         },
 
@@ -295,7 +295,7 @@
           "ipAddress": "10.0.50.10",
           "hostName": "ecobee.owl.red",
           "comments": "Ecobee smart thermostat — needs internet for cloud API",
-          "macSource": "OPNsense DHCP lease 2026-06-09 (ecobee inc)",
+          "macSource": "Recorded DHCP lease 2026-06-09 (ecobee inc)",
           "status": "confirmed"
         },
 

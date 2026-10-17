@@ -96,7 +96,7 @@ pre-commit run --all-files
   [roadmap execution order](ROADMAP.md#execution-order); the audited live network
   is flat, not already isolated. Resolve legacy `/16` overlap before routing its
   contained target `/24`s.
-- Preserve client DNS/DHCP on OPNsense during preparation. Attach Technitium VLAN
+- Preserve client DNS/DHCP on VyOS during preparation. Attach Technitium VLAN
   interfaces only after proving the replacement scopes cannot issue competing
   offers; transfer authority in an approved coordinated handoff. Final DNS
   enforcement follows successful path, renewal and rollback checks.
@@ -107,9 +107,10 @@ pre-commit run --all-files
 - Publishing is an operational action: a new Git revision, even documentation
   only, can trigger the Technitium timer's full settings/zone/scope sync. Review
   that effect and coordinate its serving-state guard before a push.
-- Terraform reaches Proxmox/OPNsense over their self-signed management TLS
-  (`PROXMOX_VE_INSECURE=true`, OPNsense `allow_unverified`) — acceptable for LAN-only admin APIs;
-  pin a CA if these are ever reached off-LAN.
+- Terraform's Proxmox management TLS exception (`PROXMOX_VE_INSECURE=true`) is
+  scoped to the existing private API; pin its CA rather than extending a global
+  bypass. VyOS management uses strictly pinned SSH host keys, not the retired
+  router provider or its TLS settings.
 
 3. Backups and Artifacts
 - Backup exports must be encrypted at rest when stored outside trusted systems.

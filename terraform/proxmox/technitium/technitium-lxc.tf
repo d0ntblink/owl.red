@@ -6,7 +6,7 @@
 #
 # Network layout: 5 NICs, each bridged to vmbr0 with specific vlan_id.
 # This allows Technitium to receive L2 broadcast (DHCP) natively on every subnet
-# and serves DNS directly via local VLAN IP without crossing the OPNsense firewall.
+# and serves DNS directly via local VLAN IP without crossing the router firewall.
 #
 # Prerequisites (before terraform apply):
 #   1. Debian 12 LXC template downloaded on edge.pve:

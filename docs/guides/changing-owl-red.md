@@ -12,7 +12,7 @@ applies Git-managed DNS/DHCP data. Some appliance settings have an explicit
 approved execution lane, and verify runtime results plus rollback access.
 
 For networking follow the [roadmap execution order](../../ROADMAP.md#execution-order).
-OPNsense retains client DNS/DHCP during preparation; the final handoff waits for
+VyOS retains client DNS/DHCP during preparation; the final handoff waits for
 supporting VLAN paths/interfaces. Existing reservations are a target plan, not
 proof of VLAN membership. This work does not authorize NAS VM/passthrough/disk/
 array/boot/power or unrelated service changes.
@@ -28,10 +28,10 @@ array/boot/power or unrelated service changes.
 | Add/change a **DHCP scope** or a **host's reserved IP** | **Git-managed Technitium target; actual serving authority is migration-dependent** | `gitops/technitium/dhcp/scopes.json` / `dhcp-reservations.json`; coordinate scope lifecycle and lease authority before applying/publishing |
 | Deploy/change a **k8s app** | **GitOps** (Fleet) | `gitops/<app>/` + add the path to the GitRepo in `gitops/rancher/fleet/` |
 | Add a **k8s secret** | **Bitwarden + operator** | `scripts/bitwarden-k8s-secrets-sync.sh` → `gitops/bitwarden-secrets/` (never a placeholder `bwSecretId`) |
-| Change **OPNsense** firewall rules / NAT / aliases / DNS overrides / VLAN+VIP / VPN / certs | **Terraform** | `terraform/opnsense/` ([ADR 016](../decisions/016-opnsense-terraform.md)) — run `scripts/opnsense-terraform-run.sh plan` then `apply` |
-| Change **OPNsense** base interfaces / IP / WAN / gateways / system / **NTP** / captive portal / shaper / IDS | **Documented WebUI floor** | [ADR 016](../decisions/016-opnsense-terraform.md); verify current version/API/provider coverage before moving ownership, then document affected configuration and rollback |
-| Add a **new bootstrap script** (one-off host/LXC provisioning) | **scripts/** + Terraform for the resource | write `scripts/<name>.sh`; then codify the created resource in `terraform/proxmox/<x>/` (don't leave it script-only) |
-| Change **NTP** for a host | per host | **Unraid** → Terraform (`terraform/unraid`); **Proxmox** → Ansible (chrony); **Talos** → machine config; the LAN NTP authority is OPNsense `10.0.10.1` (ROADMAP 16.1) |
+| Change **VyOS** interfaces, routes, firewall/NAT, DNS/DHCP, NTP or IDS configuration | **Native config through Ansible** | [Native template](../../vyos/config.boot.j2), [profiles](../../vyos/baseline.yml), private inputs and the reviewed candidate/confirmed-commit/save lane; [ADR 022](../decisions/022-vyos-router-replacement.md). No parallel Terraform router-config writer. |
+| Change **VyOS VM hardware/lifecycle** | **Terraform** | [Production/lab root](../../terraform/proxmox/vyos-vm/main.tf); declared direct PCI ownership for VM 103, isolated virtual networking for VM 102. |
+| Bootstrap a **new host/LXC** | **Terraform lifecycle, then Ansible/NixOS configuration** | Extend the owning root and reusable configuration path; do not add an imperative guest-creation script or keep a completed migration runner. |
+| Change **NTP** for a host | per host | **Unraid** → Terraform (`terraform/unraid`); **Proxmox** → Ansible (chrony); **Talos** → machine config; LAN NTP authority is VyOS `10.0.10.1` (ROADMAP 16.1). |
 | Change a **host's IP** | depends on current authority and address method | Leased address: active DHCP owner's lane plus the target registry; static: that host's Talos/Ansible/appliance lane. Update masks, gateway, routes and VLAN attachment as a reviewed transition, not by reservation alone. |
 | Mount / change **shared storage** (NFS PVCs, Proxmox shared disks) | per consumer | NAS is the store ([ADR 018](../decisions/018-storage-backend.md)). Export config → Ansible file-lane; k8s CSI → Fleet; Proxmox `pvesm` → Ansible. Full plan: [shared-storage.md](shared-storage.md) |
 
