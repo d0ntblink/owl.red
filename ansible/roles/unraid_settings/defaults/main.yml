@@ -53,6 +53,5 @@ unraid_shares:
   - backups
   - isos
   - media
-  - sharefiles
   - system
   - vms

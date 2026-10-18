@@ -1,9 +1,25 @@
-# Decision 018: Shared storage — NFS from the NAS now, Longhorn later
+# Decision 018: NAS-Backed Shared Storage
 
 ## Status
 
 Accepted (2026-06-18). NFS not yet enabled on the box — see the rollout in
 [`docs/guides/shared-storage.md`](../guides/shared-storage.md).
+
+Owner amendment (2026-10-18): keep one mixed NAS/Kubernetes `appdata` share;
+schedule inventory/cleanup instead of creating a separate Kubernetes share.
+Retire `sharefiles` only after consumer/data-retention review. Production
+`media` is protected, including paths, data, share security and exports; no
+merge, relocation or permission change is authorized. These boundaries govern
+the earlier rollout below. Global NFS activation remains blocked because it
+would activate media's saved public export. No live changes have been made.
+
+The owner selected authenticated **SMB for Kubernetes**, with a dedicated
+`k8s` account and upstream `csi-driver-smb`; this supersedes the earlier
+Kubernetes NFS proposal. Retain per-PVC data and keep credentials in the private
+Bitwarden/Kubernetes secret lane. Backup/scanner identities are planned until
+their consumers exist. Reuse current root/PC identities. Follow the
+[no-fallback data-protection constraint](../guides/unraid-making-changes.md#no-fallback-operating-constraint);
+no driver, user, share permission or NAS service change is claimed.
 
 ## Context
 
@@ -13,10 +29,9 @@ ADR 011/§13), and general data. `nas.owl.red` (Unraid) is already the data hub 
 
 ## Decision
 
-Use **NFS exports from `nas.owl.red`** as the shared store now, **reusing the existing shares**
-(no new share scheme). **NFS** serves the HA/infra consumers — k8s (via an NFS CSI driver +
-`StorageClass`), Proxmox (`pvesm` NFS storage for `images`/`rootdir`/`iso`/`backup`), and other
-LXC/VMs — while **SMB** stays for personal devices. NFS exports are **host-restricted to VLAN 10**
+Use **NAS-backed storage with shared appdata**. **SMB** serves Kubernetes PVCs
+and authenticated PC access. **NFS** remains proposed for Proxmox and reviewed
+infrastructure consumers, not Kubernetes. NFS exports are host-restricted
 (`shareSecurityNFS="private"` + `shareHostListNFS`), never `public`; `no_root_squash` only on the
 cluster/Proxmox exports. Unraid NFS enable + export config is owned by the **Ansible file-lane**
 (`unraid_settings`); array/disk layout stays **manual**.
@@ -38,10 +53,16 @@ cluster PVCs; the NAS would then back media/backups/bulk rather than live HA sta
 
 - Simple and works today; unblocks k8s stateful apps and Proxmox CT/VM HA failover.
 - **The NAS is a SPOF for everything HA** until Longhorn — documented and accepted short-term.
-- NFS is plaintext, so exports are LAN/VLAN-10-only and host-restricted; the current `media` `public`
-  export must be tightened before enabling NFS.
-- The NFS CSI driver + `StorageClass` become a Fleet-managed cluster dependency.
-- Reusing `appdata` for PVCs (under a `/k8s` subpath) blurs Unraid's own docker appdata vs cluster data —
-  mitigated by the subpath; revisit a dedicated share if needed.
+- NFS is plaintext and host-restricted. Resolve protected media's latent public
+  export through a separately agreed approach before enabling NFS; do not
+  silently activate it or change media permissions under the storage work.
+- SMB CSI, private secret mappings and the StorageClass become Fleet-managed
+  cluster dependencies, subject to qualification on the existing Talos baseline.
+- Mixed `appdata` is the owner's selected model. Final per-app/PVC paths and
+  database compatibility require review; avoid simultaneous old/new writers.
+- SMB users govern authenticated SMB access; shared Kubernetes credentials are
+  not a strong per-application isolation boundary. Proxmox NFS has a separate
+  host/UID policy. Untouched media remains guest-readable under its current
+  SMB policy; do not claim denial without changing that explicit exception.
 
 See [`docs/guides/shared-storage.md`](../guides/shared-storage.md) and ROADMAP §4.

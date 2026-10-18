@@ -3,6 +3,19 @@
 Read-only capture of the Unraid settings (`/boot/config/*.cfg`) for IaC reference.
 Captured **2026-06-15** over SSH from `10.0.10.5` (Unraid 7.3.0).
 
+Owner-authorized update (2026-10-18): `sharefiles` was retired through Unraid's
+native handler after confirming no consumers. No files were present; its one
+empty recycle-bin directory was removed. Its snapshot/config inventory entry
+is removed; other share, disk and global settings were verified unchanged.
+The dated observations below remain historical, not a full fresh capture.
+
+At `2026-10-18T19:50:37Z`, the appdata snapshot was reconciled to accepted native
+Unraid changes: private SMB, preserved `d0ntblink` access and new non-login
+`k8s` write access. NAS-local SMB3 write/read and guest rejection pass. Native
+serialization omitted the obsolete disabled Fruit key and added an empty
+secondary-pool key; effective metadata/storage behavior was verified unchanged.
+No account password or database is captured in this snapshot.
+
 > **This is a sanitized reference snapshot, not an applied artifact.** Files here
 > are for diffing/authoring IaC. Nothing in this directory is pushed back to the NAS
 > automatically. See [`docs/guides/unraid-iac-plan.md`](../../docs/guides/unraid-iac-plan.md)
@@ -16,7 +29,7 @@ Captured `/boot/config` settings files only:
 | Group | Files |
 |-------|-------|
 | Top-level | `disk.cfg`, `docker.cfg`, `domain.cfg`, `editor.cfg`, `flash.cfg`, `ident.cfg`, `network.cfg`, `network-extra.cfg`, `network-rules.cfg`, `share.cfg`, `smb-extra.conf`, `go` |
-| Per-share | `shares/{appdata,backups,isos,media,sharefiles,system,vms}.cfg` |
+| Per-share | `shares/{appdata,backups,isos,media,system,vms}.cfg` |
 | Plugins | `plugins/**/*.cfg` (settings of installed plugins) |
 
 ## Security — what was redacted / excluded
@@ -46,7 +59,7 @@ Captured content was scanned (keyword + base64 sweeps) before saving. Handling:
 - `smb-extra.conf` is **empty** — clean slate for custom Samba shares.
 
 ### Per-share (`shares/*.cfg`)
-7 shares. Each declares `shareUseCache`, `shareCachePool`, `shareExport`,
+Originally 7 shares; 6 remain after the 2026-10-18 retirement. Each declares `shareUseCache`, `shareCachePool`, `shareExport`,
 `shareSecurity`, `shareWriteList`, NFS export fields. Example `appdata`:
 cache `only` on pool `ssd`, security `secure`, writelist `d0ntblink`.
 
