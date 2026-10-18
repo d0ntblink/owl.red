@@ -1,20 +1,32 @@
 # Technitium DNS + DHCP (LXC, GitOps-synced)
 
-**Approved handoff candidate (2026-10-17):** source intent now enables native,
-private and IoT DHCP with VLAN-local DNS/NTP; guest stays disabled. Publication
-and live activation are coordinated using the paused timer, retained lease map
-and independent host lock. The source manifest is not proof of live authority;
-require the [handoff acceptance](../../docs/guides/controller-setup.md#coordinated-vlan-dhcp-handoff).
-
 Technitium runs as a NixOS LXC on `edge.pve` and is authoritative for `owl.red`.
-Sole client DNS/DHCP service across five VLANs is the **post-cutover target**,
-not the observed deployment. Keep the accepted VyOS client DNS/DHCP authority until supporting
-VLAN paths and Technitium interfaces are ready and a coordinated handoff is
-approved. See the [execution order](../../ROADMAP.md#execution-order),
+The approved handoff is accepted: native/private/local-IoT/cloud-IoT scopes are
+enabled with explicit VLAN-local DNS/NTP, `/24` and 24-hour leases. VyOS DHCP
+is disabled and saved; its old DNS endpoint proxies through Technitium. Guest
+scope/SSID stays disabled and routing quarantined by owner choice.
+
+CT200 stage 4 has native management plus tagged 20/40/50/30, IPv4 and stable ULA
+DNS addresses. RA/SLAAC and dual-stack policy passed on all four client VLANs.
+Client and observer captures for 10/20/40/50 have matching synthetic MAC/XID,
+DISCOVER/OFFER, zero drops and only Technitium server IDs. Real disposable
+acquisition and forced renewal passed, then synthetic leases were released.
+The timer is active; SSH/admin is native-only. Talos resolvers now use only
+`.30`, and an existing application pod resolves internal, cluster and public
+names correctly. Client ports 53/853 are enforced in IPv4/IPv6; arbitrary DoH
+over HTTPS is not claimed blocked.
+
+Evidence: `~/.local/state/owl-red/technitium-vlan-final-azMB1X`.
+See the [handoff runbook](../../docs/guides/controller-setup.md#coordinated-vlan-dhcp-handoff),
+[owner checklist](../../docs/guides/vlan-client-migration.md),
+[execution order](../../ROADMAP.md#execution-order),
 [ADR 013](../../docs/decisions/013-technitium-single-resolver-all-vlans.md)
 for the selected target and revisitable trade-offs, and
 [ADR 010](../../docs/decisions/010-technitium-fleet-git-managed-dns.md) for the
 Git-managed DNS model.
+
+<details>
+<summary>Historical audit and staged DNS-path acceptance</summary>
 
 **Audit baseline (2026-10-14):** one untagged `10.0.10.30/24` NIC; VLAN 10 scope
 disabled, scopes 20-50 enabled, zero leases, and every scope reporting DNS
@@ -64,18 +76,21 @@ activation lock false and no UDP 67 listener. Client DNS/DHCP remains on VyOS;
 new DHCP wire-offer/renewal, guest and IPv6 acceptance are not claimed.
 Private evidence: `~/.local/state/owl-red/technitium-vlan-iot-OFZ7pw`.
 
+</details>
+
 ## Quick Reference
 
 | Item | Value |
 |------|-------|
 | Placement | NixOS LXC (VMID 200) on `edge.pve` (`10.0.10.3`) |
 | Hostname | `ns1.owl.red` |
-| DNS authority | `owl.red` authoritative zone now; target client DNS uses VLAN-local `10.0.x.30` after handoff |
+| DNS authority | `owl.red` authoritative zone and active client DNS through VLAN-local `10.0.x.30` |
 | Management IP (native, untagged) | `10.0.10.30` |
-| Accepted private VLAN-20 DNS path | `10.0.20.30`; not yet advertised to clients |
-| Accepted IoT VLAN-40/50 DNS paths | `10.0.40.30` / `10.0.50.30`; not yet advertised to clients |
+| Private VLAN-20 DNS | `10.0.20.30`, advertised through DHCP and ULA through RA |
+| IoT VLAN-40/50 DNS | `10.0.40.30` / `10.0.50.30`, advertised through DHCP and ULA through RA |
+| Guest VLAN-30 DNS | `10.0.30.30`; plumbing tested, DHCP/SSID disabled |
 | Web UI | `https://dns.owl.red` (Traefik ingress → `10.0.10.201`) |
-| DHCP authority | VyOS currently; all five Technitium scopes disabled until approved per-domain handoff |
+| DHCP authority | Technitium on 10/20/40/50; guest 30 disabled; VyOS Kea off |
 | DHCP ranges | `10.0.x.100–199` per VLAN |
 | Sync engine | `technitium-sync.service` + `.timer` (boot+3min, then every 15min) |
 | Sync source of truth | this directory (`gitops/technitium/`) |
@@ -92,8 +107,10 @@ it was replaced by the approved guard-only rollout, not a DHCP authority handoff
 |------|-------------|---------|
 | `settings.json` | `/api/settings/set` | Server settings (forwarders, recursion, DNSSEC, TTL) |
 | `zones/owl.red.zone` | `/api/zones/import` | Authoritative `owl.red` zone (BIND format) |
-| `dhcp/scopes.json` | Scope settings plus `/api/dhcp/scopes/disable`, `/enable`, `/list` | Explicit desired serving state; current transition intent is disabled for all five |
+| `dhcp/scopes.json` | Scope settings plus `/api/dhcp/scopes/disable`, `/enable`, `/list` | Explicit intent: 10/20/40/50 enabled, guest 30 disabled |
 | `dhcp-reservations.json` | `/api/dhcp/scopes/addReservedLease` | MAC registry → static leases (only `status: confirmed`, non-`TBD`) |
+| `dhcp/migration-leases.json` | Temporary reservations and expiry conversion | Preserve old addresses for 48 hours, then return active holds to dynamic |
+| `network.json` | Terraform initialization and native VyOS RA/policy | One shared ULA/delegation plan for the five VLAN allocations |
 
 `dynamicClients` in the registry is metadata for known devices that must remain
 on dynamic DHCP, not a second reservation list. Pending reservations also remain
@@ -125,11 +142,11 @@ intended records and inspect the live serial separately.
 
 ### Transition Safety
 
-- All five checked-in scopes now have `enabled: false`. Lifecycle is separate
+- Four checked-in scopes have `enabled: true`; guest 30 remains false. Lifecycle is separate
   from `scopes/set`: disable/enable calls require a matching `/list` read-back.
   Missing or non-boolean intent is rejected, not treated as an activation default.
-- Nix sets `DHCP_ENABLE_ALLOWED=false`. A future approved handoff needs both the
-  reviewed host lock lifted and explicit per-scope enabled intent in Git. The
+- Nix now explicitly sets `DHCP_ENABLE_ALLOWED=true` for the accepted handoff.
+  Activation requires both the reviewed host policy and enabled intent in Git. The
   lock rejects inconsistent enabled intent before API writes; it is not an
   emergency stop for scopes already serving. To turn a managed scope off, set
   its desired `enabled` state false and verify reconciliation.
@@ -157,7 +174,7 @@ intended records and inspect the live serial separately.
 
 | Layer | Owner |
 |-------|-------|
-| LXC lifecycle (staged target five NICs; observed four) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
+| LXC lifecycle (accepted five NICs, stage 4) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
 | OS + Technitium + sync service | NixOS — `nix/hosts/technitium/configuration.nix` |
 | Admin account, API token, first sync trigger | Ansible — `ansible/roles/technitium_lxc/`, played by `ansible/playbooks/deploy-technitium-lxc.yml` |
 | DNS / DHCP desired state | This directory |
@@ -380,8 +397,9 @@ Use the [capture controller](../../scripts/capture-dhcp-authority.mjs) with the
 [documented prerequisites](../../docs/guides/controller-setup.md#dhcp-packet-acceptance-requirements).
 It starts bounded, non-promiscuous captures at both the physical LAN client and
 Technitium's existing interface, then sends one Nmap DHCPDISCOVER only after both
-are ready. It never releases or accepts a lease or changes interface settings.
-The capture coordinator has seven network-free regression cases.
+are ready. It never accepts a lease. Optional accepted-VLAN mode uses a temporary
+self-cleaning cp1 namespace; native capture does not change interfaces.
+The capture coordinator has eight network-free regression cases.
 
 From the repository root, with one reviewed unused synthetic MAC retained in
 `probe_mac` and a new private evidence path in `output_dir`:
@@ -392,14 +410,14 @@ node scripts/capture-dhcp-authority.mjs \
   --observer-host 10.0.10.3 --container-id 200 --observer-interface eth0 \
   --identity "$HOME/.ssh/id_ed25519_owl_ansible" \
   --client-mac "${probe_mac:?select and retain one synthetic client MAC}" \
-  --expected-server 10.0.10.1 --forbidden-server 10.0.10.30 \
+  --expected-server 10.0.10.30 --forbidden-server 10.0.10.1 \
   --output-dir "${output_dir:?use a new private evidence directory}"
 ```
 
 An `EVIDENCE_READY_PACKET_REVIEW_REQUIRED` result is not a no-offer pass. Review
 the retained PCAPs with tcpdump, correlating the same synthetic client identity
-and transaction at both capture points. Require the OPNsense offer as a positive
-control and no Technitium offer. Silence or missing ingress visibility is
+and transaction at both capture points. For the current authority require only
+the expected Technitium offer and no VyOS offer. Silence or missing ingress visibility is
 inconclusive. Reuse the same MAC for the approved post-sync-unit-restart phase;
 restarting the DNS daemon or LXC is not implied. This checks the existing
 untagged LAN only, not unattached target VLANs or real-device renewal/handoff.

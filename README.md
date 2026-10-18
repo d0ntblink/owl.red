@@ -12,9 +12,11 @@ credentials and validation. Tool installation does not authorize infrastructure 
 
 ## Observed State (2026-10-14)
 
-Current update (2026-10-17 UTC): VyOS VM 103 is the active `/24` router and VM 102
-is the permanent isolated lab. The retired router VM, its 64-GB disk and installer
-ISO have been deleted. The dated audit below is historical, not live authority.
+Current update: VyOS VM 103 is the active dual-stack router and VM 102 remains
+the isolated lab. The accepted VLAN infrastructure now uses Technitium DHCP/DNS
+on native/20/40/50; guest stays disabled and management stays native. Onsite
+follow-ups are separate. The retired router VM/disk/ISO are gone; the audit
+below is historical, not current serving authority.
 
 The [live audit](docs/issues/008-live-state-vs-repository.md) distinguishes
 deployed state from the target tables below. All six PVE hosts, eight guests and
@@ -25,16 +27,15 @@ Gateway/pod DNS, Fleet convergence and management TLS still need correction;
 there was no shared-storage/PVC setup or registered PVE backup coverage.
 
 Follow the [roadmap execution order](ROADMAP.md#execution-order) and its
-change-scoped [acceptance gates](ROADMAP.md#stabilization-gates). Keep client
-DNS/DHCP on VyOS while preparing the network; handoff waits for supporting
-VLAN paths and Technitium interfaces plus an approved coordinated change. Resolve
-legacy `/16` overlap before routing the contained target `/24`s; management-mask
-contraction and management VLAN tagging are different steps.
+change-scoped [acceptance gates](ROADMAP.md#stabilization-gates). The approved
+Technitium handoff is complete, including real leases/renewals, dual-stack
+policy, Talos/pod DNS and final client DNS-port enforcement. Keep future device
+moves, physical filtering and management tagging in separately reviewed batches.
 
 Full NAS-data backups, PBS, unrelated Fleet/TLS repairs, storage and NAS VM/
 passthrough/disk changes are not network entry criteria. Preserve the working
 NAS and save only affected configuration/state with practical rollback access
-for network work. No live remediation is implied by this documentation update.
+for network work. Do not bundle storage/power changes into network follow-ups.
 
 ## Quick Reference
 
@@ -44,12 +45,14 @@ for network work. No live remediation is implied by this documentation update.
 |------|------|--------|---------|------|---------|
 | 10 | `network-devices` | `10.0.10.0/24` | `10.0.10.1` | Technitium `10.0.10.100-199` | Infrastructure management; known devices use MAC reservations |
 | 20 | `private-net` | `10.0.20.0/24` | `10.0.20.1` | Technitium `10.0.20.100-199` | Trusted wired and WiFi clients |
-| 30 | `guest-net` | `10.0.30.0/24` | `10.0.30.1` | Technitium `10.0.30.100-199` | Guest WiFi with captive portal |
+| 30 | `guest-net` | `10.0.30.0/24` | `10.0.30.1` | Disabled; reserved pool `10.0.30.100-199` | Guest plumbing quarantined; SSID off until portal |
 | 40 | `iot-no-inter` | `10.0.40.0/24` | `10.0.40.1` | Technitium `10.0.40.100-199` | IoT with local-only access |
 | 50 | `iot-with-inter` | `10.0.50.0/24` | `10.0.50.1` | Technitium `10.0.50.100-199` | IoT with internet, no lateral movement |
 
-These are target VLAN allocations, not proof of a completed network cutover. DHCP
-reservations do not configure switch-port or WiFi VLAN membership. The canonical
+The infrastructure scope is accepted: active DHCP on 10/20/40/50, dual-stack
+client paths, and native management retained. Device moves/RF checks remain in
+the [owner checklist](docs/guides/vlan-client-migration.md). DHCP reservations
+do not configure switch-port or WiFi VLAN membership. The canonical
 [DHCP registry](gitops/technitium/dhcp-reservations.json) and
 [scope definitions](gitops/technitium/dhcp/scopes.json) own the address plan.
 
@@ -57,7 +60,7 @@ reservations do not configure switch-port or WiFi VLAN membership. The canonical
 
 | IP | Hostname | Device | Purpose |
 |----|----------|--------|---------|
-| `10.0.10.1` | `edge.owl.red` | VyOS VM 103 | Active native-LAN gateway/firewall, interim DHCP/DNS; VLANs and guest portal remain planned |
+| `10.0.10.1` | `edge.owl.red` | VyOS VM 103 | Native/per-VLAN routing, firewall, NTP/RA; DHCP off, compatibility DNS through Technitium |
 | `10.0.10.2` | `switch.owl.red` | MikroTik CSS326 | Switch management |
 | `10.0.10.3` | `edge.pve.owl.red` | CSE-523L Proxmox | Router node PVE host |
 | `10.0.10.4` | `storage.pve.owl.red` | RSV-L4500U Proxmox | Storage node PVE host |
@@ -74,7 +77,7 @@ reservations do not configure switch-port or WiFi VLAN membership. The canonical
 | `10.0.10.24` | `worker1.k8s.owl.red` | Talos VM on worker1.pve | k8s worker node |
 | `10.0.10.31` | `pdm.owl.red` | PDM LXC 231 on cp1.pve | Proxmox Datacenter Manager; cp1-only HA affinity |
 | `10.0.10.33` | `pbs.owl.red` | PBS VM planned on storage.pve | Not yet provisioned |
-| `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | Recorded WAP management address; unreachable at audit |
+| `10.0.10.40` | `ap.owl.red` | DIR-885L OpenWrt | Accepted wired management; lightweight VLAN AP, no DNS/DHCP/portal compute |
 
 ### VLAN 20 Private Clients (target allocations)
 
@@ -196,8 +199,8 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 
 | Field | Value | Info |
 |-------|-------|------|
-| Chassis | RSV-L4500U (4U) | |
-| Platform | Supermicro X10SRi-F | LGA 2011 / Xeon |
+| Chassis | Rosewill RSV-L4500U (4U) | |
+| Platform | Supermicro X10SRi-F | LGA 2011 / Xeon E5-2620 v4 |
 | RAM | 32 GB | 4 × 8 GB |
 | Hypervisor | Proxmox VE | `storage.pve.owl.red` — `10.0.10.4` (bond0 via obnic0+obnic1) |
 | Unraid | VM 101 on storage.pve | `nas.owl.red` — `10.0.10.5`; Unraid 7.3.3, NFS disabled |
@@ -332,13 +335,20 @@ grant direct AP/Proxmox/NAS administration. A VLAN-20 probe verified ingress TLS
 and continued blocking of those tested management endpoints. Shared ingress
 hostnames still require their own application authentication and TLS policy.
 
+Accepted client VLANs have delegated IPv6 `/64`s plus stable ULA DNS from
+`fde4:cabf:d798::/48`. Private/cloud have verified IPv4/IPv6 internet; local IoT
+and guest cannot bypass their routed restrictions using IPv6. Client ports
+53/853 are enforced after DHCP/renewal and pod DNS acceptance; this is not an
+arbitrary-DoH-over-443 blocking claim. Management remains native/untagged by
+explicit owner choice; operator port 22 is unchanged.
+
 | Function | Primary Service | Endpoint | Notes |
 |----------|-----------------|----------|-------|
-| Routing and firewall | OPNsense | `10.0.10.1` and per-VLAN gateways | Default gateway and policy engine |
-| DHCP (target: all VLANs) | Technitium | Target multi-homed IPs | Live LXC has one NIC, VLAN 10 scope disabled, no leases; current client-serving authority needs authenticated verification |
+| Routing and firewall | VyOS VM 103 | `10.0.10.1` and per-VLAN gateways | Dual-stack policy, NTP and RA; guest quarantined |
+| DHCP | Technitium CT200 | VLAN-local `10.0.x.30` | 10/20/40/50 enabled and packet/renewal accepted; guest off; VyOS DHCP disabled |
 | Authoritative DNS | Technitium | Live `10.0.10.30` | LXC on edge.pve; Git sync via its systemd timer |
 | Ingress and TLS | Traefik + cert-manager | `10.0.10.201` | Internal ingress VIP for cluster web services; not a public origin endpoint |
-| Guest captive portal (target) | OPNsense | `https://captive.owl.red` | Hostname was NXDOMAIN at audit; portal configuration not authenticated/verified |
+| Guest captive portal (deferred) | Off-AP engine not selected | `https://captive.owl.red` | Separate milestone; guest DHCP/SSID remains disabled |
 
 ### DHCP and DNS Plan
 
@@ -346,13 +356,17 @@ hostnames still require their own application authentication and TLS policy.
 |------|----------------|-------|--------|-----|-------|
 | `10` | Technitium | `10.0.10.100-199` | `10.0.10.1` | `10.0.10.30` | Known infrastructure devices use reservations |
 | `20` | Technitium | `10.0.20.100-199` | `10.0.20.1` | `10.0.20.30` | Trusted wired and WiFi clients |
-| `30` | Technitium | `10.0.30.100-199` | `10.0.30.1` | `10.0.30.30` | Guest scope with captive portal signaling |
+| `30` | Disabled | Reserved `10.0.30.100-199` | `10.0.30.1` | `10.0.30.30` | Plumbing tested; no guest DHCP/SSID until portal |
 | `40` | Technitium | `10.0.40.100-199` | `10.0.40.1` | `10.0.40.30` | IoT local-only policy |
 | `50` | Technitium | `10.0.50.100-199` | `10.0.50.1` | `10.0.50.30` | IoT with internet, no lateral movement |
 
-Technitium is authoritative for `owl.red` on `10.0.10.30`; five VLAN-local
-interfaces are the target, not the audited live configuration. Its systemd timer
-pulls Git every 15 minutes and skips unchanged commits. All confirmed target
+Technitium now has five IPv4/ULA interfaces and the accepted four-scope serving
+state. Its systemd timer checks DHCP lifecycle even without a new Git SHA.
+Talos resolvers use only `.30`; existing-pod internal/cluster/public DNS passed
+after one-at-a-time CoreDNS pod replacement. The old router DNS endpoint remains
+a compatibility proxy, not an independent client DHCP authority.
+
+**Historical audit (superseded by accepted handoff):** all confirmed target
 reservations matched live, but there were no leases and VLAN 10's scope was
 disabled while the other scopes were enabled. Direct gateway queries returned
 NXDOMAIN for internal ingress names, and an existing pod received public answers
@@ -360,7 +374,7 @@ or ENOTFOUND. Preserve the OPNsense client path during preparation; final resolv
 handoff and enforcement are roadmap G2 work after network readiness, not before.
 Any interim resolver repair needs separate justification and rollback.
 
-Before attaching new Technitium NICs, prove explicit DHCP serving-state control;
+**Historical preparation note (now completed):** before attaching new Technitium NICs, prove explicit DHCP serving-state control;
 the prepared source now disables all scopes and adds verified lifecycle calls
 plus a default-locked Nix activation gate, but it has not been deployed. The
 old running script does not gain that behavior from a Git pull alone. Even a

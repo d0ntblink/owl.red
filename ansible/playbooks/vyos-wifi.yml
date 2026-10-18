@@ -60,7 +60,7 @@
     - name: Refuse collisions in the dual-stack VLAN ownership slice
       ansible.builtin.raw: |
         /bin/vbash -c '
-        {% for family, number, marker in [('ipv4', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv6', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv4', 6300, 'OWL-VLAN-GUEST-QUARANTINE'), ('ipv4', 2820, 'OWL-VLAN-PRIVATE-LOCAL-IOT'), ('ipv4', 2830, 'OWL-VLAN-CLOUD-MEDIA')] %}
+        {% for family, number, marker in [('ipv4', 90, 'OWL-VLAN-CLIENT-DNS-EGRESS'), ('ipv6', 90, 'OWL-VLAN-CLIENT-DNS-EGRESS'), ('ipv4', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv6', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv4', 6300, 'OWL-VLAN-GUEST-QUARANTINE'), ('ipv4', 2820, 'OWL-VLAN-PRIVATE-LOCAL-IOT'), ('ipv4', 2830, 'OWL-VLAN-CLOUD-MEDIA')] %}
         if /bin/cli-shell-api existsActive firewall {{ family }} forward filter rule {{ number }}; then
           [[ $(/bin/cli-shell-api returnActiveValue firewall {{ family }} forward filter rule {{ number }} description) == {{ marker }} ]] || builtin exit 1
         fi
