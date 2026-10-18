@@ -486,10 +486,14 @@ DHCP/SSID activation and off-AP portal deployment remain a separate milestone.
 
 ## 3. Remote Access — Tailscale
 
-Audit baseline: Tailscale is online on the NAS, but MagicDNS is disabled. This
-does not prove management-subnet routing, split-DNS, or an exit-node design.
+Read-only refresh (2026-10-18): NAS Tailscale 1.104.1 is online and already
+advertises exit-node routes `0.0.0.0/0` and `::/0`. It advertises no management
+subnet route; MagicDNS, accepted DNS and accepted routes are disabled. No peers
+were online during this observation. This is not outside-network acceptance or
+permission to change NAS networking. Private evidence:
+`~/.local/state/owl-red/tailscale-audit-wzwgsY/summary.json`.
 
-- `[ ]` Review whether an additional exit node is needed beyond the running NAS connector; choose a supported placement without requiring an OPNsense plugin or bundling it into the router swap
+- `[~]` Reuse the existing NAS exit-node capability unless independent availability is explicitly required; no duplicate exit node is needed merely for internet egress. Management-subnet routing, tailnet access policy and split-DNS still need their own reviewed configuration and remote-client acceptance.
 - `[ ]` Deploy Tailscale on chosen host
 - `[ ]` Confirm `owl.red` split-DNS via Tailscale MagicDNS or override to Technitium
 - `[ ]` Verify VLAN 10 services reachable over Tailscale from outside network
@@ -657,10 +661,11 @@ mail-server operations; it does not remove other services' storage requirements.
 
 ### 12.2 Domain And IaC Setup
 - `[ ]` Choose individual automated sender identities and confirm account/plan limits; do not onboard optional `0v0.zip` without its own selection
-- `[~]` Prepare [the isolated Mailgun root](terraform/mailgun/README.md): pinned provider 0.10.0, `owl.red`/US, protected lifecycle, 2048-bit DKIM and tracking disabled. Actual provider validation passes; authenticated plan/apply and public-DNS adoption remain pending
+- `[x]` Provision `owl.red` in Mailgun US through [the isolated Mailgun root](terraform/mailgun/README.md): pinned provider 0.10.0, protected lifecycle, 2048-bit DKIM and tracking disabled. Authenticated one-resource plan/apply passed; DNS and delivery acceptance are separate
+- `[~]` Move public DNS ownership to private [d0ntblink/cloudflare-iac](https://github.com/d0ntblink/cloudflare-iac), initially `zones/owl.red` only. Standalone provider/CI validation and the identical two-record SPF/DKIM plan pass; no DNS apply yet. Explicit public inputs replace local cross-repository state access; the duplicate homelab DNS root is retired
 - `[ ]` Configure and verify Mailgun's supplied SPF/DKIM records and the intended DMARC policy; reconcile existing records rather than publishing a second SPF policy
 - `[ ]` Preserve existing mailbox MX records. Add Mailgun receiving records/routes only for a separately approved receiving domain and destination; sending setup alone does not authorize an MX cutover
-- `[ ]` Store scoped SMTP/API credentials in Bitwarden Secrets Manager and reference them through the existing workload-secret workflow; no credentials in Git, logs or command arguments
+- `[~]` Mailgun and zone-scoped Cloudflare provider credentials are available in Bitwarden Secrets Manager and injected privately. Per-application SMTP/sending credentials and workload-secret wiring remain pending; no credential values belong in Git, logs or CLI arguments
 - `[ ]` Document required outbound HTTPS API or authenticated TLS SMTP connectivity; do not expose inbound port 25 or add a local mail workload
 
 ### 12.3 Application Delivery And Personal-Mail Cutover
