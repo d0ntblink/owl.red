@@ -641,35 +641,35 @@ Personal/family file storage migration. Infrastructure-adjacent — needs to be 
 
 ---
 
-## 12. Mail — Self-Hosted `@owl.red` Mail Server
+## 12. Mail - Mailgun
 
-Hosted mail for `owl.red` users. Also a dependency for any service that needs to send email (HA alerts, cluster notifications, etc.).
+Mailgun is the selected managed email-delivery service. No local mail-server
+workload, mailbox PVC, inbound SMTP listener or mail-specific certificate is
+planned. This removes the mail-delivery dependency on shared storage and local
+mail-server operations; it does not remove other services' storage requirements.
 
-### 12.1 Evaluate Proton Mail Replacement
-- `[ ]` Options:
-  - **Self-hosted**: Stalwart Mail (modern, all-in-one SMTP/IMAP/JMAP) — fits k8s well
-  - **Self-hosted**: Maddy — minimal, single binary
-  - **Managed**: Fastmail, Migadu — no infra overhead
-  - **Recommendation**: Stalwart on k8s for full control; Migadu if ops burden is a concern
-- `[ ]` Decide and document in `docs/decisions/`
+### 12.1 Provider And Scope
+- `[x]` Select Mailgun instead of a local mail stack (owner decision, 2026-10-18)
+- `[x]` Confirm Mailgun account ready in the US region and `owl.red` itself selected for automated sender addresses; `0v0.zip` is optional, and only `khodayari.info` / `d0ntb.link` are personal-mail domains
+- `crucialmentis.com` is explicitly outside this project's DNS/mail scope.
+- `[x]` Record [ADR 017](docs/decisions/017-mailgun.md), including the isolated Terraform owner and the separate personal-mailbox boundary
+- Proton replacement is required for `khodayari.info` and `d0ntb.link`. Mailgun supplies sending/inbound routes, not hosted IMAP/JMAP inboxes; choose the actual mailbox provider or forwarding destination before MX changes. Keep existing delivery working during the verified cutover, not as the final design.
 
-### 12.2 Deploy Mail Server (if self-hosted)
-- `[ ]` Requires: Cloudflare tunnel or open port 25 inbound (or smart relay via Mailgun/SES for outbound)
-- `[ ]` Provision persistent volume for mail store (NFS StorageClass — see milestone 4)
-- `[ ]` TLS cert for `mail.owl.red` via cert-manager
-- `[ ]` Cloudflare DNS: MX record → `mail.owl.red`, SPF TXT, DKIM TXT, DMARC TXT
-- `[ ]` Create user accounts for all `owl.red` users
-- `[ ]` Test send + receive, DKIM signing, spam score (mail-tester.com)
-- `[ ]` Configure services to relay through mail server:
-  - Home Assistant notifications
-  - Cluster alerting (Alertmanager)
-  - Any app needing SMTP
+### 12.2 Domain And IaC Setup
+- `[ ]` Choose individual automated sender identities and confirm account/plan limits; do not onboard optional `0v0.zip` without its own selection
+- `[~]` Prepare [the isolated Mailgun root](terraform/mailgun/README.md): pinned provider 0.10.0, `owl.red`/US, protected lifecycle, 2048-bit DKIM and tracking disabled. Actual provider validation passes; authenticated plan/apply and public-DNS adoption remain pending
+- `[ ]` Configure and verify Mailgun's supplied SPF/DKIM records and the intended DMARC policy; reconcile existing records rather than publishing a second SPF policy
+- `[ ]` Preserve existing mailbox MX records. Add Mailgun receiving records/routes only for a separately approved receiving domain and destination; sending setup alone does not authorize an MX cutover
+- `[ ]` Store scoped SMTP/API credentials in Bitwarden Secrets Manager and reference them through the existing workload-secret workflow; no credentials in Git, logs or command arguments
+- `[ ]` Document required outbound HTTPS API or authenticated TLS SMTP connectivity; do not expose inbound port 25 or add a local mail workload
 
-### 12.3 Migrate from Proton Mail
-- `[ ]` Export Proton Mail messages (use Proton Mail Bridge + `imapsync` or `mbsync`)
-- `[ ]` Import into new mail server
-- `[ ]` Update MX records to point at new server
-- `[ ]` Monitor for 30 days, keep Proton active during transition
+### 12.3 Application Delivery And Personal-Mail Cutover
+- `[ ]` Configure Home Assistant notifications, Alertmanager and other SMTP/API consumers through their existing IaC owners
+- `[ ]` Verify domain authentication, sender/reply-to identities and an actual delivered notification; inspect provider delivery/bounce events
+- `[ ]` Configure bounce/complaint handling, sending limits and credential rotation; verify retry/failure behavior without turning alerts into an email loop
+- `[ ]` Select and test the replacement inbox provider or inbound forwarding destination for `khodayari.info` and `d0ntb.link`, including aliases, replies and authenticated sending
+- `[ ]` Preserve/export required Proton messages and verify the chosen replacement's import/retention path; Mailgun itself is not an archive or mailbox migration target
+- `[ ]` Change only the approved personal-domain MX records after receive/send tests, monitor delivery, and retire Proton only after acceptance
 
 ---
 
@@ -760,11 +760,11 @@ Do this last — docs written after everything is running are accurate.
 - `[ ]` `storage-setup.md` — NFS share → CSI driver → StorageClass → PVC workflow
 - `[ ]` `cert-manager.md` — wildcard cert workflow, how LXCs get certs
 - `[ ]` `tailscale.md` — how to connect, what's exposed, split-DNS setup
-- `[ ]` `mail-server.md` — user creation, SMTP relay config for services
+- `[~]` Mailgun requirements/import/DNS gates are documented in [the module runbook](terraform/mailgun/README.md); service credential wiring and delivered-notification troubleshooting remain pending deployment
 
 ### 15.2 Decisions (create in `docs/decisions/`)
 - `[x]` `016-opnsense-terraform.md` — historical OPNsense Terraform/manual-floor decision; superseded for the target router by ADR 022, retained for interim ownership
-- `[ ]` `017-mail-server-choice.md` — Stalwart vs. Migadu decision
+- `[x]` [017-mailgun.md](docs/decisions/017-mailgun.md) - Mailgun US / `owl.red` automation and the separate personal-mailbox replacement
 - `[x]` `018-storage-backend.md` — NFS-from-NAS now, Longhorn later (created 2026-06-18)
 - `[ ]` `019-tailscale-vs-vpn.md` — why Tailscale over WireGuard/OpenVPN
 - `[x]` `021-unraid-hybrid-iac.md` — hybrid API/File/Manual IaC for the Unraid NAS (done 2026-06-18)
@@ -844,6 +844,6 @@ Functionally identical stratum-1; trades ~$45 for soldering/wiring + less tidy.
 - **Unraid VM placement**: already VM 101 on storage.pve with GPU/HBA/NIC passthrough. Shared-storage rollout and any later Plex migration are separate work, not a pending conversion from bare metal.
 - **Tailscale before captive portal**: Tailscale gives a reliable admin path if the captive portal breaks VLAN 30 routing during testing.
 - **Home Assistant mDNS**: this is the hardest part. IoT device auto-discovery requires multicast to reach HA across VLANs. Plan this before deploying HA.
-- **Mail inbound delivery**: port 25 inbound is blocked by most residential ISPs. Use Cloudflare Email Routing to receive and relay to self-hosted SMTP, or use a VPS SMTP relay with `cloudflared` for the web UI.
+- **Mail delivery**: Mailgun US for automated `owl.red` email; `0v0.zip` is optional. Replace Proton for personal `khodayari.info` / `d0ntb.link` only after selecting/testing their actual receiving/inbox destination; Mailgun does not host IMAP/JMAP inboxes. No local mail workload or inbound SMTP exposure. Ignore `crucialmentis.com` in this project.
 - **draw.io vs. Visio**: draw.io is free, cross-platform, exports editable XML committed to git. Prefer it over Visio unless you already have a license.
 - **Terraform import order**: author matching resource configuration, import the existing guest, then reconcile to a no-op plan before apply. Only genuinely new guests use the create path; never recreate a protected production guest to sidestep import.
