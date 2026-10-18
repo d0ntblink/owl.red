@@ -275,13 +275,16 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 ### 1.1 VLAN Steering on WAP (`ap.owl.red`)
 - `[x]` Complete the known-client target allocation registry (2026-10-14): workstation, LG phone, Shield and WUUK cameras have reservations/DNS; tablet is pending target-SSID MAC; work laptop remains dynamic. No live VLAN cutover performed.
-- `[!]` Restore/identify the AP uplink before SSID inspection: port 18 had no link and `10.0.10.40` was unreachable in the 2026-10-14 audit
-- `[ ]` Log into OpenWrt on `10.0.10.40`
-- `[ ]` Confirm SSID → VLAN bridge mappings:
+- `[x]` Rebuild the verified DIR-885L/OpenWrt 25.12.2 as a lightweight VLAN AP through [Ansible/native UCI](ansible/playbooks/openwrt-ap.yml) and [the versioned controller entry point](scripts/openwrt-run.mjs). Permanent wired management is now `https://10.0.10.40` through SW18, native management VLAN 1 and `/24`; LAN4 is the physical management recovery port. The old Wi-Fi `10.10.20.1` path is retired. Native timed trial/verification/confirmation passed; the final source comparison and service finish are idempotent. Private recovery/evidence: `~/.local/state/owl-red/openwrt-rebuild-eyuSab`.
+- `[x]` Retain the initial failed-verification history: the first network trial automatically rolled back while an unsupported runtime API check was corrected. The owner restored Wi-Fi; final acceptance uses native UCI for configuration and existing pinned SSH for runtime, with no extra AP package. No whole-device reset or untracked LuCI edits were used.
+- `[x]` Confirm configured SSID → VLAN bridge mappings and active radio state:
   - `owl.red` → VLAN 20 (`private-net`)
-  - `silence of the lans` → VLAN 30 (`guest-net`)
-  - IoT → explicit VLAN 40 or VLAN 50 membership decided below
-- `[ ]` Prefer separate IoT SSIDs (`owl.red-iot-local` VLAN 40, `owl.red-iot-cloud` VLAN 50) unless the actual OpenWrt/radio build proves a supported per-device/per-credential dynamic VLAN mechanism. A single SSID plus OPNsense MAC-based DHCP reservations does not assign Layer-2 VLAN membership. Record the chosen trade-off before changing SSIDs.
+  - `silence of the lans` → VLAN 30 (`guest-net`), disabled until external portal enforcement is ready
+  - `owl.red-iot-local` → VLAN 40; `owl.red-iot-cloud` → VLAN 50, active on 2.4 GHz with separate credentials
+- `[x]` Select explicit separate IoT SSIDs, not a single ambiguous SSID with DHCP-based VLAN assumptions. Private is active on both bands; the target respects the hardware's four-BSS-per-radio limit. Wi-Fi keys are in the four named `owl-red-wifi-*` Password Manager items, not Git.
+- `[x]` Verify the no-compute runtime: local DNS/DHCP/RA, OpenNDS, firewall and IPv4/IPv6 forwarding are stopped/disabled; enabled VLAN DHCP/DNS/NTP and policy run on VyOS. Driver-reported transmit power is 8 dBm at 2.4 GHz and 12 dBm at 5 GHz. No new AP daemon/package or firmware flash was introduced.
+- `[x]` Accept real wireless operation without repeating completed tests: private `owl.red` completed WPA authorization, reserved `10.0.20.10/24`, correct internal DNS and verified HTTPS explicitly bound to Wi-Fi. Both IoT WPA handshakes were observed; the owner subsequently confirmed the updated cloud-IoT key works. Evidence: `~/.local/state/owl-red/openwrt-rebuild-auth-1dUNpQ/client-test.json` and the accepted rotation record. No further password/client retest is an entry gate for the next scoped task.
+- `[ ]` Verify the weakest normal-use apartment locations, exterior signal spill, additional client types and IPv6. A 900-sq-ft floor area or one working client is not a measured RF boundary.
 - `[ ]` After Phase 1.5's overlap, path and service-authority checks, move known private clients in small batches:
   - `w1ngz.owl.red` → `10.0.20.10`
   - `paranoid-android.owl.red` → `10.0.20.11`
@@ -306,7 +309,7 @@ completion of unrelated dashboard certificates or every Fleet repair.
 - `[x]` Qualify the native VLAN-20 overlay on isolated lab VM 102 (2026-10-17) through [the opt-in lab playbook](ansible/playbooks/vyos-vlan-lab.yml) and [source profile](vyos/baseline.yml). Native commit/save and rerun comparison pass; `eth1.20` is `.20.1/24`, original `.192.0.2.1` management remains reachable, the four compiled input/forwarding rule IDs exist, and DNS on the new gateway returns synthetic NAS `.192.0.2.5`. Four focused offline tests pass, including early refusal of production targets. This is not a physical-path, packet-isolation, WAN, DHCP or IPv6 qualification; no production activation occurred.
 - `[ ]` Save the SwOS configuration privately and test a designated physical recovery/access port before changing filtering or management VLAN. CSS326 has no serial console; reset is disruptive last-resort recovery, not an ordinary rollback.
 - `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
-- `[ ]` Confirm the actual AP trunk carries VLANs 20/30/40/50 to the matching router paths without disrupting legacy management. SW18 is a recorded location to verify, not proof of current cabling.
+- `[~]` AP trunk is staged with native management unchanged, VLAN 20 members `[2,18,25]` and VLANs 40/50 members `[18,25]`, learning enabled. Temporary wired test memberships were removed after all three gateway policies passed. Wired AP management and active SSID-to-VLAN runtime pass; guest VLAN 30 remains disabled and over-air client tests are next.
 
 ### 1.3 VyOS VLAN Firewall Rules
 - **Requires:** Phase 0.6 router acceptance; all target rules remain inactive during the parity replacement
@@ -320,8 +323,10 @@ completion of unrelated dashboard certificates or every Fleet repair.
 
 **Current baseline (2026-10-17):** fresh native reads confirm VyOS `eth1` at
 `10.0.10.1/24`, its native-LAN route, a WAN default route and active DHCP/DNS.
-The accepted wired pilot additionally routes VLAN 20 as `10.0.20.1/24`, without
-a DHCP scope or real-client migration. The retired router's saved `/24`
+The accepted AP support now routes VLANs 20/40/50 with gateway `.1`, interim
+VyOS DHCP `.100-.199`, canonical confirmed reservations, DNS/NTP and qualified
+wired private/local-only/cloud policy. Technitium scope activation/handoff and
+real wireless-client acceptance remain separate. The retired router's saved `/24`
 transaction is historical, not a pending operation or restart prerequisite.
 
 Accepted host/client changes already cover all six PVE addresses (edge `.3`,

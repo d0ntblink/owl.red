@@ -1,0 +1,109 @@
+---
+- name: Stage only the declared off-AP Wi-Fi gateway services
+  hosts: "{{ openwrt_gateway_target | default('edge_lab') }}"
+  gather_facts: false
+  vars_files:
+    - ../inventory/group_vars/aps.yml
+  vars:
+    openwrt_apply_allowed: false
+    openwrt_gateway_phase: trial
+    openwrt_target_registry: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/dhcp-reservations.json') | from_json }}"
+    openwrt_gateway_commands: "{{ lookup('template', playbook_dir ~ '/../templates/vyos-wifi-services.j2') }}"
+  tasks:
+    - name: Require explicit gateway scope and the accepted AP allocation
+      ansible.builtin.assert:
+        that:
+          - openwrt_apply_allowed | bool
+          - inventory_hostname in ['edge_lab', 'edge_router']
+          - (inventory_hostname == 'edge_lab' and vm_id | int == 102) or (inventory_hostname == 'edge_router' and vm_id | int == 103)
+          - openwrt_gateway_phase in ['trial', 'confirm']
+          - openwrt_wifi_networks.guest.enabled is sameas false
+          - openwrt_wifi_networks.private.vlan | int == 20
+          - openwrt_wifi_networks.iot_local.vlan | int == 40
+          - openwrt_wifi_networks.iot_cloud.vlan | int == 50
+
+    - name: Refuse collisions with non-owned gateway nodes
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        [[ $(hostname) == {{ 'edge-lab' if inventory_hostname == 'edge_lab' else 'edge' }} ]] || builtin exit 1
+        /bin/cli-shell-api existsActive interfaces ethernet eth1 vif 20 || builtin exit 1
+        /bin/cli-shell-api existsActive firewall group network-group OWL_VLAN20_NONPUBLIC || builtin exit 1
+        {% for name, network in openwrt_wifi_networks.items() if network.enabled %}
+        {% if network.vlan != 20 %}
+        if /bin/cli-shell-api existsActive interfaces ethernet eth1 vif {{ network.vlan }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue interfaces ethernet eth1 vif {{ network.vlan }} description) == OWL-WIFI-{{ network.vlan }} ]] || builtin exit 1
+        fi
+        {% endif %}
+        if /bin/cli-shell-api existsActive service dhcp-server shared-network-name WIFI_{{ name | upper }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue service dhcp-server shared-network-name WIFI_{{ name | upper }} description) == OWL-WIFI-{{ network.vlan }} ]] || builtin exit 1
+        fi
+        {% endfor %}
+        '
+      changed_when: false
+
+    - name: Retain the actual gateway boot configuration privately
+      ansible.builtin.raw: sudo -n cat /config/config.boot
+      register: openwrt_gateway_before
+      changed_when: false
+      no_log: true
+      when: openwrt_gateway_phase == 'trial'
+
+    - name: Preserve the private gateway recovery preimage
+      ansible.builtin.copy:
+        content: "{{ openwrt_gateway_before.stdout }}"
+        dest: "{{ openwrt_recovery_directory }}/{{ inventory_hostname }}-before.config.boot"
+        mode: "0600"
+      delegate_to: localhost
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      no_log: true
+      when: openwrt_gateway_phase == 'trial'
+
+    - name: Stage and trial the declared services under native timed rollback
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        {% if inventory_hostname == 'edge_lab' %}
+        confirm >/dev/null 2>&1 || true
+        {% endif %}
+        {{ openwrt_gateway_commands }} || builtin exit 1
+        if /bin/cli-shell-api sessionChanged; then
+          commit-confirm 10 no-prompt || builtin exit 1
+          if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+          printf "OWL_WIFI_GATEWAY_TRIAL\n"
+        else
+          printf "OWL_WIFI_GATEWAY_UNCHANGED\n"
+        fi
+        exit
+        '
+      register: openwrt_gateway_trial
+      changed_when: "'OWL_WIFI_GATEWAY_TRIAL' in openwrt_gateway_trial.stdout"
+      failed_when: >-
+        openwrt_gateway_trial.rc != 0 or 'Set failed' in openwrt_gateway_trial.stdout or
+        'Commit failed' in openwrt_gateway_trial.stdout or 'OWL_WIFI_GATEWAY_' not in openwrt_gateway_trial.stdout
+      when: openwrt_gateway_phase == 'trial'
+
+    - name: Confirm gateway services only after their acceptance
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        confirm || builtin exit 1
+        save /config/config.boot || builtin exit 1
+        exit
+        '
+      when: openwrt_gateway_phase == 'confirm'
+
+    - name: Verify actual native services and new gateway addresses
+      ansible.builtin.raw: |
+        ip -j -4 address show dev eth1.40 &&
+        ip -j -4 address show dev eth1.50 &&
+        systemctl is-active isc-kea-dhcp4-server.service pdns-recursor.service chrony.service
+      register: openwrt_gateway_runtime
+      changed_when: false
+      failed_when: >-
+        openwrt_gateway_runtime.rc != 0 or
+        '10.0.40.1' not in openwrt_gateway_runtime.stdout or
+        '10.0.50.1' not in openwrt_gateway_runtime.stdout

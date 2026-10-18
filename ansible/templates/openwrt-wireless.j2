@@ -1,0 +1,26 @@
+{% for name, radio in openwrt_radio_profiles.items() %}
+config wifi-device '{{ name }}'
+        option type 'mac80211'
+        option path '{{ radio.path }}'
+        option band '{{ radio.band }}'
+        option channel '{{ radio.channel }}'
+        option htmode '{{ radio.htmode }}'
+        option country '{{ radio.country }}'
+        option txpower '{{ radio.txpower }}'
+        option disabled '0'
+
+{% endfor %}
+{% for name, network in openwrt_wifi_networks.items() %}
+{% for radio in network.radios %}
+config wifi-iface '{{ name }}_{{ radio }}'
+        option device '{{ radio }}'
+        option mode 'ap'
+        option network '{{ name }}'
+        option ssid {{ network.ssid | quote }}
+        option encryption 'psk2+ccmp'
+        option key {{ openwrt_wifi_keys[network.key_source] | quote }}
+        option isolate '{{ network.isolate | int }}'
+        option disabled '{{ (not network.enabled) | int }}'
+
+{% endfor %}
+{% endfor %}

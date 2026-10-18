@@ -224,13 +224,16 @@ CSS326 front numbering is staggered by column: top row is even ports, bottom row
 | Model | D-Link DIR-885L (OpenWrt) |
 | Management IP | `10.0.10.40` (`ap.owl.red`) |
 | Management MAC | `10:be:f5:d9:1e:37` |
-| Uplink | Recorded `SW18` via `PP33`; target trunk VLANs `10/20/30/40/50`, but no link at audit |
+| Uplink | `SW18` via `PP33`; native management retained, tagged VLANs `20/40/50`, guest activation deferred |
+| Mode | Lightweight Layer-2 AP; DHCP/DNS/routing/filtering on VyOS, no local portal or compute services |
+| Power | Verified 8 dBm at 2.4 GHz, 12 dBm at 5 GHz; apartment coverage still needs a client walk-test |
 
 | Target SSID | Target VLAN | Notes |
 |------|------|-------|
-| `owl.red` | `20` | Trusted clients |
-| `silence of the lans` | `30` | Guest clients behind captive portal |
-| `owl.red-iot` | `40` or `50` | IoT segment depending device policy |
+| `owl.red` | `20` | Active on 2.4/5 GHz; key in Bitwarden `owl-red-wifi-private` |
+| `silence of the lans` | `30` | Disabled until external captive-portal enforcement is ready |
+| `owl.red-iot-local` | `40` | Active on 2.4 GHz; no internet, isolated clients |
+| `owl.red-iot-cloud` | `50` | Active on 2.4 GHz; internet without private-network forwarding |
 
 ### Compute Nodes : Lenovo ThinkCentre M73 (×4)
 
