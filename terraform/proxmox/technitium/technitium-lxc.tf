@@ -4,15 +4,18 @@
 # Single-node LXC multi-homed to all VLANs.
 # HA failover added when shared storage is available.
 #
-# Network layout: 5 NICs, each bridged to vmbr0 with specific vlan_id.
-# This allows Technitium to receive L2 broadcast (DHCP) natively on every subnet
-# and serves DNS directly via local VLAN IP without crossing the router firewall.
+# Network layout: preserve the accepted native management NIC; attach reviewed
+# tagged interfaces incrementally through technitium_vlan_stage. DHCP activation
+# is separately guarded and is not implied by attaching a network interface.
 #
 # Prerequisites (before terraform apply):
-#   1. Debian 12 LXC template downloaded on edge.pve:
-#      pveam update && pveam download local debian-12-standard_12.7-1_amd64.tar.zst
+#   1. The declared NixOS LXC template is available on edge.pve.
 #   2. 10.0.10.30 must be free (MetalLB technitium pool removed — already done)
 # ---------------------------------------------------------------------------
+
+locals {
+  technitium_attached_vlans = slice([20, 40, 50, 30], 0, var.technitium_vlan_stage)
+}
 
 resource "proxmox_virtual_environment_container" "technitium" {
   node_name   = "edge"
@@ -30,10 +33,11 @@ resource "proxmox_virtual_environment_container" "technitium" {
     # During bootstrap Technitium cannot resolve itself — use public fallback.
     # After first-boot configuration, Technitium serves its own DNS.
     dns {
+      domain  = " "
       servers = ["1.1.1.1", "8.8.8.8"]
     }
 
-    # eth0 — VLAN 10 (Management & Infra)
+    # eth0 — native management, unchanged until its separate tagging transition
     ip_config {
       ipv4 {
         address = "10.0.10.30/24"
@@ -41,24 +45,13 @@ resource "proxmox_virtual_environment_container" "technitium" {
       }
     }
 
-    # eth1 — VLAN 20 (Private)
-    ip_config {
-      ipv4 { address = "10.0.20.30/24" }
-    }
-
-    # eth2 — VLAN 30 (Guest)
-    ip_config {
-      ipv4 { address = "10.0.30.30/24" }
-    }
-
-    # eth3 — VLAN 40 (IoT No-Inter)
-    ip_config {
-      ipv4 { address = "10.0.40.30/24" }
-    }
-
-    # eth4 — VLAN 50 (IoT With-Inter)
-    ip_config {
-      ipv4 { address = "10.0.50.30/24" }
+    dynamic "ip_config" {
+      for_each = local.technitium_attached_vlans
+      content {
+        ipv4 {
+          address = "10.0.${ip_config.value}.30/24"
+        }
+      }
     }
   }
 
@@ -79,29 +72,17 @@ resource "proxmox_virtual_environment_container" "technitium" {
 
   # Native VLAN bridging — LXC sits directly on all subnets
   network_interface {
-    name    = "eth0"
-    bridge  = "vmbr0"
-    vlan_id = 10
+    name        = "eth0"
+    bridge      = "vmbr0"
+    mac_address = "BC:24:11:D4:5B:7B"
   }
-  network_interface {
-    name    = "eth1"
-    bridge  = "vmbr0"
-    vlan_id = 20
-  }
-  network_interface {
-    name    = "eth2"
-    bridge  = "vmbr0"
-    vlan_id = 30
-  }
-  network_interface {
-    name    = "eth3"
-    bridge  = "vmbr0"
-    vlan_id = 40
-  }
-  network_interface {
-    name    = "eth4"
-    bridge  = "vmbr0"
-    vlan_id = 50
+  dynamic "network_interface" {
+    for_each = local.technitium_attached_vlans
+    content {
+      name    = "eth${network_interface.key + 1}"
+      bridge  = "vmbr0"
+      vlan_id = network_interface.value
+    }
   }
 
   operating_system {
@@ -112,5 +93,9 @@ resource "proxmox_virtual_environment_container" "technitium" {
 
   features {
     nesting = true
+  }
+
+  lifecycle {
+    prevent_destroy = true
   }
 }

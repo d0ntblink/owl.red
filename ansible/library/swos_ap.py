@@ -14,16 +14,20 @@ from swos.platform import PlatformType
 
 
 def desired_table(table, declared):
-    allowed = {20: [2, 18, 25], 40: [18, 25], 50: [18, 25]}
-    if {int(key): value for key, value in declared.items()} != allowed:
-        raise ValueError("Only the reviewed AP trunk and retained cp1 pilot membership is allowed")
+    base = {20: [2, 18, 25], 40: [18, 25], 50: [18, 25]}
+    attached = {20: [2, 18, 24, 25], 40: [18, 25], 50: [18, 25]}
+    local_iot = {**attached, 40: [18, 24, 25]}
+    active_iot = {**local_iot, 50: [18, 24, 25]}
+    allowed = {int(key): value for key, value in declared.items()}
+    if allowed not in (base, attached, local_iot, active_iot):
+        raise ValueError("Only the reviewed AP, DNS trunk and retained cp1 membership is allowed")
     result = copy.deepcopy(table)
     for vlan, members in allowed.items():
         matches = [row for row in result if row["vlan_id"] == vlan]
         if len(matches) != 1:
             raise ValueError("Missing or duplicate target switch VLAN")
-        prior = [2, 25] if vlan == 20 else [5]
-        if sorted(matches[0]["member_ports"]) not in (prior, members):
+        prior = ([2, 25], base[20], attached[20]) if vlan == 20 else ([5], base[vlan], active_iot[vlan])
+        if sorted(matches[0]["member_ports"]) not in prior:
             raise ValueError("Unexpected AP VLAN membership; refusing overwrite")
         matches[0]["member_ports"] = members
         matches[0]["learning"] = True
@@ -34,7 +38,7 @@ def test_table(table, declared):
     result = desired_table(table, declared)
     for row in result:
         if row["vlan_id"] in [40, 50]:
-            row["member_ports"] = [2, 18, 25]
+            row["member_ports"] = sorted(set(row["member_ports"]) | {2})
     return result
 
 
@@ -47,7 +51,7 @@ def main():
     }, supports_check_mode=True)
     params = module.params
     directory = Path(params["recovery_directory"]).resolve()
-    if directory.parent != Path.home() / ".local/state/owl-red" or not directory.name.startswith("openwrt-rebuild-") or not directory.is_dir():
+    if directory.parent != Path.home() / ".local/state/owl-red" or not directory.name.startswith(("openwrt-rebuild-", "technitium-vlan-")) or not directory.is_dir():
         module.fail_json(msg="An existing private AP rebuild recovery directory is required")
     if not params["password"]:
         module.fail_json(msg="The existing Bitwarden switch login is required")
@@ -62,7 +66,7 @@ def main():
         ports, native = get_links(*args), get_port_vlans(*args)
         if len(ports) != 26 or len(native) != 26:
             raise ValueError("Incomplete switch response")
-        for number, name in [(2, "cp1.pve"), (18, "ap.owl.red"), (22, "cab-trunk"), (25, "sfp1-vyos")]:
+        for number, name in [(2, "cp1.pve"), (18, "ap.owl.red"), (22, "cab-trunk"), (24, "edge.pve-mgmt"), (25, "sfp1-vyos")]:
             port, vlan = ports[number - 1], native[number - 1]
             if port["port_name"] != name or not port["enabled"] or not port["link_up"]:
                 raise ValueError("A required AP/native management port is not ready")

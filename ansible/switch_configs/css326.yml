@@ -182,7 +182,7 @@ vlans:
     name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium LXC
 
   - vlan_id: 20
-    member_ports: [2, 18, 25]
+    member_ports: [2, 18, 24, 25]
     learning: true
     name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
 
@@ -191,11 +191,11 @@ vlans:
     name: "guest-net"         # 10.0.30.0/24 — guest WiFi, internet only
 
   - vlan_id: 40
-    member_ports: [18, 25]
+    member_ports: [18, 24, 25]
     learning: true
     name: "iot-no-inter"      # 10.0.40.0/24 — IoT local only
 
   - vlan_id: 50
-    member_ports: [18, 25]
+    member_ports: [18, 24, 25]
     learning: true
     name: "iot-with-inter"    # 10.0.50.0/24 — IoT internet permitted

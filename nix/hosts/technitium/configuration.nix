@@ -29,7 +29,23 @@ in
   # ---------------------------------------------------------------------------
   services.technitium-dns-server = {
     enable = true;
-    openFirewall = true;
+    openFirewall = false;
+  };
+
+  services.resolved.extraConfig = ''
+    DNSStubListener=no
+  '';
+  environment.etc."resolv.conf".source = lib.mkForce "/run/systemd/resolve/resolv.conf";
+  systemd.services.technitium-dns-server = {
+    after = [ "systemd-resolved.service" ];
+    requires = [ "systemd-resolved.service" ];
+    restartTriggers = [ config.environment.etc."systemd/resolved.conf".source ];
+  };
+
+  networking.firewall = {
+    allowedTCPPorts = [ 53 ];
+    allowedUDPPorts = [ 53 ];
+    interfaces.eth0.allowedTCPPorts = [ 22 5380 ];
   };
 
   # ---------------------------------------------------------------------------
@@ -37,7 +53,7 @@ in
   # ---------------------------------------------------------------------------
   services.openssh = {
     enable = true;
-    openFirewall = true;
+    openFirewall = false;
     settings = {
       PermitRootLogin = "prohibit-password";
       PasswordAuthentication = false;

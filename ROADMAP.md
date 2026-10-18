@@ -22,8 +22,9 @@ decisions/guides remain. Resume Phase 1 without bundling security-feed activatio
 
 The 2026-10-14 audit found a working flat network and Kubernetes control plane,
 not an operational five-VLAN deployment. Internal DNS, Fleet and TLS have known
-gaps. The Terraform NIC syntax failure has since been fixed offline; that does
-not make its five-NIC target safe to apply to the live one-NIC Technitium LXC.
+gaps. Technitium now preserves its native management NIC and has accepted DNS
+interfaces on active VLANs 20/40/50. Terraform defaults to this four-NIC stage;
+guest attachment and the DNS/DHCP authority handoff remain separate approvals.
 
 **Transition constraint:** VyOS now serves the agreed interim client DNS/DHCP
 behavior at the existing gateway endpoint. The later handoff to Technitium waits
@@ -314,7 +315,7 @@ completion of unrelated dashboard certificates or every Fleet repair.
 ### 1.3 VyOS VLAN Firewall Rules
 - **Requires:** Phase 0.6 router acceptance; all target rules remain inactive during the parity replacement
 - `[ ]` Confirm VLAN 10 → all VLANs (admin rule) exists
-- `[~]` VLAN-20 pilot internet/gateway DNS passes, with nonpublic forwarding and router SSH denied in tested flows. Select the final explicit VLAN-10 service allowlist and prove its permitted/denied application flows before moving clients; this conservative pilot is not that completed policy.
+- `[~]` Private VLAN-20 service allowlist now explicitly permits NAS `.5` TCP `445/32400` and shared ingress `.201` TCP `443`, not the management subnet generally. Rule 2810 is source-owned before the nonpublic deny, qualified in the lab and confirmed in production after a real VLAN-20 probe reached `dns.owl.red` with valid TLS/HTTP while AP `.40:443`, Proxmox `.3:8006` and NAS `.5:443` stayed blocked. Existing client/DHCP/radio settings were untouched. Evidence: `~/.local/state/owl-red/openwrt-rebuild-private-services-xJvlq2`. Remaining device-specific/discovery/IPv6 flows are separate work; per-host ingress authentication/TLS is not provided by this IP rule.
 - `[ ]` Confirm VLAN 40 → LAN only, no internet, no lateral movement
 - `[ ]` Confirm VLAN 50 → internet only, no lateral movement
 - `[ ]` Guest VLAN 30 isolation rules (see `README.md` captive portal section)
@@ -325,8 +326,8 @@ completion of unrelated dashboard certificates or every Fleet repair.
 `10.0.10.1/24`, its native-LAN route, a WAN default route and active DHCP/DNS.
 The accepted AP support now routes VLANs 20/40/50 with gateway `.1`, interim
 VyOS DHCP `.100-.199`, canonical confirmed reservations, DNS/NTP and qualified
-wired private/local-only/cloud policy. Technitium scope activation/handoff and
-real wireless-client acceptance remain separate. The retired router's saved `/24`
+wired private/local-only/cloud policy. Private wireless and owner IoT tests are
+accepted; Technitium scope activation/handoff remains separate. The retired router's saved `/24`
 transaction is historical, not a pending operation or restart prerequisite.
 
 Accepted host/client changes already cover all six PVE addresses (edge `.3`,
@@ -334,9 +335,11 @@ storage `.4`, compute `.11-.14`), four Talos guests `.21-.24`, NAS `.5` and
 operator Ethernet `.174` at `/24`; do not repeat those migrations. Remaining
 client/static-appliance masks still need verification before moving or depending
 on those clients. The switch's existing native PVID and operator port 22 remain
-unchanged. Technitium retains one untagged `.30/24` NIC; its five target scopes
-were disabled by the accepted lifecycle guard and are not operational VLANs.
-Keep scope activation and the DNS/DHCP handoff separate from a wired-path pilot.
+unchanged. Technitium retains native `eth0` at `10.0.10.30/24` and now has
+tagged `eth1/eth2/eth3` at `10.0.20.30/24`, `10.0.40.30/24` and
+`10.0.50.30/24`. All five scopes remain disabled with
+the activation lock false and no UDP 67 listener. VyOS still serves client
+DNS/DHCP; the accepted DNS path does not transfer that authority.
 
 Any remaining client `/16` treats contained target `/24`s as on-link. Prove each
 pilot's client and return paths explicitly; do not infer subnet readiness from
@@ -420,7 +423,11 @@ recovery and connectivity requirements.
 4. **Prove VLAN paths after VyOS acceptance, before Technitium handoff.**
   - `[x]` Activate the bounded VLAN-20 tagged path between physical cp1 SW02 and VyOS SFP+1, using the shared lab-qualified native overlay and exact switch-row owner. Native trial confirmed after the disposable static probe passed; no production bridge, client move or DHCP activation.
   - `[~]` Static wired client `/24`, gateway/MAC, DNS, HTTPS, return traffic and two denied management/private TCP flows pass. DHCP broadcasts/options, IPv6, other VLANs and full policy matrices remain unqualified. WSL reachability was not used as packet proof.
-  - `[ ]` Complete the required switch/AP/PVE/LXC paths with Technitium DHCP still guarded; verify scope-local `.30` DNS listeners and firewall exposure. Do not put the same `10.0.10.0/24` address space on both native and tagged router interfaces.
+  - `[x]` Attach only CT200 VLAN 20 through Terraform stage 1 after native-only SSH/admin firewall guards, including the explicitly approved provider-required container restart. Preserve native management/MAC/default route; add only edge port 24 to the existing switch VLAN-20 row. A refreshed CT-only plan has zero changes.
+  - `[x]` Accept `10.0.20.30` from the disposable cp1 VLAN-20 client: internal/public UDP DNS answers, TCP 53 connectivity and blocked TCP 22/5380. Fix the conflicting systemd-resolved IPv4 stub through Nix while preserving OS DNS. Native API recovery, all five disabled scopes, lock false and no DHCP listener pass; no client resolver/lease change or new DHCP wire-offer test is claimed. Private evidence: `~/.local/state/owl-red/technitium-vlan-4qDmlH`.
+  - `[x]` Add CT200 VLANs 40/50 in one separately approved provider-restart batch, leaving guest 30 detached. Stage 3 is the accepted default in the active-first order 20/40/50/30. Native/private NICs, sole native gateway, CPU/RAM/disk and client authority are preserved; the refreshed CT-only plan has zero changes.
+  - `[x]` Accept internal/public UDP DNS, TCP 53 and blocked SSH/admin from disposable wired clients to `10.0.40.30` and `10.0.50.30`. The guarded switch owner retains port 24 on both IoT rows and removes temporary cp1 port 2 after testing. After boot, native DNS/API and OS DNS are healthy, all five scopes remain disabled, lock false and no UDP 67 listener; no real-client DNS/lease change. Private evidence: `~/.local/state/owl-red/technitium-vlan-iot-OFZ7pw`.
+  - `[~]` Complete the remaining paths with Technitium DHCP still guarded. Guest LXC attachment and per-VLAN DHCP wire/renewal and IPv6 acceptance remain pending. Do not put the same `10.0.10.0/24` address space on both native and tagged router interfaces.
 5. **Approve and perform the DNS/DHCP handoff, then expand.**
   - `[ ]` Reconcile outstanding leases, reservations and pool exclusions for each broadcast domain; keep a rollback lease map so neither authority reissues an address already in use
   - `[ ]` After supporting paths/interfaces pass, approve the exact handoff batch. Disable VyOS DHCP for that domain before enabling its Technitium scope, then renew test clients and verify DNS. Keep unmigrated domains on their accepted interim authority; do not enable every scope at once.
