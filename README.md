@@ -144,6 +144,10 @@ does not complete AP/SSID steering, IPv6, full segmentation or client migration.
 
 CSS326 front numbering is staggered by column: top row is even ports, bottom row is odd ports.
 
+The patch panel is passive: the switch sees the directly connected endpoint,
+not a separate panel device. The Patch column records physical cabling; SW22 to
+PP35 and SW24 to PP36 are owner-confirmed (2026-10-18).
+
 | Switch Port | Patch | Target | Target Role / VLANs | Notes |
 |-------------|-------|--------|--------------|-------|
 | `SW02` | `PP25` | `cp1.pve.owl.red` | VLAN 10 access | Active |

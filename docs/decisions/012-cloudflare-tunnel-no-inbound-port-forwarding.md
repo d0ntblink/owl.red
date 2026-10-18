@@ -8,6 +8,29 @@ Accepted
 
 The current platform already depends on Cloudflare for public DNS hosting and cert-manager DNS-01 challenges. Internally, Traefik and MetalLB provide LAN service exposure on VLAN 10, and Technitium remains authoritative for LAN clients.
 
+### Owner-Provided Domain Inventory
+
+The owner's Cloudflare view supplied on 2026-10-18 shows these domains:
+
+| Domain | Scope In This Repository |
+|--------|--------------------------|
+| `0v0.zip` | Optional automated-email domain; not activated by default |
+| `crucialmentis.com` | Explicitly out of scope for this project; do not provision or change it |
+| `d0ntb.link` | Personal-mail domain; replace Proton through a separately verified receiving/mailbox cutover |
+| `khodayari.info` | Personal-mail domain; replace Proton through a separately verified receiving/mailbox cutover |
+| `owl.red` | Homelab namespace and automated email; internal DNS and external publication remain separately owned |
+
+Five names are visible although the account counter shows seven; unshown names
+are not inferred. Ownership does not authorize migrating zones, bulk MX changes,
+enrolling every domain in Mailgun or exposing homelab services under them.
+The owner selected Mailgun's US region and confirmed the account is ready.
+Personal mailbox hosting or inbound-route destinations still need selection;
+Mailgun delivery is not an IMAP/JMAP mailbox service. Retain existing MX until
+the replacement receiving path is configured and tested, not as a decision to
+keep Proton permanently. Existing websites are unaffected by the mail scope.
+
+### External Access Requirement
+
 The new requirement is stricter:
 
 - no inbound router port forwards for application access

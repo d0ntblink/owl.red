@@ -37,9 +37,9 @@ ports:
   # SW14:  PP31 → ipmi.storage   VLAN 10 access
   # SW16:  PP32 → pdu.owl.red    VLAN 10 access
   # SW18:  PP33 → ap.owl.red     802.1Q trunk all VLANs, 1G
-  # SW22:  PP36 → network cabinet 802.1Q trunk all VLANs
+  # SW22:  PP35 → network cabinet 802.1Q trunk all VLANs
   # SW23:  direct → edge.owl.red eth0 (VyOS WAN) — not a LAN port
-  # SW24:  direct → edge.pve eth0 VLAN 10 mgmt
+  # SW24:  PP36 → edge.pve eth0 VLAN 10 mgmt
   # SFP+1: DAC → edge.owl.red X710 iX11  (10G LAN trunk, active)
   # SFP+2: DAC → nas.owl.red 82599ES iX10 (10G storage uplink, active)
   # Odd ports 01/03/05/07/09/11/13/15/17/19/21: unpatched
@@ -152,7 +152,7 @@ ports:
   - port: 22
     name: "cab-trunk"
     enabled: true
-    assigned_to: network-cabinet      # PP36 <-> SW22 — 802.1Q trunk all VLANs
+    assigned_to: network-cabinet      # PP35 <-> SW22 — 802.1Q trunk all VLANs
 
   - port: 23
     name: "rtr-wan"
@@ -162,7 +162,7 @@ ports:
   - port: 24
     name: "edge.pve-mgmt"
     enabled: true
-    assigned_to: edge.pve.owl.red     # direct → edge.pve eth0 VLAN 10 mgmt
+    assigned_to: edge.pve.owl.red     # PP36 <-> SW24 — edge.pve eth0 VLAN 10 mgmt
 
   - port: 25
     name: "sfp1-vyos"
