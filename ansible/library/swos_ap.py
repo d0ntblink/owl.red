@@ -18,15 +18,21 @@ def desired_table(table, declared):
     attached = {20: [2, 18, 24, 25], 40: [18, 25], 50: [18, 25]}
     local_iot = {**attached, 40: [18, 24, 25]}
     active_iot = {**local_iot, 50: [18, 24, 25]}
+    guest = {**active_iot, 30: [18, 24, 25]}
     allowed = {int(key): value for key, value in declared.items()}
-    if allowed not in (base, attached, local_iot, active_iot):
+    if allowed not in (base, attached, local_iot, active_iot, guest):
         raise ValueError("Only the reviewed AP, DNS trunk and retained cp1 membership is allowed")
     result = copy.deepcopy(table)
     for vlan, members in allowed.items():
         matches = [row for row in result if row["vlan_id"] == vlan]
         if len(matches) != 1:
             raise ValueError("Missing or duplicate target switch VLAN")
-        prior = ([2, 25], base[20], attached[20]) if vlan == 20 else ([5], base[vlan], active_iot[vlan])
+        if vlan == 20:
+            prior = ([2, 25], base[20], attached[20])
+        elif vlan == 30:
+            prior = ([5], guest[30])
+        else:
+            prior = ([5], base[vlan], active_iot[vlan])
         if sorted(matches[0]["member_ports"]) not in prior:
             raise ValueError("Unexpected AP VLAN membership; refusing overwrite")
         matches[0]["member_ports"] = members
@@ -37,7 +43,7 @@ def desired_table(table, declared):
 def test_table(table, declared):
     result = desired_table(table, declared)
     for row in result:
-        if row["vlan_id"] in [40, 50]:
+        if row["vlan_id"] in [40, 50] or (row["vlan_id"] == 30 and any(int(key) == 30 for key in declared)):
             row["member_ports"] = sorted(set(row["member_ports"]) | {2})
     return result
 

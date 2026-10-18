@@ -1,0 +1,68 @@
+set system config-management commit-revisions 100 &&
+set system config-management commit-confirm action reload &&
+set interfaces ethernet eth1 address {{ openwrt_ipv6_plan.vlans[0].router }}/64 &&
+set firewall ipv4 forward filter rule 110 description OWL-VLAN-NATIVE-ADMIN &&
+set firewall ipv4 forward filter rule 110 inbound-interface name eth1 &&
+set firewall ipv4 forward filter rule 110 source address 10.0.10.0/24 &&
+set firewall ipv4 forward filter rule 110 destination group network-group OWL-VLAN-CLIENTS &&
+set firewall ipv4 forward filter rule 110 action accept &&
+set firewall ipv6 forward filter rule 110 description OWL-VLAN-NATIVE-ADMIN &&
+set firewall ipv6 forward filter rule 110 inbound-interface name eth1 &&
+set firewall ipv6 forward filter rule 110 outbound-interface group OWL-VLAN-CLIENTS &&
+set firewall ipv6 forward filter rule 110 action accept &&
+{% for network in openwrt_ipv6_plan.vlans if network.id != 10 %}
+{% set interface = 'eth1.' ~ network.id %}
+set interfaces ethernet eth1 vif {{ network.id }} address {{ network.router }}/64 &&
+set firewall group network-group OWL-VLAN-CLIENTS network 10.0.{{ network.id }}.0/24 &&
+set firewall group interface-group OWL-VLAN-CLIENTS interface {{ interface }} &&
+{% if network.id == 30 %}
+set interfaces ethernet eth1 vif 30 address 10.0.30.1/24 &&
+set interfaces ethernet eth1 vif 30 description OWL-WIFI-30 &&
+set firewall ipv4 forward filter rule 6300 description OWL-VLAN-GUEST-QUARANTINE &&
+set firewall ipv4 forward filter rule 6300 inbound-interface name eth1.30 &&
+set firewall ipv4 forward filter rule 6300 action drop &&
+set firewall ipv4 forward filter rule 6300 log &&
+set firewall ipv4 input filter rule 5230 description OWL-WIFI-30 &&
+set firewall ipv4 input filter rule 5230 inbound-interface name eth1.30 &&
+set firewall ipv4 input filter rule 5230 destination address 10.0.30.1 &&
+set firewall ipv4 input filter rule 5230 protocol icmp &&
+set firewall ipv4 input filter rule 5230 action accept &&
+{% endif %}
+{% if openwrt_ipv6_delegate | bool %}
+set interfaces ethernet eth0 dhcpv6-options pd 0 interface {{ interface }} address 1 &&
+set interfaces ethernet eth0 dhcpv6-options pd 0 interface {{ interface }} sla-id {{ network.delegationSlaId }} &&
+{% endif %}
+set service router-advert interface {{ interface }} prefix ::/64 &&
+set service router-advert interface {{ interface }} name-server {{ network.dns }} &&
+set service router-advert interface {{ interface }} interval min 10 &&
+set service router-advert interface {{ interface }} interval max 30 &&
+set service router-advert interface {{ interface }} default-lifetime 90 &&
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} description OWL-VLAN-IPV6-{{ network.id }} &&
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} inbound-interface name {{ interface }} &&
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} action drop &&
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} log &&
+{% if network.id in [20, 50] %}
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} source address fc00::/7 &&
+set firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} outbound-interface name eth0 &&
+set firewall ipv6 forward filter rule {{ 6001 + network.id * 10 }} description OWL-VLAN-IPV6-{{ network.id }} &&
+set firewall ipv6 forward filter rule {{ 6001 + network.id * 10 }} inbound-interface name {{ interface }} &&
+set firewall ipv6 forward filter rule {{ 6001 + network.id * 10 }} outbound-interface name eth0 &&
+set firewall ipv6 forward filter rule {{ 6001 + network.id * 10 }} action accept &&
+{% endif %}
+{% endfor %}
+set firewall ipv4 forward filter rule 2820 description OWL-VLAN-PRIVATE-LOCAL-IOT &&
+set firewall ipv4 forward filter rule 2820 inbound-interface name eth1.20 &&
+set firewall ipv4 forward filter rule 2820 outbound-interface name eth1.40 &&
+set firewall ipv4 forward filter rule 2820 source address 10.0.20.0/24 &&
+set firewall ipv4 forward filter rule 2820 destination address 10.0.40.0/24 &&
+set firewall ipv4 forward filter rule 2820 protocol tcp &&
+set firewall ipv4 forward filter rule 2820 destination port 80,443,554,631,9100 &&
+set firewall ipv4 forward filter rule 2820 action accept &&
+set firewall ipv4 forward filter rule 2830 description OWL-VLAN-CLOUD-MEDIA &&
+set firewall ipv4 forward filter rule 2830 inbound-interface name eth1.50 &&
+set firewall ipv4 forward filter rule 2830 outbound-interface name eth1 &&
+set firewall ipv4 forward filter rule 2830 source address 10.0.50.0/24 &&
+set firewall ipv4 forward filter rule 2830 destination address 10.0.10.5 &&
+set firewall ipv4 forward filter rule 2830 protocol tcp &&
+set firewall ipv4 forward filter rule 2830 destination port 32400 &&
+set firewall ipv4 forward filter rule 2830 action accept

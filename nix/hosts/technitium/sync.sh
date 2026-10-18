@@ -138,6 +138,36 @@ while IFS= read -r name; do
   disable_scope "${name}"
 done < <(printf '%s' "${SCOPES_JSON}" | jq -r '.[] | select(.enabled == false) | .name')
 
+MIGRATION_LEASES='[]'
+if [[ -f "${GITOPS_DIR}/dhcp/migration-leases.json" ]]; then
+  MIGRATION_LEASES=$(jq -ce --argjson scopes "${SCOPES_JSON}" '
+    if type == "array" and all(.[];
+      (.scope | type == "string") and (.hardwareAddress | type == "string") and
+      (.ipAddress | type == "string") and (.hostName | type == "string") and
+      (.expires | type == "number" and . > 0) and
+      (.scope as $name | any($scopes[]; .name == $name)))
+    then . else error("Invalid expiring DHCP migration leases") end
+  ' "${GITOPS_DIR}/dhcp/migration-leases.json") || die "Invalid DHCP migration lease manifest"
+  while IFS= read -r lease; do
+    name=$(printf '%s' "${lease}" | jq -r '.scope')
+    hw=$(printf '%s' "${lease}" | jq -r '.hardwareAddress')
+    marker=$(printf '%s' "${lease}" | jq -r '"OWL-DHCP-MIGRATION expires=\(.expires)"')
+    details=$(api_json "dhcp/scopes/get" --data-urlencode "name=${name}")
+    if printf '%s' "${details}" | jq -e --arg hw "${hw}" --arg marker "${marker}" '
+      any(.response.reservedLeases[]?; .hardwareAddress == $hw and .comments == $marker)
+    ' > /dev/null; then
+      leases=$(api_json "dhcp/leases/list")
+      if printf '%s' "${leases}" | jq -e --arg name "${name}" --arg hw "${hw}" '
+        any(.response.leases[]?; .scope == $name and .hardwareAddress == $hw and .type == "Reserved")
+      ' > /dev/null; then
+        api "dhcp/leases/convertToDynamic" --data-urlencode "name=${name}" --data-urlencode "hardwareAddress=${hw}"
+      else
+        api "dhcp/scopes/removeReservedLease" --data-urlencode "name=${name}" --data-urlencode "hardwareAddress=${hw}"
+      fi
+    fi
+  done < <(printf '%s' "${MIGRATION_LEASES}" | jq -c --argjson now "$(date +%s)" '.[] | select(.expires <= $now)')
+fi
+
 if [[ "${CURRENT_SHA}" == "${LAST_SHA}" ]] && \
     printf '%s' "${SCOPE_STATES}" | jq -e --argjson desired "${SCOPES_JSON}" '
       .response.scopes as $live |
@@ -172,6 +202,12 @@ if [[ -f "${GITOPS_DIR}/dhcp-reservations.json" ]]; then
 elif printf '%s' "${SCOPES_JSON}" | jq -e 'any(.[]; .enabled)' > /dev/null; then
   die "DHCP reservation manifest is required before activation"
 fi
+
+RESERVATIONS_JSON=$(jq -cn --argjson canonical "${RESERVATIONS_JSON}" \
+  --argjson migrations "${MIGRATION_LEASES}" --argjson now "$(date +%s)" '
+  $canonical + [$migrations[] | select(.expires > $now) |
+    . + {comments: "OWL-DHCP-MIGRATION expires=\(.expires)"} | del(.expires)]
+')
 
 # ── Server settings ───────────────────────────────────────────────────────────
 # gitops/technitium/settings.json — keys map 1:1 to /api/settings/set params.
@@ -230,6 +266,22 @@ fi
 
 if [[ -f "${GITOPS_DIR}/dhcp-reservations.json" ]]; then
   log "→ DHCP reservations"
+  while IFS= read -r retired; do
+    scope=$(printf '%s' "${retired}" | jq -r '.scope')
+    hw=$(printf '%s' "${retired}" | jq -r '.hardwareAddress')
+    ip=$(printf '%s' "${retired}" | jq -r '.ipAddress')
+    details=$(api_json "dhcp/scopes/get" --data-urlencode "name=${scope}")
+    if printf '%s' "${details}" | jq -e --arg hw "${hw}" --arg ip "${ip}" '
+      any(.response.reservedLeases[]?; .hardwareAddress == $hw and .address != $ip)
+    ' > /dev/null; then
+      die "Retired DHCP reservation changed; refusing removal"
+    fi
+    if printf '%s' "${details}" | jq -e --arg hw "${hw}" --arg ip "${ip}" '
+      any(.response.reservedLeases[]?; .hardwareAddress == $hw and .address == $ip)
+    ' > /dev/null; then
+      api "dhcp/scopes/removeReservedLease" --data-urlencode "name=${scope}" --data-urlencode "hardwareAddress=${hw}"
+    fi
+  done < <(jq -c '.retiredReservations[]?' "${GITOPS_DIR}/dhcp-reservations.json")
   while IFS= read -r res; do
     scope=$(printf '%s' "${res}" | jq -r '.scope')
     hw=$(printf '%s' "${res}" | jq -r '.hardwareAddress')

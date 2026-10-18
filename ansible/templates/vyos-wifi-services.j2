@@ -1,6 +1,10 @@
 set system config-management commit-revisions 100 &&
 set system config-management commit-confirm action reload &&
 set service dns forwarding domain owl.red name-server 10.0.10.30 &&
+{% if openwrt_dhcp_authority | default('vyos') == 'technitium' %}
+set service dhcp-server disable &&
+set service dns forwarding name-server 10.0.10.30 &&
+{% endif %}
 delete service ntp listen-address &&
 set service ntp listen-address 0.0.0.0 &&
 {% for name, network in openwrt_wifi_networks.items() if network.enabled %}
@@ -40,6 +44,7 @@ set firewall ipv4 input filter rule {{ 5300 + vlan }} protocol udp &&
 set firewall ipv4 input filter rule {{ 5300 + vlan }} destination port 123 &&
 set firewall ipv4 input filter rule {{ 5300 + vlan }} action accept &&
 set service ntp allow-client address {{ subnet }} &&
+{% if openwrt_dhcp_authority | default('vyos') == 'vyos' %}
 set service dhcp-server listen-interface eth1.{{ vlan }} &&
 set service dhcp-server shared-network-name WIFI_{{ name | upper }} authoritative &&
 set service dhcp-server shared-network-name WIFI_{{ name | upper }} description OWL-WIFI-{{ vlan }} &&
@@ -56,6 +61,7 @@ set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ su
 set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} static-mapping {{ reservation.hostName | replace('.', '-') }} ip-address {{ reservation.ipAddress }} &&
 set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} static-mapping {{ reservation.hostName | replace('.', '-') }} mac {{ reservation.hardwareAddress | lower | replace('-', ':') }} &&
 {% endfor %}
+{% endif %}
 {% if vlan != 20 %}
 set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} description OWL-WIFI-{{ vlan }} &&
 set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} inbound-interface name eth1.{{ vlan }} &&

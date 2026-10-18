@@ -22,6 +22,7 @@
         phase: "{{ openwrt_switch_phase }}"
         declared:
           '20': "{{ (vlans | selectattr('vlan_id', 'equalto', 20) | first).member_ports }}"
+          '30': "{{ (vlans | selectattr('vlan_id', 'equalto', 30) | first).member_ports }}"
           '40': "{{ (vlans | selectattr('vlan_id', 'equalto', 40) | first).member_ports }}"
           '50': "{{ (vlans | selectattr('vlan_id', 'equalto', 50) | first).member_ports }}"
         recovery_directory: "{{ openwrt_recovery_directory }}"

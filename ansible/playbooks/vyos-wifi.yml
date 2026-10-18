@@ -4,11 +4,16 @@
   gather_facts: false
   vars_files:
     - ../inventory/group_vars/aps.yml
+    - ../../vyos/baseline.yml
   vars:
     openwrt_apply_allowed: false
     openwrt_gateway_phase: trial
+    openwrt_gateway_scope: wifi
+    openwrt_dhcp_authority: "{{ 'vyos' if inventory_hostname == 'edge_lab' else vyos_production_baseline.dhcp_authority }}"
+    openwrt_ipv6_delegate: "{{ inventory_hostname == 'edge_router' }}"
+    openwrt_ipv6_plan: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/network.json') | from_json }}"
     openwrt_target_registry: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/dhcp-reservations.json') | from_json }}"
-    openwrt_gateway_commands: "{{ lookup('template', playbook_dir ~ '/../templates/vyos-wifi-services.j2') }}"
+    openwrt_gateway_commands: "{{ lookup('template', playbook_dir ~ '/../templates/' ~ {'wifi': 'vyos-wifi-services.j2', 'ipv6': 'vyos-vlan-ipv6.j2', 'handoff': 'vyos-dhcp-handoff.j2'}[openwrt_gateway_scope]) }}"
   tasks:
     - name: Require explicit gateway scope and the accepted AP allocation
       ansible.builtin.assert:
@@ -17,6 +22,7 @@
           - inventory_hostname in ['edge_lab', 'edge_router']
           - (inventory_hostname == 'edge_lab' and vm_id | int == 102) or (inventory_hostname == 'edge_router' and vm_id | int == 103)
           - openwrt_gateway_phase in ['trial', 'confirm']
+          - openwrt_gateway_scope in ['wifi', 'ipv6', 'handoff']
           - openwrt_wifi_networks.guest.enabled is sameas false
           - openwrt_wifi_networks.private.vlan | int == 20
           - openwrt_wifi_networks.iot_local.vlan | int == 40
@@ -51,6 +57,23 @@
       no_log: true
       when: openwrt_gateway_phase == 'trial'
 
+    - name: Refuse collisions in the dual-stack VLAN ownership slice
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        {% for family, number, marker in [('ipv4', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv6', 110, 'OWL-VLAN-NATIVE-ADMIN'), ('ipv4', 6300, 'OWL-VLAN-GUEST-QUARANTINE'), ('ipv4', 2820, 'OWL-VLAN-PRIVATE-LOCAL-IOT'), ('ipv4', 2830, 'OWL-VLAN-CLOUD-MEDIA')] %}
+        if /bin/cli-shell-api existsActive firewall {{ family }} forward filter rule {{ number }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue firewall {{ family }} forward filter rule {{ number }} description) == {{ marker }} ]] || builtin exit 1
+        fi
+        {% endfor %}
+        {% for network in openwrt_ipv6_plan.vlans if network.id != 10 %}
+        if /bin/cli-shell-api existsActive firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} description) == OWL-VLAN-IPV6-{{ network.id }} ]] || builtin exit 1
+        fi
+        {% endfor %}
+        '
+      changed_when: false
+      when: openwrt_gateway_scope == 'ipv6'
+
     - name: Preserve the private gateway recovery preimage
       ansible.builtin.copy:
         content: "{{ openwrt_gateway_before.stdout }}"
@@ -71,7 +94,14 @@
         {% if inventory_hostname == 'edge_lab' %}
         confirm >/dev/null 2>&1 || true
         {% endif %}
-        {{ openwrt_gateway_commands }} || builtin exit 1
+        owl_command_output=$(
+        {{ openwrt_gateway_commands }}
+        ) || builtin exit 1
+        printf "%s\n" "$owl_command_output"
+        if [[ "$owl_command_output" == *"Set failed"* || "$owl_command_output" == *"Delete failed"* ]]; then
+          discard
+          builtin exit 1
+        fi
         if /bin/cli-shell-api sessionChanged; then
           commit-confirm 10 no-prompt || builtin exit 1
           if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
@@ -103,7 +133,12 @@
       ansible.builtin.raw: |
         ip -j -4 address show dev eth1.40 &&
         ip -j -4 address show dev eth1.50 &&
-        systemctl is-active isc-kea-dhcp4-server.service pdns-recursor.service chrony.service
+        systemctl is-active pdns-recursor.service chrony.service &&
+        {% if openwrt_gateway_scope == 'handoff' or openwrt_dhcp_authority == 'technitium' %}
+        ! systemctl is-active --quiet isc-kea-dhcp4-server.service
+        {% else %}
+        systemctl is-active isc-kea-dhcp4-server.service
+        {% endif %}
       register: openwrt_gateway_runtime
       changed_when: false
       failed_when: >-

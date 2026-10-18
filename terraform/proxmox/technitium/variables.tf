@@ -7,7 +7,7 @@ variable "storage_pool" {
 variable "technitium_vlan_stage" {
   description = "Explicit attachment count for active VLANs 20,40,50 then dormant guest 30; zero preserves native management only."
   type        = number
-  default     = 3
+  default     = 4
 
   validation {
     condition     = contains([0, 1, 2, 3, 4], var.technitium_vlan_stage)

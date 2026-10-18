@@ -1,5 +1,11 @@
 # Technitium DNS + DHCP (LXC, GitOps-synced)
 
+**Approved handoff candidate (2026-10-17):** source intent now enables native,
+private and IoT DHCP with VLAN-local DNS/NTP; guest stays disabled. Publication
+and live activation are coordinated using the paused timer, retained lease map
+and independent host lock. The source manifest is not proof of live authority;
+require the [handoff acceptance](../../docs/guides/controller-setup.md#coordinated-vlan-dhcp-handoff).
+
 Technitium runs as a NixOS LXC on `edge.pve` and is authoritative for `owl.red`.
 Sole client DNS/DHCP service across five VLANs is the **post-cutover target**,
 not the observed deployment. Keep the accepted VyOS client DNS/DHCP authority until supporting
