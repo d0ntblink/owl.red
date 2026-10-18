@@ -6,12 +6,16 @@
     "endingAddress": "10.0.10.199",
     "subnetMask": "255.255.255.0",
     "routerAddress": "10.0.10.1",
-    "useThisDnsServer": true,
+    "useThisDnsServer": false,
+    "dnsServers": "10.0.10.30",
+    "ntpServers": "10.0.10.1",
+    "ignoreClientIdentifierOption": true,
+    "blockLocallyAdministeredMacAddresses": false,
     "leaseTimeDays": 1,
     "leaseTimeHours": 0,
     "leaseTimeMinutes": 0,
     "domainName": "owl.red",
-    "enabled": false
+    "enabled": true
   },
   {
     "_comment": "VLAN 20 — trusted private devices (wired + WiFi)",
@@ -20,12 +24,16 @@
     "endingAddress": "10.0.20.199",
     "subnetMask": "255.255.255.0",
     "routerAddress": "10.0.20.1",
-    "useThisDnsServer": true,
+    "useThisDnsServer": false,
+    "dnsServers": "10.0.20.30",
+    "ntpServers": "10.0.20.1",
+    "ignoreClientIdentifierOption": true,
+    "blockLocallyAdministeredMacAddresses": false,
     "leaseTimeDays": 1,
     "leaseTimeHours": 0,
     "leaseTimeMinutes": 0,
     "domainName": "owl.red",
-    "enabled": false
+    "enabled": true
   },
   {
     "_comment": "VLAN 30 - guest WiFi, short leases. DHCP option 114 must be codified with the approved captive portal handoff.",
@@ -34,7 +42,11 @@
     "endingAddress": "10.0.30.199",
     "subnetMask": "255.255.255.0",
     "routerAddress": "10.0.30.1",
-    "useThisDnsServer": true,
+    "useThisDnsServer": false,
+    "dnsServers": "10.0.30.30",
+    "ntpServers": "10.0.30.1",
+    "ignoreClientIdentifierOption": true,
+    "blockLocallyAdministeredMacAddresses": false,
     "leaseTimeDays": 0,
     "leaseTimeHours": 4,
     "leaseTimeMinutes": 0,
@@ -48,12 +60,16 @@
     "endingAddress": "10.0.40.199",
     "subnetMask": "255.255.255.0",
     "routerAddress": "10.0.40.1",
-    "useThisDnsServer": true,
+    "useThisDnsServer": false,
+    "dnsServers": "10.0.40.30",
+    "ntpServers": "10.0.40.1",
+    "ignoreClientIdentifierOption": true,
+    "blockLocallyAdministeredMacAddresses": false,
     "leaseTimeDays": 1,
     "leaseTimeHours": 0,
     "leaseTimeMinutes": 0,
     "domainName": "owl.red",
-    "enabled": false
+    "enabled": true
   },
   {
     "_comment": "VLAN 50 — IoT, internet permitted, no lateral movement",
@@ -62,11 +78,15 @@
     "endingAddress": "10.0.50.199",
     "subnetMask": "255.255.255.0",
     "routerAddress": "10.0.50.1",
-    "useThisDnsServer": true,
+    "useThisDnsServer": false,
+    "dnsServers": "10.0.50.30",
+    "ntpServers": "10.0.50.1",
+    "ignoreClientIdentifierOption": true,
+    "blockLocallyAdministeredMacAddresses": false,
     "leaseTimeDays": 1,
     "leaseTimeHours": 0,
     "leaseTimeMinutes": 0,
     "domainName": "owl.red",
-    "enabled": false
+    "enabled": true
   }
 ]

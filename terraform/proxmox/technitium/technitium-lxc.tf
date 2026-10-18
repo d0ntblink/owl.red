@@ -15,6 +15,10 @@
 
 locals {
   technitium_attached_vlans = slice([20, 40, 50, 30], 0, var.technitium_vlan_stage)
+  technitium_ipv6 = {
+    for network in jsondecode(file("${path.module}/../../../gitops/technitium/network.json")).vlans :
+    tostring(network.id) => network
+  }
 }
 
 resource "proxmox_virtual_environment_container" "technitium" {
@@ -43,6 +47,9 @@ resource "proxmox_virtual_environment_container" "technitium" {
         address = "10.0.10.30/24"
         gateway = "10.0.10.1"
       }
+      ipv6 {
+        address = "${local.technitium_ipv6["10"].dns}/64"
+      }
     }
 
     dynamic "ip_config" {
@@ -50,6 +57,9 @@ resource "proxmox_virtual_environment_container" "technitium" {
       content {
         ipv4 {
           address = "10.0.${ip_config.value}.30/24"
+        }
+        ipv6 {
+          address = "${local.technitium_ipv6[tostring(ip_config.value)].dns}/64"
         }
       }
     }

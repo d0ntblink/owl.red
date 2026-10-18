@@ -1,6 +1,7 @@
 { config, modulesPath, pkgs, lib, ... }:
 
 let
+  dhcpActivationAllowed = true;
   # Full GitOps sync script — embedded in Nix store with pinned runtime deps.
   # Applies: server settings, DNS zones, DHCP scopes, DHCP reservations.
   # Source of truth: gitops/technitium/ in the owl.red repo.
@@ -44,7 +45,7 @@ in
 
   networking.firewall = {
     allowedTCPPorts = [ 53 ];
-    allowedUDPPorts = [ 53 ];
+    allowedUDPPorts = [ 53 ] ++ lib.optional dhcpActivationAllowed 67;
     interfaces.eth0.allowedTCPPorts = [ 22 5380 ];
   };
 
@@ -81,7 +82,7 @@ in
     wants = [ "network-online.target" ];
     # Skip silently until Ansible bootstrap writes the API token
     unitConfig.ConditionPathExists = "/etc/technitium/sync.token";
-    environment.DHCP_ENABLE_ALLOWED = "false";
+    environment.DHCP_ENABLE_ALLOWED = if dhcpActivationAllowed then "true" else "false";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${syncScript}/bin/technitium-sync";

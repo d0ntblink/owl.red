@@ -923,6 +923,60 @@ is retained. This is not a router prefix/VLAN change or proof of independent
 hotspot egress; the current LAN authority and protected native switch path stay
 unchanged. Other client masks remain a separate check.
 
+## Coordinated VLAN DHCP Handoff
+
+This transaction is explicitly approved for native management and active VLANs
+20/40/50. Guest 30 stays disabled and quarantined; its portal is separate.
+The accepted dual-stack plan is
+[network.json](../../gitops/technitium/network.json): RFC4193
+`fde4:cabf:d798::/48` for stable DNS and separate delegated `/64`s from the
+existing WAN `/56`. Native/WAN IPv6 remains intact. CT200 stage 4 includes
+native management plus tagged 20/40/50/30, each with IPv4 and ULA DNS addresses.
+
+Requirements: the existing Ansible venv, OpenSSH with the pinned identities,
+Terraform and its committed Proxmox lock, Nix, Bash, ShellCheck, jq, Node.js
+20.12+ and Python 3. On cp1 the probes use existing iproute2, tcpdump, Nmap,
+dig, curl, ping and dhclient. Nmap DISCOVER accepts no lease; dhclient is used
+only inside a disposable namespace for a real DORA/renewal check. Captures and
+recovery data stay outside Git under mode-0700 directories with mode-0600 files.
+Bitwarden credentials use private child environments; Technitium API tokens
+stay in the LXC. `pct exec` needs full `/run/current-system/sw/bin/` commands.
+
+1. Save the native router configuration, Kea CSV and generated configuration,
+  Technitium scopes/current generation, and the complete switch preimage.
+  Pause `technitium-sync.timer` and any in-flight sync before publication.
+2. Prove sole old authority on each active VLAN with
+  [capture-dhcp-authority.mjs](../../scripts/capture-dhcp-authority.mjs).
+  Optional `--vlan 20|40|50` uses the existing self-cleaning cp1 namespace and
+  waits for both packet captures before DISCOVER. Review MAC/transaction,
+  `/24`, gateway/DNS/lease options and zero capture drops.
+3. Preserve confirmed reservations and the expiring
+  [migration holds](../../gitops/technitium/dhcp/migration-leases.json).
+  Holds keep old addresses for 48 hours; the same reconciler converts expired
+  active holds to dynamic leases, including without a new Git revision.
+  Explicit `retiredReservations` removes only a matching stale MAC/address.
+4. Publish only reviewed VLAN/DHCP desired state after owner approval. Source
+  scope intent and the independently deployed host activation lock must agree.
+  A commit/push is an operational action because the LXC pulls `origin/main`.
+5. Run the existing VyOS owner with `openwrt_gateway_scope=handoff` and the
+  private recovery directory. It disables Kea and forwards compatibility DNS
+  through Technitium. Verify Kea inactive and DNS healthy, then confirm/save
+  this retirement BEFORE enabling Technitium, so a native rollback timer
+  cannot resurrect a competing authority later.
+6. Deploy the reviewed Nix host configuration with `--tags technitium_nixos`
+  and channel updates false. Its explicit activation policy opens UDP 67 but
+  keeps SSH/admin native-only. Start the Git reconciler; require native,
+  private and IoT enabled, guest disabled, and exact per-scope DNS/NTP options.
+7. Require sole new-server offers and a disposable real lease/renewal, correct
+  DNS, dual-stack policy and temporary-port/namespace cleanup. Resume the sync
+  timer after acceptance. Ordinary production Wi-Fi reconciliation honors
+  `vyos_production_baseline.dhcp_authority=technitium` and cannot re-enable Kea.
+
+On failure, first disable the new scopes and lock activation through the
+independent Proxmox path. Account for EVERY lease issued by the new authority
+before restoring old DHCP; restore source intent as well as runtime state.
+Never enable both servers or use a whole mixed-root Terraform apply as recovery.
+
 ## Non-Mutating Validation
 
 ```bash

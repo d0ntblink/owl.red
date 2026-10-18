@@ -42,6 +42,14 @@ curl() {
     return 0
   fi
   case "${endpoint}" in
+    dhcp/scopes/get)
+      jq -n --argjson reserved "${MOCK_MIGRATION_RESERVED:-[]}" '{status: "ok", response: {reservedLeases: $reserved}}'
+      return 0
+      ;;
+    dhcp/leases/list)
+      jq -n --argjson leases "${MOCK_MIGRATION_LEASES:-[]}" '{status: "ok", response: {leases: $leases}}'
+      return 0
+      ;;
     dhcp/scopes/list)
       if [[ "${MOCK_INVALID_LIST:-false}" == true ]]; then
         printf '{"status":"ok","response":{}}\n'
@@ -70,7 +78,7 @@ curl() {
         mv -- "${MOCK_STATE}.next" "${MOCK_STATE}"
       fi
       ;;
-    settings/set|zones/create|zones/import|dhcp/scopes/removeReservedLease|dhcp/scopes/addReservedLease) ;;
+    settings/set|zones/create|zones/import|dhcp/scopes/removeReservedLease|dhcp/scopes/addReservedLease|dhcp/leases/convertToDynamic) ;;
     *) printf '{"status":"error","errorMessage":"Unexpected API operation"}\n'; return 0 ;;
   esac
   printf '{"status":"ok"}\n'
@@ -85,6 +93,7 @@ setup_case() {
   export MOCK_STATE="${CASE_DIR}/scopes.json" MOCK_LOG="${CASE_DIR}/requests.jsonl"
   export DHCP_ENABLE_ALLOWED=false MOCK_FAIL_ENDPOINT='' MOCK_IGNORE_STATE='' MOCK_INVALID_LIST=false
   export MOCK_SET_ENABLES=false MOCK_HTTP_FAILURE=false
+  export MOCK_MIGRATION_RESERVED='[]' MOCK_MIGRATION_LEASES='[]'
   printf 'offline-test-token\n' > "${TOKEN_FILE}"
   printf 'old-revision\n' > "${STATE_DIR}/last-sha"
   : > "${MOCK_LOG}"
@@ -105,6 +114,31 @@ expect_failure() {
   if run_sync; then fail 'Sync unexpectedly succeeded'; fi
   [[ "$(< "${STATE_DIR}/last-sha")" == old-revision ]] || fail 'Failed sync recorded a revision'
 }
+
+setup_case migration_hold
+jq -n --argjson expires "$(($(date +%s) + 600))" '[{
+  scope: "vlan10-network-devices", hardwareAddress: "02-00-00-00-00-99",
+  ipAddress: "10.0.10.199", hostName: "migration", expires: $expires
+}]' > "${REPO_DIR}/gitops/technitium/dhcp/migration-leases.json"
+run_sync || { cat "${CASE_DIR}/output"; fail 'Migration hold sync failed'; }
+jq -se '([.[] | select(.endpoint == "dhcp/scopes/addReservedLease")] | length == 2)' "${MOCK_LOG}" > /dev/null \
+  || fail 'Unexpired migration hold was not applied with canonical reservations'
+printf 'PASS: unexpired migration hold preserves its address\n'
+
+setup_case expired_migration
+printf 'new-revision\n' > "${STATE_DIR}/last-sha"
+jq 'map(.enabled = false)' "${MOCK_STATE}" > "${MOCK_STATE}.next"
+mv "${MOCK_STATE}.next" "${MOCK_STATE}"
+jq -n '[{scope: "vlan10-network-devices", hardwareAddress: "02-00-00-00-00-99",
+  ipAddress: "10.0.10.199", hostName: "migration", expires: 1}]' \
+  > "${REPO_DIR}/gitops/technitium/dhcp/migration-leases.json"
+export MOCK_MIGRATION_RESERVED='[{"hardwareAddress":"02-00-00-00-00-99","comments":"OWL-DHCP-MIGRATION expires=1"}]'
+export MOCK_MIGRATION_LEASES='[{"scope":"vlan10-network-devices","hardwareAddress":"02-00-00-00-00-99","type":"Reserved"}]'
+run_sync || { cat "${CASE_DIR}/output"; fail 'Expired migration cleanup failed'; }
+jq -se 'any(.[]; .endpoint == "dhcp/leases/convertToDynamic") and
+  all(.[]; .endpoint != "dhcp/scopes/addReservedLease" and .endpoint != "dhcp/scopes/enable")' "${MOCK_LOG}" > /dev/null \
+  || fail 'Expired hold was not made dynamic on an unchanged revision'
+printf 'PASS: expired hold returns to dynamic without a new revision or full sync\n'
 
 setup_case disabled
 run_sync || { cat "${CASE_DIR}/output"; fail 'Disabled-state sync failed'; }

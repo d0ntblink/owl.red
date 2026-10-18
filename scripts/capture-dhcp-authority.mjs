@@ -30,6 +30,18 @@ export function validateOptions(options) {
   }
   if (options['expected-server'] === options['forbidden-server']) throw new Error('Server identities must differ');
   if (!options.identity || !options['output-dir']) throw new Error('identity and output-dir are required');
+  if (options.vlan !== undefined) {
+    const observerInterfaces = { 20: 'eth1', 40: 'eth2', 50: 'eth3' };
+    if (!Object.hasOwn(observerInterfaces, options.vlan)
+      || options['client-host'] !== '10.0.10.11' || options['observer-host'] !== '10.0.10.3'
+      || options['container-id'] !== '200' || options['client-interface'] !== `owl-wifi-${options.vlan}`
+      || options['observer-interface'] !== observerInterfaces[options.vlan]
+      || options['client-mac'] !== `02:76:79:${options.vlan}:00:fe`
+      || ![options['expected-server'], options['forbidden-server']].every(server =>
+        [`10.0.${options.vlan}.1`, `10.0.${options.vlan}.30`].includes(server))) {
+      throw new Error('VLAN capture must use the accepted cp1/CT200 path and its two DHCP identities');
+    }
+  }
 }
 
 export function parseProbeXml(xml) {
@@ -83,6 +95,38 @@ function sshArguments(options, host, command) {
     '-i', options.identity, `root@${host}`, command];
 }
 
+function startVlanNamespace(options) {
+  const script = fs.readFileSync(new URL('../ansible/files/wifi-vlan-probe.sh', import.meta.url), 'utf8');
+  const command = `exec bash -c ${quote(script)} -- ${quote(options.vlan)} capture`;
+  const child = spawn('ssh', sshArguments(options, options['client-host'], command), { timeout: 60000 });
+  let markReady;
+  let failReady;
+  let output = '';
+  let diagnostic = '';
+  let announced = false;
+  const ready = new Promise((resolve, reject) => { markReady = resolve; failReady = reject; });
+  child.stdout.on('data', chunk => {
+    output += chunk.toString();
+    if (!announced && output.includes('OWL_VLAN_CAPTURE_READY\n')) {
+      announced = true;
+      markReady();
+    }
+  });
+  child.stderr.on('data', chunk => { diagnostic += chunk.toString(); });
+  child.stdin.on('error', () => {});
+  child.on('error', () => failReady(new Error('Temporary VLAN namespace could not start')));
+  const done = new Promise(resolve => child.on('close', exitCode => {
+    if (!announced) failReady(new Error('Temporary VLAN namespace closed before readiness'));
+    resolve(exitCode);
+  }));
+  return { ready, async stop() {
+    if (!child.stdin.destroyed) child.stdin.end('complete\n');
+    const exitCode = await done;
+    save(options['output-dir'], 'namespace.log', diagnostic);
+    if (exitCode !== 0) throw new Error('Temporary VLAN namespace cleanup was not verified');
+  } };
+}
+
 function startCapture(options, role) {
   const observer = role === 'observer';
   const host = options[observer ? 'observer-host' : 'client-host'];
@@ -91,7 +135,8 @@ function startCapture(options, role) {
   const file = path.join(directory, `${role}.pcap`);
   const descriptor = fs.openSync(file, 'wx', 0o600);
   const prefix = observer ? `set -eu\ncontainer_pid=$(lxc-info -n ${quote(options['container-id'])} -pH)\n` : '';
-  const namespace = observer ? 'nsenter --target "$container_pid" --net ' : '';
+  const namespace = observer ? 'nsenter --target "$container_pid" --net '
+    : options.vlan ? `ip netns exec owl-wifi-${options.vlan} ` : '';
   const command = `${prefix}exec timeout --preserve-status --signal=INT --kill-after=2s ${captureSeconds}s `
     + `${namespace}tcpdump -p -i ${quote(device)} -nn -s 0 -U -w - 'udp and (port 67 or port 68)'`;
   const child = spawn('ssh', sshArguments(options, host, command), { timeout: 25000 });
@@ -121,10 +166,15 @@ function startCapture(options, role) {
   return { ready, done, stop() { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); } };
 }
 
-async function runProbe(options) {
+export function buildProbeCommand(options) {
   const scriptArguments = `broadcast-dhcp-discover.mac=${options['client-mac']},broadcast-dhcp-discover.timeout=${probeSeconds}s`;
-  const command = `exec timeout 18s nmap -sn -e ${quote(options['client-interface'])} `
+  const namespace = options.vlan ? `ip netns exec owl-wifi-${options.vlan} ` : '';
+  return `exec timeout 18s ${namespace}nmap -sn -e ${quote(options['client-interface'])} `
     + `--script broadcast-dhcp-discover --script-args ${quote(scriptArguments)} -oX -`;
+}
+
+async function runProbe(options) {
+  const command = buildProbeCommand(options);
   const result = await new Promise((resolve, reject) => {
     const child = spawn('ssh', sshArguments(options, options['client-host'], command), { timeout: 23000 });
     let stdout = '';
@@ -147,11 +197,11 @@ async function main() {
   const names = ['client-host', 'observer-host', 'container-id', 'client-interface', 'observer-interface',
     'client-mac', 'expected-server', 'forbidden-server', 'identity', 'output-dir'];
   const { values } = parseArgs({ options: Object.fromEntries([
-    ...names.map(name => [name, { type: 'string' }]), ['help', { type: 'boolean' }],
+    ...names.map(name => [name, { type: 'string' }]), ['vlan', { type: 'string' }], ['help', { type: 'boolean' }],
   ]) });
   if (values.help) {
     console.log('Usage: node scripts/capture-dhcp-authority.mjs ' + names.map(name => `--${name} VALUE`).join(' '));
-    console.log('DISCOVER only; captures must be reviewed for matching client identity and transaction. No lease or interface changes.');
+    console.log('DISCOVER only; review matching client identity and transaction. Optional --vlan 20|40|50 uses a temporary cp1 namespace; no lease is accepted.');
     return;
   }
   validateOptions(values);
@@ -159,9 +209,18 @@ async function main() {
   fs.mkdirSync(values['output-dir'], { mode: 0o700 });
   const startedAt = new Date().toISOString();
   save(values['output-dir'], 'configuration.json', JSON.stringify(values, null, 2) + '\n');
-  const captures = [startCapture(values, 'observer'), startCapture(values, 'client')];
+  let namespace;
   try {
+    if (values.vlan) {
+      namespace = startVlanNamespace(values);
+      await namespace.ready;
+    }
+    const captures = [startCapture(values, 'observer'), startCapture(values, 'client')];
     const result = await coordinateCaptures(captures, () => runProbe(values));
+    if (namespace) {
+      await namespace.stop();
+      namespace = undefined;
+    }
     const summary = { startedAt, completedAt: new Date().toISOString(),
       status: 'EVIDENCE_READY_PACKET_REVIEW_REQUIRED', discoverOnly: true, probeSeconds,
       serverIdentifiers: result.report.offers.map(offer => offer['Server Identifier']),
@@ -172,6 +231,8 @@ async function main() {
     save(values['output-dir'], 'failure.json', JSON.stringify({ observedAt: new Date().toISOString(),
       status: 'FAILED_OR_INCONCLUSIVE', message: error.message }, null, 2) + '\n');
     throw error;
+  } finally {
+    if (namespace) await namespace.stop();
   }
 }
 

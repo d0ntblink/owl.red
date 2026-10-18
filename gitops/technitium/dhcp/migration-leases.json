@@ -1,0 +1,14 @@
+[
+  { "scope": "vlan10-network-devices", "hardwareAddress": "0A-55-9E-2C-05-6C", "ipAddress": "10.0.10.148", "hostName": "lease-0a559e2c056c", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "3C-6D-66-0E-1F-67", "ipAddress": "10.0.10.119", "hostName": "lease-3c6d660e1f67", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "5C-87-9C-FA-10-F4", "ipAddress": "10.0.10.177", "hostName": "lease-5c879cfa10f4", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "24-FB-E3-7C-CF-DA", "ipAddress": "10.0.10.103", "hostName": "lease-24fbe37ccfda", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "82-F3-5C-C9-92-46", "ipAddress": "10.0.10.166", "hostName": "lease-82f35cc99246", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "02-2D-1F-56-EE-B8", "ipAddress": "10.0.10.124", "hostName": "lease-022d1f56eeb8", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "02-7F-F6-05-40-FC", "ipAddress": "10.0.10.186", "hostName": "lease-027ff60540fc", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "20-0B-74-A5-15-05", "ipAddress": "10.0.10.159", "hostName": "lease-200b74a51505", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "84-3A-5B-87-91-DD", "ipAddress": "10.0.10.174", "hostName": "lease-843a5b8791dd", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "80-65-99-A1-5F-9C", "ipAddress": "10.0.10.118", "hostName": "lease-806599a15f9c", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "04-70-56-5C-6D-3A", "ipAddress": "10.0.10.195", "hostName": "lease-0470565c6d3a", "expires": 1792504057 },
+  { "scope": "vlan10-network-devices", "hardwareAddress": "44-61-32-08-D6-2C", "ipAddress": "10.0.10.185", "hostName": "lease-44613208d62c", "expires": 1792504057 }
+]

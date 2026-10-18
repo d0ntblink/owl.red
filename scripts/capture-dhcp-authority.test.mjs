@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { coordinateCaptures, parseProbeXml, validateOffers, validateOptions } from './capture-dhcp-authority.mjs';
+import { buildProbeCommand, coordinateCaptures, parseProbeXml, validateOffers, validateOptions } from './capture-dhcp-authority.mjs';
 
 function deferred() {
   let resolve;
@@ -40,6 +40,21 @@ test('parses real Nmap XML structure using the standard XML parser', () => {
     + '<elem key="DHCP Message Type">DHCPOFFER</elem></table></script></prescript>'
     + '<runstats><finished exit="success"/></runstats></nmaprun>');
   assert.deepEqual(report, validReport);
+});
+
+test('VLAN captures use only the accepted namespace, interface and authority pair', () => {
+  for (const [vlan, observer] of [['20', 'eth1'], ['40', 'eth2'], ['50', 'eth3']]) {
+    const options = { ...validOptions, vlan, 'client-interface': `owl-wifi-${vlan}`,
+      'observer-interface': observer, 'client-mac': `02:76:79:${vlan}:00:fe`,
+      'expected-server': `10.0.${vlan}.1`, 'forbidden-server': `10.0.${vlan}.30` };
+    assert.doesNotThrow(() => validateOptions(options));
+    assert.match(buildProbeCommand(options), new RegExp(`ip netns exec owl-wifi-${vlan} nmap -sn -e 'owl-wifi-${vlan}'`));
+    for (const changed of [{ vlan: '30' }, { 'client-host': '10.0.10.12' },
+      { 'observer-interface': 'eth0' }, { 'expected-server': '10.0.10.1' }]) {
+      assert.throws(() => validateOptions({ ...options, ...changed }), /accepted cp1/);
+    }
+  }
+  assert.doesNotMatch(buildProbeCommand(validOptions), /netns/);
 });
 
 test('requires a positive control rather than accepting silence', () => {

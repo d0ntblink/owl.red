@@ -1,5 +1,6 @@
 ---
 vyos_production_baseline:
+  dhcp_authority: technitium
   host_mappings:
     - hostname: switch.owl.red
       ip: 10.0.10.2

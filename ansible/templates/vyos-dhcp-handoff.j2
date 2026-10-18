@@ -1,0 +1,5 @@
+set system config-management commit-revisions 100 &&
+set system config-management commit-confirm action reload &&
+set service dhcp-server disable &&
+set service dns forwarding name-server 10.0.10.30 &&
+set service dns forwarding domain owl.red name-server 10.0.10.30

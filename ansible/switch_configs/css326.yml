@@ -187,7 +187,8 @@ vlans:
     name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
 
   - vlan_id: 30
-    member_ports: [5]          # port 5 = edge.pve trunk (tagged)
+    member_ports: [18, 24, 25]
+    learning: true
     name: "guest-net"         # 10.0.30.0/24 — guest WiFi, internet only
 
   - vlan_id: 40
