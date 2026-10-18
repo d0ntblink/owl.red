@@ -1,0 +1,34 @@
+---
+- name: Stage only the AP trunk required by enabled Wi-Fi networks
+  hosts: switch_swos
+  gather_facts: false
+  vars_files:
+    - ../switch_configs/css326.yml
+  vars:
+    openwrt_apply_allowed: false
+    openwrt_switch_phase: prepare
+  tasks:
+    - name: Require the approved AP scope and known switch endpoint
+      ansible.builtin.assert:
+        that:
+          - openwrt_apply_allowed | bool
+          - ansible_host == '10.0.10.2'
+          - ansible_connection == 'local'
+          - openwrt_switch_phase in ['prepare', 'test', 'apply', 'rollback']
+
+    - name: Reconcile only the declared AP VLAN rows with complete native-state guard
+      swos_ap:
+        password: "{{ swos_password }}"
+        phase: "{{ openwrt_switch_phase }}"
+        declared:
+          '20': "{{ (vlans | selectattr('vlan_id', 'equalto', 20) | first).member_ports }}"
+          '40': "{{ (vlans | selectattr('vlan_id', 'equalto', 40) | first).member_ports }}"
+          '50': "{{ (vlans | selectattr('vlan_id', 'equalto', 50) | first).member_ports }}"
+        recovery_directory: "{{ openwrt_recovery_directory }}"
+      register: openwrt_switch_result
+
+    - name: Report public switch result
+      ansible.builtin.debug:
+        msg:
+          changed: "{{ openwrt_switch_result.changed }}"
+          verified: "{{ openwrt_switch_result.verified }}"

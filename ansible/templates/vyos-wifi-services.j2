@@ -1,0 +1,86 @@
+set system config-management commit-revisions 100 &&
+set system config-management commit-confirm action reload &&
+set service dns forwarding domain owl.red name-server 10.0.10.30 &&
+delete service ntp listen-address &&
+set service ntp listen-address 0.0.0.0 &&
+{% for name, network in openwrt_wifi_networks.items() if network.enabled %}
+{% set vlan = network.vlan %}
+{% set subnet = '10.0.' ~ vlan ~ '.0/24' %}
+{% set gateway = '10.0.' ~ vlan ~ '.1' %}
+{% if vlan != 20 %}
+set interfaces ethernet eth1 vif {{ vlan }} address {{ gateway }}/24 &&
+set interfaces ethernet eth1 vif {{ vlan }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} source address {{ subnet }} &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} destination address {{ gateway }} &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} protocol tcp_udp &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} destination port 53 &&
+set firewall ipv4 input filter rule {{ 5100 + vlan }} action accept &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} source address {{ subnet }} &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} destination address {{ gateway }} &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} protocol icmp &&
+set firewall ipv4 input filter rule {{ 5200 + vlan }} action accept &&
+set service dns forwarding allow-from {{ subnet }} &&
+set service dns forwarding listen-address {{ gateway }} &&
+{% endif %}
+set firewall ipv4 input filter rule {{ 5000 + vlan }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5000 + vlan }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5000 + vlan }} source port 68 &&
+set firewall ipv4 input filter rule {{ 5000 + vlan }} destination port 67 &&
+set firewall ipv4 input filter rule {{ 5000 + vlan }} protocol udp &&
+set firewall ipv4 input filter rule {{ 5000 + vlan }} action accept &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} source address {{ subnet }} &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} destination address {{ gateway }} &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} protocol udp &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} destination port 123 &&
+set firewall ipv4 input filter rule {{ 5300 + vlan }} action accept &&
+set service ntp allow-client address {{ subnet }} &&
+set service dhcp-server listen-interface eth1.{{ vlan }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} authoritative &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} description OWL-WIFI-{{ vlan }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} subnet-id {{ vlan }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} ignore-client-id &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} lease 86400 &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} option default-router {{ gateway }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} option name-server {{ gateway }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} option domain-name owl.red &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} range 0 start 10.0.{{ vlan }}.100 &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} range 0 stop 10.0.{{ vlan }}.199 &&
+{% set scope = openwrt_target_registry.scopes.values() | selectattr('network', 'equalto', subnet) | first %}
+{% for reservation in scope.reservations if reservation.status == 'confirmed' %}
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} static-mapping {{ reservation.hostName | replace('.', '-') }} ip-address {{ reservation.ipAddress }} &&
+set service dhcp-server shared-network-name WIFI_{{ name | upper }} subnet {{ subnet }} static-mapping {{ reservation.hostName | replace('.', '-') }} mac {{ reservation.hardwareAddress | lower | replace('-', ':') }} &&
+{% endfor %}
+{% if vlan != 20 %}
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} source address {{ subnet }} &&
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} action drop &&
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} log &&
+{% if network.internet %}
+set firewall ipv4 forward filter rule {{ 6000 + vlan * 10 }} destination group network-group OWL_VLAN20_NONPUBLIC &&
+set firewall ipv4 forward filter rule {{ 6001 + vlan * 10 }} description OWL-WIFI-{{ vlan }} &&
+set firewall ipv4 forward filter rule {{ 6001 + vlan * 10 }} inbound-interface name eth1.{{ vlan }} &&
+set firewall ipv4 forward filter rule {{ 6001 + vlan * 10 }} outbound-interface name eth0 &&
+set firewall ipv4 forward filter rule {{ 6001 + vlan * 10 }} source address {{ subnet }} &&
+set firewall ipv4 forward filter rule {{ 6001 + vlan * 10 }} action accept &&
+set nat source rule {{ 6000 + vlan }} description OWL-WIFI-{{ vlan }} &&
+set nat source rule {{ 6000 + vlan }} outbound-interface name eth0 &&
+set nat source rule {{ 6000 + vlan }} source address {{ subnet }} &&
+set nat source rule {{ 6000 + vlan }} translation address masquerade &&
+{% endif %}
+{% endif %}
+{% endfor %}
+set firewall ipv4 forward filter rule 2800 description OWL-WIFI-PRIVATE-SERVICES &&
+set firewall ipv4 forward filter rule 2800 inbound-interface name eth1.20 &&
+set firewall ipv4 forward filter rule 2800 outbound-interface name eth1 &&
+set firewall ipv4 forward filter rule 2800 source address 10.0.20.0/24 &&
+set firewall ipv4 forward filter rule 2800 destination address 10.0.10.5 &&
+set firewall ipv4 forward filter rule 2800 protocol tcp &&
+set firewall ipv4 forward filter rule 2800 destination port 445,32400 &&
+set firewall ipv4 forward filter rule 2800 action accept

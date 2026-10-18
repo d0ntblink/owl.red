@@ -1,0 +1,230 @@
+---
+- name: Reconcile the qualified lightweight AP through native UCI transactions
+  hosts: ap_openwrt
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    openwrt_phase: inspect
+    openwrt_apply_allowed: false
+    openwrt_endpoint: https://10.10.20.1
+    openwrt_private: "{{ lookup('file', openwrt_private_input_file) | from_json }}"
+    openwrt_wifi_keys: "{{ openwrt_private.wifi_keys }}"
+  tasks:
+    - name: Refuse unsupported hardware targets and unsafe AP scope
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'ap_openwrt'
+          - openwrt_expected_board == 'dlink,dir-885l'
+          - openwrt_expected_version == '25.12.2'
+          - openwrt_uplink == 'wan'
+          - openwrt_recovery_port == 'lan4'
+          - openwrt_private_ports == ['lan1', 'lan2', 'lan3']
+          - openwrt_management_host == '10.0.10.40'
+          - openwrt_native_management_vid | int == 1
+          - openwrt_wifi_networks.guest.enabled is sameas false
+          - openwrt_phase in ['inspect', 'qualify', 'plan', 'trial', 'verify', 'rebind', 'confirm', 'rollback', 'finish']
+          - openwrt_phase != 'rebind' or openwrt_apply_allowed | bool
+
+    - name: Wait for the new wired management listener during acceptance
+      ansible.builtin.wait_for:
+        host: 10.0.10.40
+        port: 443
+        timeout: 90
+        connect_timeout: 2
+      when: openwrt_phase == 'verify'
+
+    - name: Reconcile the declared AP configuration without logging secrets
+      openwrt_ap:
+        endpoint: "{{ openwrt_endpoint }}"
+        password: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
+        certificate_sha256: "{{ openwrt_private.certificate_sha256 }}"
+        recovery_directory: "{{ openwrt_recovery_directory }}"
+        phase: "{{ 'plan' if openwrt_phase in ['verify', 'rebind'] else openwrt_phase }}"
+        apply_allowed: "{{ openwrt_apply_allowed }}"
+        rendered:
+          network: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-network.j2') }}"
+          wireless: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-wireless.j2') }}"
+          dhcp: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-dhcp.j2') }}"
+          firewall: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-firewall.j2') }}"
+      register: openwrt_result
+      no_log: true
+
+    - name: Require matching source before rebinding primary wireless interfaces
+      ansible.builtin.assert:
+        that:
+          - not openwrt_result.changed
+      when: openwrt_phase == 'rebind'
+
+    - name: Rebind wireless interfaces to their declared ordinary bridges
+      ansible.builtin.command:
+        argv:
+          - sshpass
+          - -e
+          - ssh
+          - -o
+          - StrictHostKeyChecking=yes
+          - -o
+          - HostKeyAlias=10.10.20.1
+          - -o
+          - ConnectTimeout=5
+          - -o
+          - PreferredAuthentications=password
+          - -o
+          - PubkeyAuthentication=no
+          - root@10.0.10.40
+          - sh -s
+        stdin: |
+          set -eu
+          test "$(ubus call system board | jsonfilter -e '@.board_name')" = dlink,dir-885l
+          changed=0
+          {% for device, bridge in openwrt_bss_bridges.items() %}
+          test -d /sys/class/net/{{ device }}
+          test -d /sys/class/net/{{ bridge }}/bridge
+          current=$(readlink /sys/class/net/{{ device }}/master || true)
+          current=${current##*/}
+          if test "$current" != {{ bridge }}; then
+              if test -n "$current"; then brctl delif "$current" {{ device }}; fi
+              brctl addif {{ bridge }} {{ device }}
+              changed=1
+          fi
+          {% endfor %}
+          printf 'OWL_AP_BINDINGS_CHANGED=%s\n' "$changed"
+      environment:
+        SSHPASS: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
+      register: openwrt_rebind
+      changed_when: "'OWL_AP_BINDINGS_CHANGED=1' in openwrt_rebind.stdout"
+      when: openwrt_phase == 'rebind'
+
+    - name: Read actual wired runtime over the trusted native SSH transport
+      ansible.builtin.command:
+        argv:
+          - sshpass
+          - -e
+          - ssh
+          - -o
+          - StrictHostKeyChecking=yes
+          - -o
+          - HostKeyAlias=10.10.20.1
+          - -o
+          - ConnectTimeout=5
+          - -o
+          - PreferredAuthentications=password
+          - -o
+          - PubkeyAuthentication=no
+          - root@10.0.10.40
+          - ubus call network.interface dump
+      environment:
+        SSHPASS: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
+      register: openwrt_interface_runtime
+      changed_when: false
+      no_log: true
+      when: openwrt_phase == 'verify'
+
+    - name: Read actual radio runtime without logging wireless credentials
+      ansible.builtin.command:
+        argv:
+          - sshpass
+          - -e
+          - ssh
+          - -o
+          - StrictHostKeyChecking=yes
+          - -o
+          - HostKeyAlias=10.10.20.1
+          - -o
+          - ConnectTimeout=5
+          - -o
+          - PreferredAuthentications=password
+          - -o
+          - PubkeyAuthentication=no
+          - root@10.0.10.40
+          - |
+            set -eu
+            ubus call network.wireless status
+            {% for device, bridge in openwrt_bss_bridges.items() %}
+            current=$(readlink /sys/class/net/{{ device }}/master)
+            test "${current##*/}" = {{ bridge }}
+            {% endfor %}
+      environment:
+        SSHPASS: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
+      register: openwrt_wireless_runtime
+      changed_when: false
+      no_log: true
+      when: openwrt_phase == 'verify'
+
+    - name: Require exact source configuration, wired management and intended active SSIDs
+      ansible.builtin.assert:
+        that:
+          - not openwrt_result.changed
+          - >-
+            (openwrt_interface_runtime.stdout | from_json).interface |
+            selectattr('interface', 'equalto', 'lan') | selectattr('up', 'equalto', true) |
+            map(attribute='ipv4-address') | flatten | selectattr('address', 'equalto', '10.0.10.40') |
+            selectattr('mask', 'equalto', 24) | list | length == 1
+          - >-
+            openwrt_wireless_runtime.stdout | from_json | dict2items | map(attribute='value') |
+            selectattr('up', 'equalto', true) | list | length == 2
+          - >-
+            openwrt_wireless_runtime.stdout | from_json | dict2items | map(attribute='value.interfaces') |
+            flatten | map(attribute='config.ssid') | list | sort ==
+            ['owl.red', 'owl.red', 'owl.red-iot-cloud', 'owl.red-iot-local']
+        fail_msg: The exact AP target, wired interface or active radio/SSID state did not converge.
+      when: openwrt_phase == 'verify'
+
+    - name: Retire non-AP services through the existing trusted SSH transport
+      ansible.builtin.command:
+        argv:
+          - sshpass
+          - -e
+          - ssh
+          - -o
+          - StrictHostKeyChecking=yes
+          - -o
+          - HostKeyAlias=10.10.20.1
+          - -o
+          - ConnectTimeout=5
+          - -o
+          - PreferredAuthentications=password
+          - -o
+          - PubkeyAuthentication=no
+          - root@10.0.10.40
+          - sh -s
+        stdin: |
+          set -eu
+          test "$(ubus call system board | jsonfilter -e '@.board_name')" = dlink,dir-885l
+          changed=0
+          for service in opennds dnsmasq odhcpd firewall; do
+              if test -x "/etc/init.d/$service"; then
+                if pidof "$service" >/dev/null 2>&1; then
+                  changed=1
+                fi
+                "/etc/init.d/$service" stop
+                  if "/etc/init.d/$service" enabled; then
+                      "/etc/init.d/$service" disable
+                      changed=1
+                  fi
+              fi
+          done
+          sysctl -q -w net.ipv4.ip_forward=0
+          sysctl -q -w net.ipv6.conf.all.forwarding=0
+          mkdir -p /etc/sysctl.d
+          printf 'net.ipv4.ip_forward=0\nnet.ipv6.conf.all.forwarding=0\n' > /etc/sysctl.d/90-owl-ap.conf
+            if pidof dnsmasq odhcpd opennds >/dev/null 2>&1; then
+              printf 'Retired AP daemon remains running\n' >&2
+              exit 1
+            fi
+          printf 'OWL_AP_SERVICES_CHANGED=%s\n' "$changed"
+      environment:
+        SSHPASS: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
+      register: openwrt_retirement
+      changed_when: "'OWL_AP_SERVICES_CHANGED=1' in openwrt_retirement.stdout"
+      when: openwrt_phase == 'finish' and openwrt_result.service_retirement_ready | default(false)
+
+    - name: Report only public reconciliation status
+      ansible.builtin.debug:
+        msg:
+          phase: "{{ openwrt_phase }}"
+          changed: "{{ openwrt_result.changed or (openwrt_retirement.changed | default(false)) }}"
+          verified: "{{ openwrt_result.verified | default(false) }}"
+          trial_pending: "{{ openwrt_result.trial_pending | default(false) }}"
+          changed_packages: "{{ openwrt_result.changed_packages | default([]) }}"
