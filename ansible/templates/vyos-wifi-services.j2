@@ -83,4 +83,12 @@ set firewall ipv4 forward filter rule 2800 source address 10.0.20.0/24 &&
 set firewall ipv4 forward filter rule 2800 destination address 10.0.10.5 &&
 set firewall ipv4 forward filter rule 2800 protocol tcp &&
 set firewall ipv4 forward filter rule 2800 destination port 445,32400 &&
-set firewall ipv4 forward filter rule 2800 action accept
+set firewall ipv4 forward filter rule 2800 action accept &&
+set firewall ipv4 forward filter rule 2810 description OWL-WIFI-PRIVATE-INGRESS &&
+set firewall ipv4 forward filter rule 2810 inbound-interface name eth1.20 &&
+set firewall ipv4 forward filter rule 2810 outbound-interface name eth1 &&
+set firewall ipv4 forward filter rule 2810 source address 10.0.20.0/24 &&
+set firewall ipv4 forward filter rule 2810 destination address 10.0.10.201 &&
+set firewall ipv4 forward filter rule 2810 protocol tcp &&
+set firewall ipv4 forward filter rule 2810 destination port 443 &&
+set firewall ipv4 forward filter rule 2810 action accept

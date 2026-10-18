@@ -326,6 +326,12 @@ No live network assignment was changed by this allocation update.
 
 ### Service Authority Summary
 
+Private VLAN 20 now has scoped access to NAS media/SMB (`10.0.10.5` TCP
+`445/32400`) and shared ingress HTTPS (`10.0.10.201` TCP `443`). This does not
+grant direct AP/Proxmox/NAS administration. A VLAN-20 probe verified ingress TLS
+and continued blocking of those tested management endpoints. Shared ingress
+hostnames still require their own application authentication and TLS policy.
+
 | Function | Primary Service | Endpoint | Notes |
 |----------|-----------------|----------|-------|
 | Routing and firewall | OPNsense | `10.0.10.1` and per-VLAN gateways | Default gateway and policy engine |

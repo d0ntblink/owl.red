@@ -163,6 +163,39 @@ test('production VLAN pilot refuses missing approval and changed host/operator b
   }
 });
 
+test('private ingress allowlist is exact TCP443 to the shared VIP only', () => {
+  const result = spawnSync(python, ['-c', String.raw`
+import json
+from pathlib import Path
+import shlex
+import yaml
+from jinja2 import Environment, StrictUndefined
+
+profile = yaml.safe_load(Path('ansible/inventory/group_vars/aps.yml').read_text())
+profile['openwrt_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
+environment = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
+environment.filters['quote'] = shlex.quote
+rendered = environment.from_string(Path('ansible/templates/vyos-wifi-services.j2').read_text()).render(**profile)
+stem = ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '2810']
+commands = [shlex.split(line.removesuffix(' &&')) for line in rendered.splitlines() if line.startswith('set ')]
+actual = [command[len(stem):] for command in commands if command[:len(stem)] == stem]
+expected = [
+    ['description', 'OWL-WIFI-PRIVATE-INGRESS'],
+    ['inbound-interface', 'name', 'eth1.20'],
+    ['outbound-interface', 'name', 'eth1'],
+    ['source', 'address', '10.0.20.0/24'],
+    ['destination', 'address', '10.0.10.201'],
+    ['protocol', 'tcp'], ['destination', 'port', '443'], ['action', 'accept'],
+]
+assert sorted(actual) == sorted(expected), actual
+assert 2810 < 3000
+guard = Path('ansible/playbooks/vyos-wifi.yml').read_text()
+assert 'returnActiveValue firewall ipv4 forward filter rule 2810 description' in guard
+assert 'OWL-WIFI-PRIVATE-INGRESS' in guard
+`], { cwd: repository, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
+});
+
 test('candidate parses with the authenticated release library and uses its actual CLI paths', {
   skip: !process.env.VYOS_NATIVE_ROOT && 'Set VYOS_NATIVE_ROOT to the verified image extraction',
 }, () => {

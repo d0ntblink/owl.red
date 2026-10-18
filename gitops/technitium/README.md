@@ -2,7 +2,7 @@
 
 Technitium runs as a NixOS LXC on `edge.pve` and is authoritative for `owl.red`.
 Sole client DNS/DHCP service across five VLANs is the **post-cutover target**,
-not the observed deployment. Keep client DNS/DHCP on OPNsense until supporting
+not the observed deployment. Keep the accepted VyOS client DNS/DHCP authority until supporting
 VLAN paths and Technitium interfaces are ready and a coordinated handoff is
 approved. See the [execution order](../../ROADMAP.md#execution-order),
 [ADR 013](../../docs/decisions/013-technitium-single-resolver-all-vlans.md)
@@ -22,9 +22,41 @@ restart; addresses and routes are unchanged. Client DNS/DHCP stays on OPNsense.
 Native-LAN no-offer checks passed before and after a sync-unit restart on
 2026-10-15: the wired probe reached Technitium and only OPNsense offered.
 An approved daemon restart subsequently preserved all five disabled scopes
-before reconciliation and passed the same native-LAN check. Whole-container
-boot, IPv6 and unattached-VLAN acceptance remain unverified; this is not VLAN or
-handoff readiness, and no new NICs or trunks were attached.
+before reconciliation and passed the same native-LAN check. That daemon-only
+rollout did not cover whole-container boot, IPv6 or unattached VLANs, and did not
+attach any NICs or trunks.
+
+**VLAN-20 DNS path accepted (2026-10-17):** Terraform stage 1 preserves untagged
+`eth0` at `10.0.10.30/24` and adds only tagged `eth1` at `10.0.20.30/24`, with no
+second default gateway. The provider-required CT200 restart was explicitly
+approved. The existing guarded switch owner adds edge port 24 only to VLAN 20;
+native management and operator port 22 are unchanged. The refreshed CT-only
+Terraform plan has zero changes.
+
+Nix permits DNS TCP/UDP 53 but restricts SSH 22 and admin API 5380 to native
+`eth0`; DHCP UDP 67 remains closed. The conflicting systemd-resolved IPv4 stub
+is disabled while its upstream resolver file keeps OS lookups working.
+A disposable VLAN-20 client passed internal/public UDP DNS and TCP 53
+connectivity; SSH/admin connections timed out. All five scopes still read back
+disabled, `DHCP_ENABLE_ALLOWED=false`, no UDP 67 listener and native API healthy.
+No real-client DNS/lease change, new DHCP wire-offer proof, IPv6 qualification or
+authority handoff is claimed. VyOS remains the client DNS/DHCP authority.
+See [controller requirements and scope](../../docs/guides/controller-setup.md#technitium-vlan-dns-preparation).
+
+**Active IoT DNS paths accepted (2026-10-17):** the separately approved next
+batch added VLAN 40/50 NICs with one CT200 restart. Current stage 3 is native
+`eth0` plus tagged `eth1/eth2/eth3` on VLANs 20/40/50; guest 30 stays detached.
+Stage ordering is active-first 20/40/50/30. The existing native/private NICs,
+sole native default route and other hardware are preserved. The refreshed
+CT200-only plan with the accepted default has zero changes.
+
+Disposable wired clients passed internal/public UDP DNS, TCP 53 connectivity
+and blocked SSH/admin to `10.0.40.30` and `10.0.50.30`. The guarded switch owner
+keeps edge port 24 on each IoT row and removes temporary cp1 port 2 after testing.
+Native DNS/API and OS DNS recovered after boot, with all five scopes disabled,
+activation lock false and no UDP 67 listener. Client DNS/DHCP remains on VyOS;
+new DHCP wire-offer/renewal, guest and IPv6 acceptance are not claimed.
+Private evidence: `~/.local/state/owl-red/technitium-vlan-iot-OFZ7pw`.
 
 ## Quick Reference
 
@@ -33,9 +65,11 @@ handoff readiness, and no new NICs or trunks were attached.
 | Placement | NixOS LXC (VMID 200) on `edge.pve` (`10.0.10.3`) |
 | Hostname | `ns1.owl.red` |
 | DNS authority | `owl.red` authoritative zone now; target client DNS uses VLAN-local `10.0.x.30` after handoff |
-| Management / VLAN 10 IP | `10.0.10.30` |
+| Management IP (native, untagged) | `10.0.10.30` |
+| Accepted private VLAN-20 DNS path | `10.0.20.30`; not yet advertised to clients |
+| Accepted IoT VLAN-40/50 DNS paths | `10.0.40.30` / `10.0.50.30`; not yet advertised to clients |
 | Web UI | `https://dns.owl.red` (Traefik ingress → `10.0.10.201`) |
-| DHCP authority | Target: all VLANs after approved handoff; preserve OPNsense during preparation |
+| DHCP authority | VyOS currently; all five Technitium scopes disabled until approved per-domain handoff |
 | DHCP ranges | `10.0.x.100–199` per VLAN |
 | Sync engine | `technitium-sync.service` + `.timer` (boot+3min, then every 15min) |
 | Sync source of truth | this directory (`gitops/technitium/`) |
@@ -117,7 +151,7 @@ intended records and inspect the live serial separately.
 
 | Layer | Owner |
 |-------|-------|
-| LXC lifecycle (target five NICs; observed one) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
+| LXC lifecycle (staged target five NICs; observed four) | Terraform — `terraform/proxmox/technitium/technitium-lxc.tf` |
 | OS + Technitium + sync service | NixOS — `nix/hosts/technitium/configuration.nix` |
 | Admin account, API token, first sync trigger | Ansible — `ansible/roles/technitium_lxc/`, played by `ansible/playbooks/deploy-technitium-lxc.yml` |
 | DNS / DHCP desired state | This directory |

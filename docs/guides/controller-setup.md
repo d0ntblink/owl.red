@@ -247,6 +247,14 @@ or the complete collection set.
 
 ### OpenWrt AP Scope And Power
 
+The [existing wired probe](../../ansible/files/wifi-vlan-probe.sh) also accepts
+`20 services` for the narrow private-service policy check. It uses a temporary
+cp1 namespace, real gateway routing and verified TLS to shared ingress, then
+requires direct AP/Proxmox/NAS administration to time out. It does not reconnect
+Wi-Fi, request a lease, change client DNS/metrics or repeat a password test.
+The rule is owned by the native gateway template/Ansible lane; application
+hostname/authentication restrictions on a shared VIP remain ingress-owned.
+
 For routine credential changes, follow
 [Wi-Fi Password Rotation](wifi-password-rotation.md). The controller runner
 syncs Bitwarden before reading keys, defaults to wired `10.0.10.40`, and requires
@@ -308,6 +316,73 @@ dnsmasq/odhcpd/OpenNDS processes, disables their startup and local firewall, and
 persists both IP forwarding flags off. No extra AP package is installed.
 Private preimages, native session records, gateway packet acceptance and final
 result are under `~/.local/state/owl-red/openwrt-rebuild-eyuSab`.
+
+### Technitium VLAN DNS Preparation
+
+The [Terraform LXC owner](../../terraform/proxmox/technitium/technitium-lxc.tf)
+uses `technitium_vlan_stage`: 0 is native management only, 1 adds VLAN 20 and is
+the initial accepted stage; 2 adds local IoT VLAN 40, 3 adds cloud IoT VLAN 50
+and is the current accepted default. Stage 4 adds dormant guest VLAN 30 and is
+not approved. This active-first order preserves the accepted private NIC.
+Keep `eth0` untagged at `10.0.10.30/24`, its MAC
+and sole default gateway unchanged. The pinned `bpg/proxmox` 0.66.1 provider
+restarts the container for NIC/initialization updates: approve the interruption
+before applying a reviewed CT200-only saved plan. Do not apply the mixed Talos
+root. The explicit DNS domain `" "` preserves Proxmox's blank-search-domain
+representation and avoids a whitespace-only initialization/reboot plan.
+
+Controller requirements are Terraform with the committed provider lock, the
+existing Ansible venv and `python-swos`/requests/urllib3, Nix, ShellCheck,
+OpenSSH and the working Bitwarden CLI profile. Node.js 20.12+ `util.parseEnv`
+loads ignored credentials without shell-sourcing `env.secret`; passwords stay
+in child environments, not command arguments or Git. Retain plans, preimages
+and logs under a mode-0700 `~/.local/state/owl-red/technitium-vlan-*` directory
+with mode-0600 files. Use the existing Proxmox credential/SSH route.
+
+Apply reviewed native-only SSH/admin guards first through
+[the existing deployment playbook](../../ansible/playbooks/deploy-technitium-lxc.yml)
+with `--tags technitium_nixos`, channel updates false and DHCP activation locked.
+Nix disables only systemd-resolved's port-53 stub, uses its upstream resolver
+file and orders/restarts Technitium after resolved configuration changes.
+The pinned [module check](../../nix/hosts/technitium/check.nix) asserts these
+resolver, firewall and disabled-DHCP invariants.
+
+Reuse [the guarded switch playbook](../../ansible/playbooks/swos-ap.yml) directly,
+not the AP runner: `openwrt_apply_allowed=true`, `openwrt_switch_phase=prepare`
+then `apply`, and `openwrt_recovery_directory` set to that private directory.
+Supply `SWOS_PASSWORD` only in the child environment and use the venv Python
+interpreter. Its complete preimage supports `rollback`; only VLAN-20 port 24
+was added for the first stage. The accepted IoT batch additionally retains
+port 24 on VLANs 40/50, preserving native/operator and guest settings. Phase
+`test` temporarily adds cp1 port 2 to those IoT rows while retaining port 24;
+phase `apply` removes only that temporary probe membership after acceptance.
+
+The [wired probe](../../ansible/files/wifi-vlan-probe.sh) accepts
+`20 technitium`, `40 technitium` or `50 technitium`:
+
+```bash
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=6 \
+  -i "$HOME/.ssh/id_ed25519_owl_ansible" root@10.0.10.11 \
+  'timeout 40 bash -s -- 20 technitium' < ansible/files/wifi-vlan-probe.sh
+```
+
+The existing root cp1 tools are Bash, coreutils, iproute2, Python 3, ping and
+curl; no installation was needed. A temporary VLAN-local namespace/static `.254`
+tests internal/public UDP DNS via `10.0.<VLAN>.30`, TCP 53 and blocked SSH/admin, then
+cleans up. It requests no lease and changes no real-client DNS/routes. Inside
+the NixOS LXC, `pct exec` commands need full `/run/current-system/sw/bin/` paths.
+Read the native API using its local token file; never export or print the token.
+
+Accepted evidence is `~/.local/state/owl-red/technitium-vlan-4qDmlH`:
+`result.json`, `vlan20-dns-acceptance.json` and `accepted-state-plan.json` record
+the successful DNS/isolation probe, disabled scopes/lock, no DHCP listener and
+refreshed zero-change CT-only plan for stage 1. The separately approved IoT
+batch is under `~/.local/state/owl-red/technitium-vlan-iot-OFZ7pw`, with
+`approval.json`, `attachment-result.json`, both VLAN DNS acceptance records,
+`result.json` and `accepted-state-plan.json`. It passed after one provider
+restart; stage 3 is persisted and the refreshed CT-only plan is unchanged.
+DHCP wire-offer/renewal acceptance, guest, IPv6 and the authority handoff remain
+separate; VyOS still serves clients.
 
 ## IaC Dependency Sources
 

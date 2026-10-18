@@ -20,6 +20,17 @@ assert pkgs.lib.assertMsg
   "Technitium DHCP activation must remain locked during preparation";
 assert pkgs.lib.assertMsg (builtins.all (scope: scope.enabled == false) scopes)
   "Technitium DHCP scopes must remain disabled during preparation";
+assert pkgs.lib.assertMsg
+  (!(builtins.elem 22 config.networking.firewall.allowedTCPPorts)
+    && !(builtins.elem 5380 config.networking.firewall.allowedTCPPorts)
+    && !(builtins.elem 67 config.networking.firewall.allowedUDPPorts)
+    && builtins.elem 22 config.networking.firewall.interfaces.eth0.allowedTCPPorts
+    && builtins.elem 5380 config.networking.firewall.interfaces.eth0.allowedTCPPorts)
+  "Technitium management must stay native-only and DHCP must stay blocked during VLAN preparation";
+assert pkgs.lib.assertMsg
+  (config.environment.etc."resolv.conf".source == "/run/systemd/resolve/resolv.conf"
+    && pkgs.lib.hasInfix "DNSStubListener=no" config.services.resolved.extraConfig)
+  "The OS resolver must not occupy Technitium's wildcard IPv4 TCP53 listener";
 {
   sync = pkgs.runCommandLocal "owl-red-technitium-sync-check" {
     syncExecutable = config.systemd.services.technitium-sync.serviceConfig.ExecStart;
