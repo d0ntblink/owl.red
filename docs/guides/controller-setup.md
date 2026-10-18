@@ -121,6 +121,33 @@ The installed `bws secret create` accepts its value as a positional argument,
 so do not use it for these password writes. Read back both stores and compare
 in memory before configuring the guest; record only references and success.
 
+### SDK Logging Safety And SMB Checkpoint
+
+The SMB preparation on 2026-10-18 installed official Node package
+`@bitwarden/sdk-napi` `1.0.0` in the controller's private tool prefix. Its
+JavaScript exports do not include the `LogLevel` enum shown in its example.
+The installed native declarations define `Trace=0` and `Error=4`; never guess
+numeric logging levels. An invocation with level zero exposed an authentication
+secret in debug output. The owner subsequently rotated the affected token and
+updated the private controller input. Replacement reads and Kubernetes secret
+delivery pass with captured output. Existing bootstrap secrets did not reference
+the retired token identifier and were not overwritten. Never put a replacement
+token in chat or assume rotation is complete merely because a value was edited.
+
+SDK authentication must run in a child process with captured stdout/stderr,
+even when its verified log level is restrictive. Emit only an explicit
+reference/status payload, never raw SDK logs or error bodies. The existing
+Python SDK lane above remains available; no secret-write path should use a
+password as an operating-system command argument.
+
+The Kubernetes SMB credential pair is privately read-back verified in Secrets
+Manager. Unraid's non-login `k8s` account and private appdata access are applied;
+NAS-local SMB3 write/read and guest rejection pass. The Bitwarden operator has
+delivered the exact two-field Kubernetes secret. SMB CSI is staged and passes
+render/server dry-run, but no driver or PVC rollout is claimed. Private evidence:
+`~/.local/state/owl-red/unraid-smb-GmLEvd/`; see
+[the release runbook](../../gitops/csi-smb/README.md).
+
 ## Ubuntu And WSL Installation
 
 Run package installation directly in an interactive local terminal when sudo

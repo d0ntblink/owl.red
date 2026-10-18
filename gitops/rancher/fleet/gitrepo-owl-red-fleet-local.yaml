@@ -15,5 +15,6 @@ spec:
     - gitops/dashboards
     - gitops/bitwarden-operator
     - gitops/bitwarden-secrets
+    - gitops/csi-smb
     - gitops/pdm
     - gitops/platform-resilience

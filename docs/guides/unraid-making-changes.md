@@ -9,6 +9,24 @@ Keep disks/array/passthrough/boot/power and unrelated services unchanged. A manu
 network mask/IP change needs its own bounded procedure and available local
 keyboard/monitor recovery; do not run a general settings apply as its preflight.
 
+## No-Fallback Operating Constraint
+
+Owner clarification (2026-10-18): Unraid has **no fallback** and is the highest
+value hardware in this environment. Continue routine, in-scope work without
+repeated permission prompts. **Temporary disruptions are acceptable; destruction
+is not.** Controlled service reloads/restarts are permitted when needed for the
+scoped work; they are not blocked by a blanket no-interruption rule. Preserve
+data, hardware and a recoverable management path. Disk/pool/array/boot/passthrough
+changes and destructive cleanup remain outside the current storage work.
+Production media files, placement and access/export policy remain unchanged.
+
+Use live observations, scoped comparisons and the existing IaC owners. Retain
+affected configuration before permitted changes, but do not describe a config
+copy, parity or local console as a replacement NAS or tested data recovery.
+Choose non-destructive, bounded changes with captured previous values and an
+exact inverse. Do not mistake permission for an interruption for permission to
+delete data, reinitialize storage or perform an unsafe power-loss test.
+
 ## Decision rule
 
 > **Is there a safe GraphQL mutation for it?** → **Terraform** (`terraform/unraid/`).

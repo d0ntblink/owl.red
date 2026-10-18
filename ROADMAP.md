@@ -507,14 +507,48 @@ The NAS is the central shared store for **all HA/stateful things** — k8s PVCs 
 Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and personal files. **Plan + design:
 [`docs/guides/shared-storage.md`](docs/guides/shared-storage.md); decision: [ADR 018](docs/decisions/018-storage-backend.md).**
 
-- `[x]` Decide storage backend → **NFS from `nas.owl.red`, reusing existing shares** (NFS for HA/infra: k8s/Proxmox/LXC;
-  SMB for personal). Longhorn remains medium-term after capacity/storage evaluation; Unraid's VM migration is already complete. (Ceph rejected: too heavy for 4 small nodes.)
+**Read-only refresh (2026-10-18):** Unraid `7.3.3`; NFS is off with no active
+exports. Six shares, including `system`, have saved public NFS exports;
+`appdata` is not exported. The `ssd` pool has about 351 GB available, and the
+proposed `appdata/k8s` directory is absent. Local apcupsd is unavailable; other
+UPS monitoring and staged shutdown remain unverified. The owner has reopened
+the share-layout/security design before activation. See the
+[observed baseline](docs/guides/shared-storage.md#observed-nas-baseline-2026-10-18).
+No NAS settings or data were changed.
+
+**Subsequent accepted change (2026-10-18, 19:25Z):** owner-authorized
+`sharefiles` retirement is complete. No SMB handles, container references or
+nested mounts; zero files and one empty recycle-bin directory removed. Native
+Unraid retirement removed the share/config/SMB advertisement; other share and
+disk/array/network/global configurations, including production media, are
+unchanged. NFS remains off. Existing Talos 1.8.1 kernel CIFS support is also
+confirmed; no node upgrade or configuration change was required.
+
+- `[x]` Select NAS-backed shared appdata with **authenticated SMB for Kubernetes** and a dedicated `k8s` account. NFS remains proposed for Proxmox/infrastructure only, subject to the media activation gate
 - `[ ]` Close G6 power/export safety checks before NFS activation; the Ansible file lane is still a scaffold and must be implemented/validated before using it for writes
 - `[ ]` Lock intended NFS exports (`shareSecurityNFS=private` + reviewed host allowlists); fix public defaults on all intended shares and exclude `system` — Ansible file-lane (`--check` first)
 - `[ ]` Enable NFS globally on Unraid (`shareNFSEnabled=yes`) — array untouched
-- `[ ]` k8s: deploy NFS CSI (`nfs-subdir-external-provisioner`/`democratic-csi`) via Fleet → `StorageClass` → smoke-test a PVC (write + survive reschedule)
+- `[~]` Existing Talos 1.8.1 CIFS support and NAS-local SMB3 authentication/write/read pass. [SMB CSI 1.20.3](gitops/csi-smb/README.md), retained non-default StorageClass and Fleet path registration are staged; real render and Kubernetes 1.31 server dry-run pass. Publish/activate through Fleet, then complete PVC mount/write/reschedule acceptance
 - `[ ]` Proxmox: `pvesm add nfs` (images/rootdir/iso/backup) on each node → verify CT HA failover (unblocks PDM HA, §11/§13)
 - `[ ]` Document StorageClass name, NFS paths, and per-share export rules back into the guide + README
+
+### 4.1 Owner Amendments And Access Plan (2026-10-18)
+
+These boundaries govern the earlier storage checklist; no live change or
+automatic global NFS activation is approved by selecting the design.
+
+- `[x]` Record Unraid's [no-fallback data-protection constraint](docs/guides/unraid-making-changes.md#no-fallback-operating-constraint): proceed without repeated permission prompts; temporary scoped interruptions are acceptable, destructive changes are not. Preserve data/hardware, management recovery and production media
+- `[x]` Keep one mixed NAS/Kubernetes `appdata` share, not a separate Kubernetes appdata share
+- `[ ]` Inventory and clean appdata after reviewing owners, live consumers, per-app/PVC paths and data retention; no automatic moves/deletion or simultaneous old/new single-writer instances
+- `[x]` Protect production `media`: no files, paths, placement, share-security or export changes; no merge into a new bulk-data share
+- `[!]` Resolve protected media's saved public NFS export before global enable; keep NFS off while activation would expose it. This overrides the earlier blanket export-remediation/global-enable items
+- `[x]` Retire `sharefiles` after explicit owner confirmation that all contents are disposable; no consumers, zero files, one empty recycle-bin directory removed. Native share retirement and unchanged protected configurations verified; inventory/snapshot updated
+- `[x]` Select a dedicated `k8s` SMB role; plan backup/scanner accounts and create them when their consumers exist. Reuse `root` for administration and `d0ntblink` for the PC
+- `[x]` Owner rotated the exposed Bitwarden token; replacement credential reads and end-to-end operator delivery pass with captured output. Existing SMB password reused, no additional rotation. See the [checkpoint/safeguard](docs/guides/controller-setup.md#sdk-logging-safety-and-smb-checkpoint)
+- `[x]` Create non-login `k8s` through Unraid's native account handler and make appdata private with only `d0ntblink,k8s` write grants; NAS-local SMB3 write/read, guest rejection and temporary probe cleanup pass. Initial native grant reset repaired before acceptance; root/owner credentials, other shares/media and hardware settings unchanged. [Access plan](docs/guides/shared-storage.md#accounts-and-access-roles)
+- `[x]` Bootstrap the source-defined storage namespace, private rotated machine token and Bitwarden mapping; operator secret contains only username/password and matches the intended vault entries. Fleet adoption is prepared; the driver remains uninstalled
+- `[ ]` Validate application UID/GID/mode/locking behavior on SMB without recursive ownership resets or blanket world-write permissions. NFS host rules apply to the separate Proxmox lane; unchanged media prevents a strict appdata-only read-denial claim
+- `[ ]` Evaluate optional Harbor/image caching after storage qualification, including retention/capacity, TLS and a working upstream/bootstrap path; no registry deployment is selected
 
 ---
 
@@ -524,7 +558,7 @@ Proxmox CT/VM disks on shared storage (real failover), other LXC/VMs, and person
 - `[ ]` Create `gitops/home-assistant/` Fleet app directory
 - `[ ]` Deploy via Helm chart (`home-assistant` from `pajikos` or raw manifests)
 - `[ ]` Validate the proposed 3-replica/anti-affinity design against Home Assistant's supported state/database model before choosing a workload topology; NFS alone does not make an application multi-writer safe
-- `[ ]` Persistent volume via NFS StorageClass (10 GiB minimum for config + DB)
+- `[ ]` Persistent configuration via the qualified SMB StorageClass; select supported database placement separately rather than assuming a network filesystem is safe for SQLite
 - `[ ]` Choose an unused Home Assistant hostname before adding its DNS/ingress; `home.owl.red` already serves Homepage and must not be silently reassigned
 - `[ ]` TLS via cert-manager + Traefik IngressRoute (matches existing pattern)
 - `[ ]` Home Assistant `homeassistant.http.use_x_forwarded_for` + trusted proxy set to Traefik pod CIDR
