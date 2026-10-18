@@ -654,23 +654,24 @@ mail-server operations; it does not remove other services' storage requirements.
 
 ### 12.1 Provider And Scope
 - `[x]` Select Mailgun instead of a local mail stack (owner decision, 2026-10-18)
-- `[x]` Confirm Mailgun account ready in the US region and `owl.red` itself selected for automated sender addresses; `0v0.zip` is optional, and only `khodayari.info` / `d0ntb.link` are personal-mail domains
+- `[x]` Select `mg.owl.red` in Mailgun US for production sending, keeping apex receiving independent. The free plan does not include `0v0.zip` in this setup; `khodayari.info` / `d0ntb.link` remain the personal-mail domains
+- Existing non-production sandbox: `sandbox280a4fb516e04b73a52aa6c61e3242f1.mailgun.org`, active and Mailgun-managed; no extra custom-domain or DNS provisioning
 - `crucialmentis.com` is explicitly outside this project's DNS/mail scope.
 - `[x]` Record [ADR 017](docs/decisions/017-mailgun.md), including the isolated Terraform owner and the separate personal-mailbox boundary
 - Proton replacement is required for `khodayari.info` and `d0ntb.link`. Mailgun supplies sending/inbound routes, not hosted IMAP/JMAP inboxes; choose the actual mailbox provider or forwarding destination before MX changes. Keep existing delivery working during the verified cutover, not as the final design.
 
 ### 12.2 Domain And IaC Setup
-- `[ ]` Choose individual automated sender identities and confirm account/plan limits; do not onboard optional `0v0.zip` without its own selection
-- `[x]` Provision `owl.red` in Mailgun US through [the isolated Mailgun root](terraform/mailgun/README.md): pinned provider 0.10.0, protected lifecycle, 2048-bit DKIM and tracking disabled. Authenticated one-resource plan/apply passed; DNS and delivery acceptance are separate
-- `[~]` Move public DNS ownership to private [d0ntblink/cloudflare-iac](https://github.com/d0ntblink/cloudflare-iac), initially `zones/owl.red` only. Standalone provider/CI validation and the identical two-record SPF/DKIM plan pass; no DNS apply yet. Explicit public inputs replace local cross-repository state access; the duplicate homelab DNS root is retired
-- `[ ]` Configure and verify Mailgun's supplied SPF/DKIM records and the intended DMARC policy; reconcile existing records rather than publishing a second SPF policy
-- `[ ]` Preserve existing mailbox MX records. Add Mailgun receiving records/routes only for a separately approved receiving domain and destination; sending setup alone does not authorize an MX cutover
+- `[~]` Test sender `alerts@owl.red` passed actual delivery and owner receipt confirmation. Select per-application identities and confirm plan/volume limits before production integration; optional `0v0.zip` is not onboarded
+- `[x]` Adopt the owner-created `mg.owl.red` through [the isolated Mailgun root](terraform/mailgun/README.md), preserving RSA-2048 DKIM and disabled tracking. SPF/DKIM/subdomain MX verification and owner-confirmed delivery pass. The absent old apex registration's stale ownership is retired with `destroy=false`, so it cannot be recreated; only one custom sender is managed
+- `[x]` Public DNS ownership is private [d0ntblink/cloudflare-iac](https://github.com/d0ntblink/cloudflare-iac), `zones/owl.red` only. The reviewed SPF import/content update and public DKIM creation are applied; CI/provider validation and authoritative DNS checks pass. Explicit public inputs replace cross-repository state access; the duplicate homelab DNS root is retired
+- `[~]` `mg.owl.red` has verified SPF, its exact DKIM key and two subdomain-only Mailgun MX records. Its parent DMARC policy is `p=none`; no third-party forensic reporting is added. Enforcement/reporting policy remains separate work
+- `[x]` Keep apex receiving independent: MX, other TXT records and SPF TTL are preserved; only the apex SPF's now-unused Mailgun include is removed. Legacy public DKIM remains for prior signatures. No application receiving route, tracking CNAME, forensic-report destination or personal-domain change
 - `[~]` Mailgun and zone-scoped Cloudflare provider credentials are available in Bitwarden Secrets Manager and injected privately. Per-application SMTP/sending credentials and workload-secret wiring remain pending; no credential values belong in Git, logs or CLI arguments
-- `[ ]` Document required outbound HTTPS API or authenticated TLS SMTP connectivity; do not expose inbound port 25 or add a local mail workload
+- `[x]` Document and prove outbound HTTPS API delivery (port 443) in [the Mailgun runbook](terraform/mailgun/README.md). No local mail workload or inbound port 25; future SMTP consumers need their own authenticated TLS configuration
 
 ### 12.3 Application Delivery And Personal-Mail Cutover
 - `[ ]` Configure Home Assistant notifications, Alertmanager and other SMTP/API consumers through their existing IaC owners
-- `[ ]` Verify domain authentication, sender/reply-to identities and an actual delivered notification; inspect provider delivery/bounce events
+- `[~]` Migrated authentication and one authorized notification from `alerts@mg.owl.red` pass; the owner confirmed receipt. Production sender/reply-to policy, bounce/complaint handling and per-application acceptance remain pending
 - `[ ]` Configure bounce/complaint handling, sending limits and credential rotation; verify retry/failure behavior without turning alerts into an email loop
 - `[ ]` Select and test the replacement inbox provider or inbound forwarding destination for `khodayari.info` and `d0ntb.link`, including aliases, replies and authenticated sending
 - `[ ]` Preserve/export required Proton messages and verify the chosen replacement's import/retention path; Mailgun itself is not an archive or mailbox migration target
@@ -849,6 +850,6 @@ Functionally identical stratum-1; trades ~$45 for soldering/wiring + less tidy.
 - **Unraid VM placement**: already VM 101 on storage.pve with GPU/HBA/NIC passthrough. Shared-storage rollout and any later Plex migration are separate work, not a pending conversion from bare metal.
 - **Tailscale before captive portal**: Tailscale gives a reliable admin path if the captive portal breaks VLAN 30 routing during testing.
 - **Home Assistant mDNS**: this is the hardest part. IoT device auto-discovery requires multicast to reach HA across VLANs. Plan this before deploying HA.
-- **Mail delivery**: Mailgun US for automated `owl.red` email; `0v0.zip` is optional. Replace Proton for personal `khodayari.info` / `d0ntb.link` only after selecting/testing their actual receiving/inbox destination; Mailgun does not host IMAP/JMAP inboxes. No local mail workload or inbound SMTP exposure. Ignore `crucialmentis.com` in this project.
+- **Mail delivery**: Mailgun US production sending uses `mg.owl.red`; the existing Mailgun sandbox is non-production. Leave apex receiving independent and do not onboard `0v0.zip` under the current free plan. Personal `khodayari.info` / `d0ntb.link` receiving replacement is separate; no local mail workload or inbound SMTP exposure. Ignore `crucialmentis.com` in this project.
 - **draw.io vs. Visio**: draw.io is free, cross-platform, exports editable XML committed to git. Prefer it over Visio unless you already have a license.
 - **Terraform import order**: author matching resource configuration, import the existing guest, then reconcile to a no-op plan before apply. Only genuinely new guests use the create path; never recreate a protected production guest to sidestep import.
