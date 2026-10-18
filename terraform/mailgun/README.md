@@ -6,6 +6,15 @@ Personal `khodayari.info` / `d0ntb.link` Proton replacement is pending a mailbox
 destination decision. `0v0.zip` is optional and not provisioned;
 `crucialmentis.com` is excluded from this project.
 
+Public Cloudflare DNS is owned by the separate private
+[d0ntblink/cloudflare-iac](https://github.com/d0ntblink/cloudflare-iac) repository,
+under `zones/owl.red`. That root consumes explicit public DKIM inputs, not this
+repository's local Terraform state. Do not recreate a second DNS writer here.
+
+Current status: the `owl.red` Mailgun US domain is created through this root.
+Sending DNS verification and the authorized delivery test remain pending the
+separate DNS apply; no MX or personal-mailbox change has been made.
+
 ## Requirements And Credentials
 
 - Terraform 1.5+ and registry access; `wgebis/mailgun` is pinned to 0.10.0 in source and its generated dependency lock must be retained.
@@ -45,8 +54,9 @@ successful validation is not an authenticated plan or permission to apply.
 ## DNS And Delivery Gates
 
 1. Inspect the provider's `sending_dns_records` output against current public
-   records. Register/import only approved records with the DNS owner before a
-   reviewed apply; this root intentionally performs no DNS writes.
+   records. Update only the explicit public inputs in `cloudflare-iac`, then
+   review its zone-scoped import/plan. This root intentionally performs no DNS
+   writes and grants no cross-repository access to its full local state.
 2. Merge Mailgun into the existing SPF policy instead of publishing a second
    SPF record. Preserve Proton's authorization while it still sends mail.
 3. Publish only Mailgun's exact public DKIM key/selector. Do not copy private
@@ -59,6 +69,6 @@ successful validation is not an authenticated plan or permission to apply.
    sending/authentication plus an actual delivered test and bounce-event review
    before configuring production notification consumers.
 
-No domain provision, DNS mutation, sending test or mailbox migration is claimed
-by this scaffold. The sender addresses, workload credentials and alert failure
-behavior still need to be configured through their owning IaC lanes.
+Domain provisioning alone does not prove verified DNS or delivered mail. The
+sender addresses, workload credentials and alert failure behavior still need
+to be configured through their owning IaC lanes.

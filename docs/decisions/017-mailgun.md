@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted by the owner on 2026-10-18. Configuration is prepared, not deployed.
+Accepted by the owner on 2026-10-18. The Mailgun US automation domain is
+provisioned; sending DNS adoption, verification and delivery acceptance remain
+pending.
 
 ## Decision
 
@@ -36,10 +38,14 @@ Credentials belong in the existing Bitwarden Secrets Manager workflow, never
 Git, tfvars, logs or credential-bearing CLI arguments. Provider credentials in
 an environment do not make future resource-level passwords absent from state.
 
-Public DNS remains separately owned. Review Mailgun's supplied sending records,
+Public Cloudflare DNS is owned by the separate private
+[d0ntblink/cloudflare-iac](https://github.com/d0ntblink/cloudflare-iac) repository.
+Its initial `zones/owl.red` root uses explicit public DKIM inputs, not another
+repository's local Terraform state. Review Mailgun's supplied sending records,
 merge SPF instead of creating a second policy, and publish only the exact public
-DKIM records. Do not add receiving MX or tracking records incidentally. Internal
-Technitium DNS and the homelab external-access policy remain unchanged.
+DKIM records. The duplicate unapplied DNS root in this repository is retired.
+Do not add receiving MX or tracking records incidentally. Internal Technitium
+DNS and the homelab external-access policy remain unchanged.
 
 ## Acceptance
 
