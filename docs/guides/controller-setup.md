@@ -322,8 +322,9 @@ result are under `~/.local/state/owl-red/openwrt-rebuild-eyuSab`.
 The [Terraform LXC owner](../../terraform/proxmox/technitium/technitium-lxc.tf)
 uses `technitium_vlan_stage`: 0 is native management only, 1 adds VLAN 20 and is
 the initial accepted stage; 2 adds local IoT VLAN 40, 3 adds cloud IoT VLAN 50
-and is the current accepted default. Stage 4 adds dormant guest VLAN 30 and is
-not approved. This active-first order preserves the accepted private NIC.
+and 4 adds guest VLAN 30. Stage 4 is now the explicitly approved, accepted
+default, including IPv6 addresses; guest DHCP/SSID remains disabled. This
+active-first order preserves the accepted private NIC.
 Keep `eth0` untagged at `10.0.10.30/24`, its MAC
 and sole default gateway unchanged. The pinned `bpg/proxmox` 0.66.1 provider
 restarts the container for NIC/initialization updates: approve the interruption
@@ -936,11 +937,26 @@ native management plus tagged 20/40/50/30, each with IPv4 and ULA DNS addresses.
 Requirements: the existing Ansible venv, OpenSSH with the pinned identities,
 Terraform and its committed Proxmox lock, Nix, Bash, ShellCheck, jq, Node.js
 20.12+ and Python 3. On cp1 the probes use existing iproute2, tcpdump, Nmap,
-dig, curl, ping and dhclient. Nmap DISCOVER accepts no lease; dhclient is used
-only inside a disposable namespace for a real DORA/renewal check. Captures and
+dig, curl, ping and BusyBox `udhcpc` (verified 1.37.0). Nmap DISCOVER accepts no
+lease; BusyBox performs real DORA and SIGUSR1 renewal only inside a disposable
+namespace. The [restricted hook](../../ansible/files/vlan-dhcp-client-hook.sh)
+checks the namespace/interface and exact advertised options, never host DNS.
+Native probes use a macvlan on the existing `vmbr0`; tagged probes use `nic0`.
+The installed ISC dhclient AppArmor profile rejected custom hook/lease paths;
+it was not weakened or disabled. No new package was installed. Captures and
 recovery data stay outside Git under mode-0700 directories with mode-0600 files.
 Bitwarden credentials use private child environments; Technitium API tokens
 stay in the LXC. `pct exec` needs full `/run/current-system/sw/bin/` commands.
+
+The existing wired probe takes `VLAN MODE [ULA_DNS]`. Use `20|30|40|50
+dualstack ULA_DNS` for RA/SLAAC, IPv6 DNS and policy; `20|50 dns-policy ULA_DNS`
+for direct-DNS denial with working local DNS/HTTPS; and `10|20|40|50 dhcp` for
+real acquisition/forced renewal. Obtain `ULA_DNS` from the checked-in network
+manifest. DHCP mode first needs the restricted hook copied as root-owned mode
+0700 to `/tmp/owl-vlan-dhcp-client-hook.sh` on cp1 using Ansible's copy module;
+remove it after acceptance. `capture` is an internal readiness/cleanup mode for
+the capture controller. Every mode refuses other hosts and pre-existing probe
+state; cleanup removes only its own namespaces, links, processes and test lease.
 
 1. Save the native router configuration, Kea CSV and generated configuration,
   Technitium scopes/current generation, and the complete switch preimage.
@@ -976,6 +992,37 @@ On failure, first disable the new scopes and lock activation through the
 independent Proxmox path. Account for EVERY lease issued by the new authority
 before restoring old DHCP; restore source intent as well as runtime state.
 Never enable both servers or use a whole mixed-root Terraform apply as recovery.
+
+### Talos And Pod DNS Acceptance
+
+The accepted DHCP handoff exposed an existing public-resolver fallback in
+Talos/CoreDNS. The canonical `local.nameservers` in
+[the existing root](../../terraform/proxmox/technitium/main.tf) is now only
+`10.0.10.30`. The root still has unrelated generation-version drift and was NOT
+applied wholesale. Use the verified matching client
+`~/.local/share/owl-red/tools/talos/1.8.1/talosctl`, not global 1.13.0, for this
+existing live 1.8.1 cluster. Its `get machineconfig -o json` resource carries a
+YAML payload in `.spec`; parse with PyYAML, never print full credentials.
+
+The scoped correction saved private live configs, tested hostname/current
+resolver values in JSON Patch, and obtained server-side no-reboot previews for
+all four nodes. Worker-first `--mode=try --timeout=3m` was followed by complete
+config comparison, four Ready nodes and unchanged boot IDs, then persistence
+with the identical accepted config in `--mode=no-reboot`. No gateway, mask,
+machine secret, node version or unrelated field changed.
+
+CoreDNS owns its generated ConfigMap through Talos; no competing writer was
+added. Its `dnsPolicy: Default` pods retained old resolver files, so each of two
+replicas was replaced through the `policy/v1` eviction API with UID preconditions.
+Require two Ready DNS replicas before each eviction and wait for rollout before
+the next. Real Homepage-pod lookups then passed `rancher.owl.red`, `ap.owl.red`,
+`kubernetes.default.svc.cluster.local` and `example.com`.
+
+Final evidence is under `~/.local/state/owl-red/technitium-vlan-final-azMB1X`:
+`dhcp-after-result.json`, `dhcp-packet-review.json`, `dualstack-result.json`,
+`final-policy-result.json`, `dns-egress-result.json`, `talos-dns-accepted.json`
+and `pod-dns-acceptance.json`. Onsite follow-ups are tracked in the
+[separate owner checklist](vlan-client-migration.md).
 
 ## Non-Mutating Validation
 

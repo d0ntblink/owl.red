@@ -1,5 +1,13 @@
 set system config-management commit-revisions 100 &&
 set system config-management commit-confirm action reload &&
+{% for family in ['ipv4', 'ipv6'] %}
+set firewall {{ family }} forward filter rule 90 description OWL-VLAN-CLIENT-DNS-EGRESS &&
+set firewall {{ family }} forward filter rule 90 inbound-interface group OWL-VLAN-CLIENTS &&
+set firewall {{ family }} forward filter rule 90 protocol tcp_udp &&
+set firewall {{ family }} forward filter rule 90 destination port 53,853 &&
+set firewall {{ family }} forward filter rule 90 action drop &&
+set firewall {{ family }} forward filter rule 90 log &&
+{% endfor %}
 set interfaces ethernet eth1 address {{ openwrt_ipv6_plan.vlans[0].router }}/64 &&
 set firewall ipv4 forward filter rule 110 description OWL-VLAN-NATIVE-ADMIN &&
 set firewall ipv4 forward filter rule 110 inbound-interface name eth1 &&

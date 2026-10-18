@@ -196,6 +196,51 @@ assert 'OWL-WIFI-PRIVATE-INGRESS' in guard
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });
 
+test('final dual-stack VLAN policy keeps guest quarantined and Technitium authoritative', () => {
+  const result = spawnSync(python, ['-c', String.raw`
+import json
+from pathlib import Path
+import shlex
+import yaml
+from jinja2 import Environment, StrictUndefined
+
+environment = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
+environment.filters['bool'] = bool
+plan = json.loads(Path('gitops/technitium/network.json').read_text())
+rendered = environment.from_string(Path('ansible/templates/vyos-vlan-ipv6.j2').read_text()).render(
+    openwrt_ipv6_plan=plan, openwrt_ipv6_delegate=True)
+commands = [shlex.split(line.removesuffix(' &&')) for line in rendered.splitlines() if line.startswith('set ')]
+for family in ['ipv4', 'ipv6']:
+    stem = ['set', 'firewall', family, 'forward', 'filter', 'rule', '90']
+    actual = [command[len(stem):] for command in commands if command[:len(stem)] == stem]
+    expected = [['description', 'OWL-VLAN-CLIENT-DNS-EGRESS'],
+        ['inbound-interface', 'group', 'OWL-VLAN-CLIENTS'], ['protocol', 'tcp_udp'],
+        ['destination', 'port', '53,853'], ['action', 'drop'], ['log']]
+    assert sorted(actual) == sorted(expected), actual
+for network in plan['vlans'][1:]:
+    interface = f"eth1.{network['id']}"
+    assert ['set', 'interfaces', 'ethernet', 'eth1', 'vif', str(network['id']), 'address', network['router']+'/64'] in commands
+    assert ['set', 'service', 'router-advert', 'interface', interface, 'name-server', network['dns']] in commands
+    assert ['set', 'interfaces', 'ethernet', 'eth0', 'dhcpv6-options', 'pd', '0', 'interface', interface, 'sla-id', str(network['delegationSlaId'])] in commands
+    if network['id'] in [30, 40]:
+        forbidden = ['set', 'firewall', 'ipv6', 'forward', 'filter', 'rule', str(6001 + network['id']*10)]
+        assert not any(command[:len(forbidden)] == forbidden for command in commands)
+assert ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '6300', 'action', 'drop'] in commands
+assert not any(command[:3] == ['set', 'nat', 'source'] for command in commands)
+profile = yaml.safe_load(Path('ansible/inventory/group_vars/aps.yml').read_text())
+assert profile['openwrt_wifi_networks']['guest']['enabled'] is False
+authority = yaml.safe_load(Path('vyos/baseline.yml').read_text())['vyos_production_baseline']['dhcp_authority']
+assert authority == 'technitium'
+profile['openwrt_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
+profile['openwrt_dhcp_authority'] = authority
+wifi = environment.from_string(Path('ansible/templates/vyos-wifi-services.j2').read_text()).render(**profile)
+assert 'set service dhcp-server disable' in wifi
+assert 'set service dhcp-server shared-network-name' not in wifi
+assert 'set service dns forwarding name-server 10.0.10.30' in wifi
+`], { cwd: repository, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
+});
+
 test('candidate parses with the authenticated release library and uses its actual CLI paths', {
   skip: !process.env.VYOS_NATIVE_ROOT && 'Set VYOS_NATIVE_ROOT to the verified image extraction',
 }, () => {

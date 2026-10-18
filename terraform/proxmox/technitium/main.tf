@@ -44,7 +44,7 @@ locals {
   cluster_endpoint = "https://10.0.10.20:6443" # Control Plane VIP
   talos_version    = "v1.7.5"
   gateway          = "10.0.10.1"
-  nameservers      = ["10.0.10.1", "1.1.1.1"]
+  nameservers      = ["10.0.10.30"]
 
   control_planes = {
     "cp1-talos" = { node = "cp1", vmid = 601, ip = "10.0.10.21/24", mac = "02:00:00:00:00:21", cores = 2, memory = 10240 }

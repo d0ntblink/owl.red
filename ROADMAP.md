@@ -10,7 +10,7 @@ Install tools for the owning lane and verify access, interpreter/library paths
 and versions before running commands; package installation is not build success
 or permission to deploy.
 
-**Current focus: VyOS replacement accepted; resume the bounded VLAN transition.**
+**Current focus: VLAN infrastructure accepted; advance beyond the VLAN work.**
 The architecture is accepted in [ADR 022](docs/decisions/022-vyos-router-replacement.md):
 one pinned VyOS rolling VM on edge, direct WAN/LAN PCI passthrough, unchanged gateway IP,
 no new production router bridges and no HA requirement. Configuration and VM
@@ -22,16 +22,17 @@ decisions/guides remain. Resume Phase 1 without bundling security-feed activatio
 
 The 2026-10-14 audit found a working flat network and Kubernetes control plane,
 not an operational five-VLAN deployment. Internal DNS, Fleet and TLS have known
-gaps. Technitium now preserves its native management NIC and has accepted DNS
-interfaces on active VLANs 20/40/50. Terraform defaults to this four-NIC stage;
-guest attachment and the DNS/DHCP authority handoff remain separate approvals.
+gaps. The approved VLAN work now has five-NIC Technitium stage 4, accepted
+dual-stack client paths and a completed DNS/DHCP handoff. Guest remains disabled
+and quarantined. The owner kept management native and moved onsite device/RF/
+recovery tasks to the [separate checklist](docs/guides/vlan-client-migration.md).
 
-**Transition constraint:** VyOS now serves the agreed interim client DNS/DHCP
-behavior at the existing gateway endpoint. The later handoff to Technitium waits
-for supporting VLAN paths and
-interfaces plus its own coordinated approval. Do not force CoreDNS, Talos
-resolvers, client DNS or DNS interception to the final design early. Any interim
-DNS repair needs its own scope and rollback; it is not a VLAN prerequisite.
+**Accepted authority:** Technitium serves native/private/local-IoT/cloud-IoT DHCP
+and VLAN-local DNS. VyOS DHCP is disabled and saved; its `.1` DNS endpoint is a
+compatibility proxy through Technitium. Talos resolvers now use only `.30`, and
+existing-pod internal/cluster/public DNS passes after one-at-a-time CoreDNS
+replacement. Guest DHCP stays off. Final client DNS port enforcement passed in
+both families; this is not a claim that arbitrary DoH is blocked.
 
 **Historical paused router state:** the approved LAN-mask operation saved `/24` at 20:59Z on
 2026-10-16, but the whole-config guard stopped before Apply because other
@@ -51,10 +52,10 @@ operation because a new Git revision can trigger live Technitium reconciliation.
 | Gate | Blocks | Required Exit Evidence |
 |------|--------|------------------------|
 | G1 `[ ]` Change-Scoped Access And Rollback | Each live change to an affected component | Working administrative access; saved affected configuration and, if Terraform is used, protected state outside the affected system; exact inverse change and an independent recovery path for the affected management link. The user can connect to a switch port and has NAS keyboard/monitor access; neither proves router/switch recovery. A full NAS-data backup, guest backup programme or unrelated passthrough change is not a network prerequisite. |
-| G2 `[ ]` Final DNS And Public Namespace | Final resolver handoff/enforcement and services requiring correct internal DNS, not VLAN preparation | After G5's supporting paths/interfaces are ready and handoff is approved, LAN clients, gateway-dependent hosts and pods resolve internal names to private targets and external DNS still works. Review wildcard/DDNS consumers and authoritative/public records before ADR 012 cleanup. DNS interception or blocking follows successful renewal/cache/rollback tests, not interface preparation. |
+| G2 `[~]` Internal DNS Accepted / Public Namespace Review | Public namespace cleanup and services requiring correct DNS | The approved client/Talos/pod resolver handoff, real acquisition/renewal and final IPv4/IPv6 DNS port enforcement pass. Public wildcard/DDNS consumer review and ADR 012 cleanup remain separate; internal resolver acceptance does not claim that public cleanup is complete. |
 | G3 `[ ]` GitOps, TLS And Platform Resilience | Declaring platform convergence complete; dependent deployments/drains require the affected release, ingress and PDB checks, not unrelated repairs | Completion means all 9 owl.red bundles ready with matching desired/applied revisions; fleet-agent ownership, replicas, tolerations and PDB reconciled in the owning release. Verify secrets; remove the runtime global backend TLS bypass, retain only PDM's scoped exception, provide trusted management certificates and restrict the dashboard to verified admin sources. This is a separate workstream, not a blanket Phase 1 entry gate. |
 | G4 `[~]` Terraform And Inventory Safety | The specific infrastructure root being planned/applied or guest being imported/changed | NIC syntax/fmt/validation is fixed offline. Reconcile live/state/desired values for the touched resource without unapproved version, placement, sizing or power changes. Import only where needed; review a narrowly scoped plan and reject unapproved destroy/recreate, disk, passthrough or unrelated guest actions. The VyOS replacement is a separate VM; Phase 0.6 owns its explicitly approved PCI handoff, not recreation of VM 100. Do not apply a whole cluster target to perform a network-only change. |
-| G5 `[ ]` End-To-End VLAN Readiness | Each subnet/L2 migration batch and the subsequent DNS/DHCP handoff | Fresh authenticated service/interface/lease survey of the serving router: OPNsense before replacement, VyOS after acceptance; resolved legacy `/16` overlap; reviewed router/switch/AP and existing PVE/LXC port map; protected operator path; verified Technitium DHCP lifecycle guard before attaching reachable NICs. Prove gateway, return routes, expected DHCP authority/options and policy from a real LAN client for each batch. Mask contraction and management VLAN tagging are separate changes; readiness is built during Phase 1, not required in full before starting it. |
+| G5 `[x]` Accepted VLAN Infrastructure Scope | Future changes still need their own affected-path acceptance | Native/20/40/50 DHCP handoff and real acquisition/forced renewal, correlated sole-authority packets, dual-stack RA/DNS/policy on 20/30/40/50, final DNS enforcement, protected native/operator path and pod DNS all pass. Guest DHCP/SSID stays off. The owner explicitly kept management native and separated device moves, RF/physical recovery and future access-port/tagging work into the owner checklist; these are not silently marked complete. |
 | G6 `[ ]` Power And Stateful Storage Safety | NFS activation and production stateful/HA rollout | Verify UPS monitoring and staged shutdown rather than trusting an enable flag. Restrict intended NFS exports and exclude `system` before enabling NFS. Then prove PVC data survives rescheduling and shared Proxmox storage supports the intended failover before moving application state. |
 
 **Offline progress (2026-10-14):** the five NIC block declarations now parse.
@@ -259,7 +260,25 @@ Manager, with references only in [credentials.json](vyos/credentials.json).
 
 ---
 
-## 1. Network Foundation
+## 1. Network Foundation: Infrastructure Accepted
+
+**Exit scope:** the owner approved guest plumbing without portal activation,
+dual-stack client VLANs, the scoped Git publication and Technitium handoff,
+native management retained, and onsite work in a separate owner checklist.
+That infrastructure scope is complete; do not repeat the accepted Wi-Fi/key,
+DHCP or addressing batches to advance to later sections.
+
+Accepted evidence is private under
+`~/.local/state/owl-red/technitium-vlan-final-azMB1X`: correlated old/new DHCP
+captures, real disposable acquisition/forced renewal on 10/20/40/50, RA/SLAAC/
+IPv6 DNS and policy on 20/30/40/50, the final DNS-egress test, unchanged CT-only
+plan, no-reboot Talos resolver changes and existing-pod DNS acceptance. Temporary
+ports/namespaces/test leases were cleaned up; the Git sync timer is active.
+
+Remaining device onboarding, RF measurements, physical recovery/access-port
+tests and future management tagging are in
+[VLAN Client Migration And Physical Checks](docs/guides/vlan-client-migration.md).
+Captive portal activation remains section 1.6, not an undisclosed open guest SSID.
 
 These must be complete before anything that depends on VLAN isolation or correct name resolution works end-to-end.
 Follow the [execution order](#execution-order), not the numerical order of the
@@ -304,31 +323,30 @@ completion of unrelated dashboard certificates or every Fleet repair.
 - Audit baseline: all ports were Optional/PVID 1 and every VLAN listed only disabled port 5. Port names alone do not establish working trunks or access VLANs.
 - `[x]` Restore authenticated SwOS API reads (2026-10-17): after the owner reset admin access, `admin` with blank password authenticated the expected CSS326 serial/MAC at `.2`. The password-only [Ansible recovery](ansible/playbooks/swos-restore-password.yml) applied the existing Bitwarden value; authenticated read-back passes and blank login returns 401. The source-owned port-25 label is now `sfp1-vyos`; all 26 port enable/autoneg settings, per-port VLANs, VLAN membership and protected port 22 are unchanged. A fresh private authenticated `.swb` backup is retained. The authentication blocker is cleared, not the physical pilot/path acceptance.
 - `[~]` Reconcile `ansible/switch_configs/css326.yml` with actual cabling. Native CSS326 dynamic-host fields confirm cp1 MAC on SW02, VyOS LAN MAC on SFP+1/port 25, operator MAC on SW22 and edge management MAC on SW24. The library's Lite-only host parser returned an empty table; native `adr/prt/vid` reads were used instead. Other switch/AP/PVE/LXC boundaries remain to be verified.
-- `[~]` Fresh API reads after access recovery show switch identity/IP retained, all ports Optional/PVID 1, and target VLAN membership still only on disabled port 5. SW18 now has link, but the AP/device identity and management address behind it remain unverified; this is not SSID/trunk acceptance. Do not apply the stale full target map.
+- Historical access-recovery baseline: all ports were Optional/PVID 1 and parked VLAN rows used disabled port 5. The accepted AP/CT trunks below supersede that baseline; other physical access-port/filtering changes remain in the separate owner checklist.
 - `[x]` Activate and accept the wired VLAN-20 pilot without moving real clients (2026-10-17). VyOS `eth1.20` is `10.0.20.1/24`; the sole switch-row change is VLAN 20 members `[2,25]` with MAC learning enabled. A temporary static `10.0.20.254/24` namespace on cp1's physical `nic0` passed gateway-MAC/ping, internal/public DNS and verified HTTPS; NAS `.5:443` and router VLAN-gateway SSH timed out as required. Tagged router-side frames were captured, the namespace/interface/resolver files were removed, cp1 native management stayed identical, and all four Kubernetes nodes remained Ready. The five-minute native trial was confirmed and saved. Existing ports/PVIDs, operator 22 and DHCP authority are unchanged. Evidence: `~/.local/state/owl-red/vlan20-wired-n8rR1M`.
 - `[x]` Retain failed-trial recovery evidence honestly: earlier gateway probes failed and both owners were rolled back. Coordinated capture proved the router received tagged ARP and sent replies. The switch's raw VLAN-20 learning bit was disabled; explicitly enabling it restored the return path. No unaccepted trial was left active. This does not qualify IPv6, every inter-VLAN flow, physical access-port filtering or the AP path.
 - `[x]` Qualify the native VLAN-20 overlay on isolated lab VM 102 (2026-10-17) through [the opt-in lab playbook](ansible/playbooks/vyos-vlan-lab.yml) and [source profile](vyos/baseline.yml). Native commit/save and rerun comparison pass; `eth1.20` is `.20.1/24`, original `.192.0.2.1` management remains reachable, the four compiled input/forwarding rule IDs exist, and DNS on the new gateway returns synthetic NAS `.192.0.2.5`. Four focused offline tests pass, including early refusal of production targets. This is not a physical-path, packet-isolation, WAN, DHCP or IPv6 qualification; no production activation occurred.
-- `[ ]` Save the SwOS configuration privately and test a designated physical recovery/access port before changing filtering or management VLAN. CSS326 has no serial console; reset is disruptive last-resort recovery, not an ordinary rollback.
-- `[ ]` Review the exact diff and apply only the approved port/VLAN batch via `swos-apply-config.yml` or its reviewed owning interface; do not apply the full target map to discover whether it works
-- `[~]` AP trunk is staged with native management unchanged, VLAN 20 members `[2,18,25]` and VLANs 40/50 members `[18,25]`, learning enabled. Temporary wired test memberships were removed after all three gateway policies passed. Wired AP management and active SSID-to-VLAN runtime pass; guest VLAN 30 remains disabled and over-air client tests are next.
+- `[x]` Save complete private switch preimages and apply only the reviewed bounded rows through the existing guarded owner; no full target-map apply. A physical spare recovery/access-port test remains an owner prerequisite before future filtering/management tagging, not a completed test.
+- `[x]` Final trunk membership is VLAN 20 `[2,18,24,25]`, VLANs 30/40/50 `[18,24,25]`, learning enabled. Native/operator settings are unchanged; temporary cp1 membership on 30/40/50 is removed. Active SSID operation, all CT DNS paths, DHCP handoff and dual-stack routing/isolation pass; guest DHCP/SSID stays disabled.
 
 ### 1.3 VyOS VLAN Firewall Rules
 - **Requires:** Phase 0.6 router acceptance; all target rules remain inactive during the parity replacement
-- `[ ]` Confirm VLAN 10 → all VLANs (admin rule) exists
+- `[x]` Native management (logical VLAN 10) can administer client VLANs through owned IPv4/IPv6 rule 110; operator port 22/native PVID remain unchanged.
 - `[~]` Private VLAN-20 service allowlist now explicitly permits NAS `.5` TCP `445/32400` and shared ingress `.201` TCP `443`, not the management subnet generally. Rule 2810 is source-owned before the nonpublic deny, qualified in the lab and confirmed in production after a real VLAN-20 probe reached `dns.owl.red` with valid TLS/HTTP while AP `.40:443`, Proxmox `.3:8006` and NAS `.5:443` stayed blocked. Existing client/DHCP/radio settings were untouched. Evidence: `~/.local/state/owl-red/openwrt-rebuild-private-services-xJvlq2`. Remaining device-specific/discovery/IPv6 flows are separate work; per-host ingress authentication/TLS is not provided by this IP rule.
-- `[ ]` Confirm VLAN 40 → LAN only, no internet, no lateral movement
-- `[ ]` Confirm VLAN 50 → internet only, no lateral movement
-- `[ ]` Guest VLAN 30 isolation rules (see `README.md` captive portal section)
+- `[x]` VLAN 40 is local-only with no routed internet/inter-VLAN initiation in either family; private-to-local service access is explicitly narrowed. Device-specific flows remain in the owner checklist.
+- `[x]` VLAN 50 has internet with cross-VLAN administration denied in both families; only explicit NAS Plex TCP 32400 is allowed as the media exception.
+- `[x]` Guest VLAN 30 plumbing is dual-stack tested and forwarding quarantined; DHCP and SSID remain disabled pending section 1.6.
 
 ### 1.5 Subnet Migration: `/16` → `/24` per VLAN
 
-**Current baseline (2026-10-17):** fresh native reads confirm VyOS `eth1` at
-`10.0.10.1/24`, its native-LAN route, a WAN default route and active DHCP/DNS.
-The accepted AP support now routes VLANs 20/40/50 with gateway `.1`, interim
-VyOS DHCP `.100-.199`, canonical confirmed reservations, DNS/NTP and qualified
-wired private/local-only/cloud policy. Private wireless and owner IoT tests are
-accepted; Technitium scope activation/handoff remains separate. The retired router's saved `/24`
-transaction is historical, not a pending operation or restart prerequisite.
+**Current baseline:** VyOS retains native `10.0.10.1/24`, WAN IPv4/IPv6 and
+per-VLAN routing/NTP/RA. Its DHCP retirement is confirmed and saved. Technitium
+now serves the four approved scopes with `.100-.199`, `/24`, 24-hour leases,
+canonical reservations, expiring migration holds and explicit VLAN-local DNS.
+Guest 30 is physically prepared and quarantined but has DHCP/SSID disabled.
+Private/cloud dual-stack internet, local/guest denial, administration isolation,
+DHCP acquisition/forced renewal and internal/public DNS all pass.
 
 Accepted host/client changes already cover all six PVE addresses (edge `.3`,
 storage `.4`, compute `.11-.14`), four Talos guests `.21-.24`, NAS `.5` and
@@ -336,10 +354,14 @@ operator Ethernet `.174` at `/24`; do not repeat those migrations. Remaining
 client/static-appliance masks still need verification before moving or depending
 on those clients. The switch's existing native PVID and operator port 22 remain
 unchanged. Technitium retains native `eth0` at `10.0.10.30/24` and now has
-tagged `eth1/eth2/eth3` at `10.0.20.30/24`, `10.0.40.30/24` and
-`10.0.50.30/24`. All five scopes remain disabled with
-the activation lock false and no UDP 67 listener. VyOS still serves client
-DNS/DHCP; the accepted DNS path does not transfer that authority.
+tagged `eth1/eth2/eth3/eth4` at `10.0.20.30/24`, `10.0.40.30/24`,
+`10.0.50.30/24` and `10.0.30.30/24`, plus stable ULA DNS addresses from
+`fde4:cabf:d798::/48`. Host activation is explicitly allowed, UDP 67 is open
+for the four enabled scopes, and SSH/admin remains native-only. Stage 4 is the
+accepted default with a refreshed zero-change CT-only plan.
+
+<details>
+<summary>Historical preparation and migration sequence (superseded by the accepted baseline above)</summary>
 
 Any remaining client `/16` treats contained target `/24`s as on-link. Prove each
 pilot's client and return paths explicitly; do not infer subnet readiness from
@@ -435,7 +457,12 @@ recovery and connectivity requirements.
   - `[ ]` Migrate small client groups, test required camera/printer/media flows, and perform the separately planned management-tag transition with the tested operator/recovery port still available. On DHCP rollback, disable the new authority before restoring the old one and account for leases issued in the interim.
   - `[ ]` Close G2 only after the coordinated resolver change is verified; tighten DNS policy last. Remove temporary paths and stale active `/16` configuration after acceptance, but retain dated audit/history references.
 
+</details>
+
 ### 1.6 Captive Portal (`captive.owl.red`)
+
+**Explicitly deferred by owner choice:** guest plumbing is accepted, but guest
+DHCP/SSID activation and off-AP portal deployment remain a separate milestone.
 
 - **Requires:** a working VLAN 30 L2/L3 path, verified DNS/DHCP options and isolation from 1.1/1.3/1.5; the portal does not gate initial VLAN preparation
 - `[ ]` Select a proven enforcement engine/placement compatible with the VyOS guest path; a central web/auth service alone is not enforcement, and the weak WAP must not host the heavy portal service
