@@ -14,10 +14,6 @@ the relevant guides and configuration sources.
 
 ## Platform And Recovery
 
-- [ ] Reconcile Fleet agent ownership, scheduling and disruption budgets;
-  ensure each application bundle applies its intended Git revision.
-- [ ] Remove Traefik's global backend TLS bypass, retain only the scoped PDM
-  exception, provide trusted management certificates and restrict dashboard access.
 - [ ] Verify UPS monitoring, shutdown ordering and restart recovery for the NAS,
   hypervisors and essential network services without unsafe power-loss testing.
 - [ ] Establish application-consistent backups, an independent copy for NAS
@@ -25,8 +21,6 @@ the relevant guides and configuration sources.
 
 ## Shared Storage
 
-- [ ] Publish and activate the [Fleet SMB CSI bundle](gitops/csi-smb/README.md),
-  then verify a retained PVC survives pod recreation on another node.
 - [ ] Inventory and clean shared appdata: identify application directories,
   active writers, obsolete content and retention requirements before changes.
 - [ ] Validate each application's permissions, locking and database storage;
