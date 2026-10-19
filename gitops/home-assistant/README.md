@@ -4,6 +4,9 @@ Home Assistant Container runs through Fleet at `https://ha.owl.red`, with one
 replica and a Recreate update strategy. It is not Home Assistant OS: Supervisor
 and its add-on store are not included. Supporting services are separate workloads.
 
+For adding integrations/modules, areas, zones and YAML packages, use the
+[Home Assistant and IaC guide](../../docs/guides/home-assistant.md).
+
 ## Storage
 
 - The retained `config` PVC uses `nas-appdata-smb` and only its own generated

@@ -3,6 +3,7 @@
   "token_secret_id": "05591a1b-1e91-45a8-91a5-b4e80141c6d0",
   "devices": {
     "canon": {
+      "area": "Office",
       "integration": "ipp",
       "host": "10.0.40.10",
       "port": 631,
@@ -11,6 +12,7 @@
       "verify_ssl": false
     },
     "camera_foyer": {
+      "area": "Foyer",
       "integration": "onvif",
       "name": "WUUK Foyer",
       "mac": "02:7f:f6:05:40:fc",
@@ -19,6 +21,7 @@
       "credential_secret_id": "0e38c95a-79cb-4700-b015-b4e801443d54"
     },
     "camera_office": {
+      "area": "Office",
       "integration": "onvif",
       "name": "WUUK Office",
       "mac": "02:2d:1f:56:ee:b8",
@@ -27,6 +30,7 @@
       "credential_secret_id": "7e8e9e5b-6f83-46fb-840b-b4e801443d91"
     },
     "ecobee": {
+      "area": "Living Room",
       "integration": "homekit_controller",
       "name": "ecobee",
       "host": "10.0.50.10",
@@ -35,6 +39,7 @@
       "credential_secret_id": "7d088c02-3b5f-46d5-849d-b4e8014add85"
     },
     "bambu_a1": {
+      "area": "Office",
       "integration": "bambu_lab",
       "host": "10.0.40.11",
       "credential_item": "5d4f3e7d-4798-4db7-8600-b210018b452c"
