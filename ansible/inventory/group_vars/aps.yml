@@ -5,7 +5,7 @@ openwrt_expected_uplink_mac: 10:be:f5:d9:1e:37
 openwrt_management_host: 10.0.10.40
 openwrt_management_prefix: 24
 openwrt_management_gateway: 10.0.10.1
-openwrt_management_dns: 10.0.10.1
+openwrt_management_dns: 10.0.10.30
 openwrt_hostname: ap
 openwrt_bridge: br-ap
 openwrt_uplink: wan

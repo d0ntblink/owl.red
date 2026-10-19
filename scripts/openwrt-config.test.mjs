@@ -26,6 +26,7 @@ sections = module.parse_config(environment.from_string(Path('ansible/templates/o
 assert sections['management_vlan']['ports'] == ['wan:u*', 'lan4:u*']
 assert sections['lan']['device'] == 'br-ap.1'
 assert sections['lan']['ipaddr'] == '10.0.10.40'
+assert sections['lan']['dns'] == ['10.0.10.30']
 for name, network in profile['openwrt_wifi_networks'].items():
     bridge = 'br-' + name.replace('_', '-')
     assert sections[name]['device'] == bridge

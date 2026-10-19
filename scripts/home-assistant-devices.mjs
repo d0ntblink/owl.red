@@ -37,7 +37,7 @@ async function main() {
     ensure(typeof login?.username === 'string' && login.username.length > 0 && typeof login.password === 'string' && login.password.length > 0, 'Camera credential entry is incomplete.');
     return { username: login.username, password: login.password };
   }
-  function bambuSettings(device) {
+  function vaultItem(id) {
     const home = os.homedir();
     const binary = path.join(home, '.local/share/owl-red/tools/bitwarden/2026.7.0/bw');
     const environment = { ...process.env, BW_SECRET: stored.BW_SECRET,
@@ -52,8 +52,12 @@ async function main() {
     environment.BW_SESSION = vault(['unlock', '--passwordenv', 'BW_SECRET', '--raw']);
     vault(['sync']);
     let item;
-    try { item = JSON.parse(vault(['get', 'item', device.credential_item])); }
-    catch { throw new Error('Private Bambu item lookup failed; details withheld.'); }
+    try { item = JSON.parse(vault(['get', 'item', id])); }
+    catch { throw new Error('Private device item lookup failed; details withheld.'); }
+    return item;
+  }
+  function bambuSettings(device) {
+    const item = vaultItem(device.credential_item);
     function field(name) {
       const matches = (item.fields ?? []).filter(entry => entry.name === name);
       ensure(matches.length <= 1, 'Duplicate private Bambu field: ' + name);
@@ -103,6 +107,10 @@ async function main() {
   async function reconcileArea(name, device, entry) {
     if (device.area === undefined) return false;
     ensure(typeof device.area === 'string' && device.area.trim().length > 0, 'Area must name an existing HA area.');
+    if (device.integration === 'luci') {
+      console.log(JSON.stringify({ device: name, area: device.area, areaAssignment: 'not_applied_luci_has_client_trackers_not_an_ap_device', changed: false }));
+      return false;
+    }
     const areas = await registry({ type: 'config/area_registry/list' });
     const matchingAreas = areas.filter(area => area.name === device.area);
     ensure(matchingAreas.length === 1, 'Create exactly one HA area named ' + device.area + ' before applying this device.');
@@ -210,7 +218,7 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
   }
   ensure(phase !== 'apply' || selected, 'Apply requires one explicitly named device.');
   for (const [name, device] of Object.entries(config.devices).filter(([name]) => !selected || name === selected)) {
-    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller'].includes(device.integration), 'This device flow has not been qualified.');
+    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller', 'luci'].includes(device.integration), 'This device flow has not been qualified.');
     const lan = device.integration === 'bambu_lab' ? bambuSettings(device) : null;
     if (device.integration === 'bambu_lab' && !lan) {
       ensure(phase !== 'apply', 'Add hidden printer_serial and lan_access_code fields to the existing Bambu Lab vault item; no printer changes made.');
@@ -243,11 +251,17 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       if (device.integration === 'bambu_lab' && flow.type === 'form' && flow.step_id === 'user') {
         flow = await api('config/config_entries/flow/' + flow.flow_id, 'POST', { printer_mode: 'lan' });
       }
-      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair' }[device.integration];
+      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair', luci: 'user' }[device.integration];
       ensure(flow.type === 'form' && flow.step_id === step, 'Unexpected integration setup step.');
       ensure(!Object.keys(flow.errors ?? {}).length, 'Integration setup returned errors before credential submission.');
       const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, area, ...settings } = device;
       if (integration === 'onvif') Object.assign(settings, cameraLogin(credential_secret_id));
+      if (integration === 'luci') {
+        ensure(settings.ssl === true && settings.verify_ssl === true && settings.host === 'ap.owl.red', 'Use the verified AP HTTPS endpoint.');
+        const item = vaultItem(credential_item);
+        ensure(item.login?.username && item.login.password, 'OpenWrt credential is incomplete.');
+        Object.assign(settings, { username: item.login.username, password: item.login.password });
+      }
       const pairing = integration === 'homekit_controller' ? { pairing_code: homekitCode(credential_secret_id) } : null;
       const configured = await api('config/config_entries/flow/' + flow.flow_id, 'POST', pairing ?? lan ?? settings);
       if (configured.type === 'form') throw new Error('Integration requires attention: ' + JSON.stringify(configured.errors ?? {}));

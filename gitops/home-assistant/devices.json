@@ -2,6 +2,14 @@
   "endpoint": "https://ha.owl.red",
   "token_secret_id": "05591a1b-1e91-45a8-91a5-b4e80141c6d0",
   "devices": {
+    "openwrt": {
+      "area": "Office",
+      "integration": "luci",
+      "host": "ap.owl.red",
+      "ssl": true,
+      "verify_ssl": true,
+      "credential_item": "10da341d-20ad-4f4a-b15c-add2008eb0e4"
+    },
     "canon": {
       "area": "Office",
       "integration": "ipp",
