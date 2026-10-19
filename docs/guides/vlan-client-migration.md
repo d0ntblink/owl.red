@@ -53,6 +53,47 @@ or broadcast discovery is not enabled; use explicit names/addresses or review
 an application-specific discovery requirement. New direct client DNS/DoT/DoQ
 on ports 53/853 is denied in both families; arbitrary DoH over 443 is not blocked.
 
+## Home Assistant Device Batch
+
+Move these devices one at a time. Both IoT SSIDs are 2.4 GHz; use their
+existing Bitwarden Wi-Fi credentials. Leave addressing on DHCP so the canonical
+reservations supply the intended addresses rather than setting static IPs on
+the devices.
+
+- [x] Canon printer (`Canon1c2258`): moved to `owl.red-iot-local`, VLAN 40;
+	verified `10.0.40.10` / `printer.owl.red` and authorized 2.4 GHz association.
+	Local printing and the exact model's HA integration still need verification.
+- [x] Bambu Lab A1: moved to `owl.red-iot-local`, VLAN 40; verified
+	`10.0.40.11` / `bambu.owl.red` and authorized 2.4 GHz association.
+	Verify LAN-only operation separately; this SSID has no internet, so
+	cloud-dependent Bambu features will not work. Keep the LAN access code private.
+- [x] Ecobee thermostat: moved to `owl.red-iot-cloud`, VLAN 50; verified
+	`10.0.50.10` / `ecobee.owl.red` and authorized 2.4 GHz association.
+	Normal thermostat operation and vendor connectivity remain separate checks.
+	Keep its pairing code private; HA pairing is not completed by the SSID move.
+- [x] WUUK Y0510 foyer camera: join `owl.red-iot-local`, VLAN 40; verified
+	`10.0.40.12` / `wuuk-ptz-foyer.owl.red`. Keep the existing firmware and
+	credentials; web and RTSP listeners verified; HA pairing remains pending.
+- [x] WUUK Y0510 office camera: join `owl.red-iot-local`, VLAN 40; verified
+	`10.0.40.13` / `wuuk-ptz-office.owl.red`. Keep the existing firmware and
+	credentials; web and RTSP listeners verified; HA pairing remains pending.
+
+Camera Wi-Fi is managed through the [Thingino Ansible lane](thingino-cameras.md).
+
+For VLAN 40, expect mask `255.255.255.0`, gateway `10.0.40.1` and DNS
+`10.0.40.30`. For VLAN 50, expect the same mask, gateway `10.0.50.1` and
+DNS `10.0.50.30`. If a device gets a different address, report its Wi-Fi MAC
+and lease before changing reservations; a camera's recorded network identity
+may differ from its Wi-Fi interface.
+
+Do not factory-reset devices or remove working legacy reservations before the
+new connection is verified. If a camera requires cloud access or lacks a
+usable local protocol, record that limitation rather than opening internet
+access or assuming RTSP/ONVIF support. There is no blanket cross-VLAN discovery
+or HA firewall exception: verify moves first, then add only the integration's
+required unicast/discovery paths. Do not use the private or disabled guest
+SSID as an IoT workaround.
+
 ## Apartment RF Walk
 
 - [ ] Measure the weakest normal-use locations and each camera/printer position.

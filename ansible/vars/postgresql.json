@@ -1,0 +1,20 @@
+{
+  "server": {
+    "host": "10.0.10.5",
+    "port": 15432,
+    "container_name": "postgresql",
+    "icon": "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/png/postgresql.png",
+    "data_directory": "/mnt/ssd/appdata/home-assistant-db",
+    "image": "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3",
+    "admin_password_secret": "home-assistant__postgres__admin-password"
+  },
+  "applications": {
+    "homeassistant": {
+      "database": "homeassistant",
+      "role": "homeassistant",
+      "password_secret": "k8s__home-assistant__recorder__password",
+      "url_secret": "k8s__home-assistant__recorder__db-url",
+      "kubernetes_namespace": "home-assistant"
+    }
+  }
+}

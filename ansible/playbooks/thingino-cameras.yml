@@ -1,0 +1,40 @@
+---
+- name: Reconcile Thingino camera Wi-Fi with timed rollback
+  hosts: thingino_cameras
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Require the bounded camera/network scope
+      ansible.builtin.assert:
+        that:
+          - platform == 'thingino'
+          - thingino_phase | default('plan') in ['inspect', 'plan', 'apply', 'verify']
+          - thingino_wifi_profile.ssid == 'owl.red-iot-local'
+          - thingino_wifi_profile.frequencies | min >= 2412
+          - thingino_wifi_profile.frequencies | max <= 2462
+          - thingino_phase | default('plan') != 'apply' or thingino_apply_allowed | default(false) | bool
+  tasks:
+    - name: Run the camera-local configuration transaction
+      ansible.builtin.command:
+        argv:
+          - "{{ thingino_node }}"
+          - "{{ playbook_dir }}/../../scripts/thingino-camera.mjs"
+        stdin: >-
+          {{ {'phase': ('plan' if ansible_check_mode else thingino_phase | default('plan')),
+              'camera': {'name': inventory_hostname, 'target': ansible_host,
+                         'bootstrap': thingino_bootstrap_host, 'mac': thingino_mac,
+                         'alias': thingino_host_key_alias},
+              'profile': thingino_wifi_profile, 'rollbackSeconds': thingino_rollback_seconds,
+              'recovery': thingino_recovery,
+              'credentials': lookup('ansible.builtin.env', 'THINGINO_CREDENTIALS') | from_json} | to_json }}
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      no_log: true
+      register: thingino_result
+      changed_when: (thingino_result.stdout | from_json).changed
+
+    - name: Report only verified non-secret camera state
+      ansible.builtin.debug:
+        msg: "{{ thingino_result.stdout | from_json }}"

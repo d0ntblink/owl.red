@@ -50,8 +50,8 @@ Secrets and authentication material are excluded.
 | [printer-bambu](#printer-bambu) | 3D printer | appliance | Bambu appliance firmware | `bambu.owl.red` / VLAN 40 allocation |
 | [thermostat-ecobee](#thermostat-ecobee) | Thermostat | appliance | ecobee appliance firmware | `ecobee.owl.red` / VLAN 50 allocation |
 | [media-shield](#media-shield) | Media player | appliance | Android TV | `shield.owl.red` / VLAN 50 allocation |
-| [camera-foyer](#camera-foyer) | Foyer camera | appliance | Embedded camera firmware | `wuuk-ptz-foyer.owl.red` / VLAN 40 allocation |
-| [camera-office](#camera-office) | Office camera | appliance | Embedded camera firmware | `wuuk-ptz-office.owl.red` / VLAN 40 allocation |
+| [camera-foyer](#camera-foyer) | Foyer camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-foyer.owl.red` / VLAN 40 allocation |
+| [camera-office](#camera-office) | Office camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-office.owl.red` / VLAN 40 allocation |
 
 ## Physical Infrastructure
 
@@ -667,10 +667,11 @@ MAC rather than its permanent address.
 | id | `camera-foyer` |
 | kind | appliance |
 | model | WUUK Y0510 PTZ camera |
-| platform | Embedded camera firmware |
+| platform | Thingino / Buildroot Linux |
 | role | Foyer monitoring |
 | parent | None |
 | hostname | `wuuk-ptz-foyer.owl.red` |
+| wifi_chipset | SSV6158 |
 | soc | `t31x` platform; exact variant not documented |
 | image_sensor | `SC4336P` |
 | flash | `ZB25VQ128` |
@@ -678,7 +679,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Camera network identity | `02:7f:f6:05:40:fc` | Allocation `10.0.40.12` | Local-IoT network |
+| Wi-Fi / `wlan0` | `02:7f:f6:05:40:fc` | Allocation `10.0.40.12` | `owl.red-iot-local`; 2.4 GHz |
 
 ### camera-office
 
@@ -687,10 +688,11 @@ MAC rather than its permanent address.
 | id | `camera-office` |
 | kind | appliance |
 | model | WUUK Y0510 PTZ camera |
-| platform | Embedded camera firmware |
+| platform | Thingino / Buildroot Linux |
 | role | Office monitoring |
 | parent | None |
 | hostname | `wuuk-ptz-office.owl.red` |
+| wifi_chipset | SSV6158 |
 | soc | `t31x` platform; exact variant not documented |
 | image_sensor | `SC4336P` |
 | flash | `ZB25VQ128` |
@@ -698,7 +700,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Camera network identity | `02:2d:1f:56:ee:b8` | Allocation `10.0.40.13` | Local-IoT network |
+| Wi-Fi / `wlan0` | `02:2d:1f:56:ee:b8` | Allocation `10.0.40.13` | `owl.red-iot-local`; 2.4 GHz |
 
 ## Rack Connections
 

@@ -9,7 +9,9 @@ and its add-on store are not included. Supporting services are separate workload
 - The retained `config` PVC uses `nas-appdata-smb` and only its own generated
   directory. The workload runs as `1001:100`; no existing appdata permissions
   are changed. The requested size is not an enforced SMB quota.
-- Recorder uses the dedicated `home-assistant-postgres` container on the NAS.
+- Recorder uses its own database and login in the NAS's [shared PostgreSQL
+  service](../../docs/guides/postgresql.md), displayed as `postgresql` on the NAS.
+  The general service name and PostgreSQL icon do not change HA's credentials.
   Its bind mount is `/mnt/ssd/appdata/home-assistant-db/data`, directly on local
   SSD storage, never through SMB. Its separate application role is not a superuser.
 - PostgreSQL listens on the NAS management address, TCP 15432, using SCRAM
@@ -19,20 +21,29 @@ and its add-on store are not included. Supporting services are separate workload
   integration state, automations, scripts and scenes remain on the config PVC.
   The initializer creates missing YAML files only; it never replaces existing ones.
 
+HTTP proxy settings live in the ConfigMap's `http.yaml`. Before HA starts, the
+`configure-http` initializer uses HA's own storage API to migrate and confirm
+them as stable settings. This release migrates HTTP YAML only once and otherwise
+ignores later YAML changes; an unconfirmed pending trial reverts after five
+minutes. Keep HTTP settings in this Git-managed initializer rather than adding
+an ignored `http` block back to `configuration.yaml`. The initializer touches
+only HTTP configuration, not authentication or recorder storage.
+
 SMB configuration plus a separate recorder does not make the NAS redundant.
 Retained storage is not a backup. Cloud/rclone backups and power work remain
 deferred; existing NAS applications and production media are not migrated here.
 
 ## Recorder Management
 
-Use the [dedicated playbook](../../ansible/playbooks/home-assistant-db.yml)
-through its private credential/socket runner, from the repository root:
+The [shared application registry](../../ansible/vars/postgresql.json) preserves
+HA's database and credential references. Use the shared runner from the
+repository root:
 
 ```bash
-node scripts/home-assistant-db-run.mjs --apply
+node scripts/postgresql-run.mjs --apply
 ```
 
-The runner reuses three Bitwarden entries, creating them only if absent:
+HA retains these three Bitwarden entries; new applications use separate entries:
 
 - `home-assistant__postgres__admin-password`
 - `k8s__home-assistant__recorder__password`
@@ -46,7 +57,7 @@ verbose credential logging. Failed output is retained only in owner-only
 controller state outside Git.
 
 The Docker API is reached through a temporary, owner-only SSH-forwarded Unix
-socket; no TCP Docker API is enabled. Only the named recorder container and its
+socket; no TCP Docker API is enabled. Only the named shared container and its
 marked directory are managed. Do not recreate it through an unrelated Unraid
 template or remove its local data during an image upgrade.
 
@@ -65,7 +76,7 @@ Bitwarden bundle. Once the namespace exists, bootstrap its private operator
 token without putting it in a manifest or overwriting an existing token:
 
 ```bash
-node scripts/home-assistant-db-run.mjs --apply --bootstrap-kubernetes
+node scripts/postgresql-run.mjs --apply --bootstrap-kubernetes --application homeassistant
 ```
 
 Initial ingress is limited to `10.0.10.0/24` and the administration workstation
@@ -82,3 +93,85 @@ multi-tenant security boundary.
 ConfigMap and environment-Secret changes require a controlled restart to be
 loaded. Keep one active writer during updates; never start a parallel Home
 Assistant instance against the same config volume or recorder database.
+
+## Device Integrations
+
+[devices.json](devices.json) declares the qualified Canon IPP, two Thingino ONVIF,
+Ecobee HomeKit and Bambu A1 LAN setup inputs. Use the repository-root runner:
+
+```bash
+node scripts/home-assistant-devices.mjs inspect
+node scripts/home-assistant-devices.mjs plan
+node scripts/home-assistant-devices.mjs apply canon
+node scripts/home-assistant-devices.mjs apply camera_foyer
+node scripts/home-assistant-devices.mjs apply camera_office
+node scripts/home-assistant-devices.mjs apply ecobee
+node scripts/home-assistant-devices.mjs apply bambu_a1
+```
+
+The API token is read from Secrets Manager's existing
+`homeassitant-iac-long-live-token` entry. Source contains credential UUIDs only.
+Plans do not create integration entries; apply requires exactly one named
+device, checks for an existing entry and cleans up incomplete setup flows.
+Existing entries are not deleted or overwritten. This manages supported setup
+flows, not every option subsequently editable in HA.
+
+ONVIF uses port 80 and per-camera Secrets Manager entries
+`home-assistant__camera-foyer__onvif` and
+`home-assistant__camera-office__onvif`, each containing a private JSON object
+with `username` and `password`. These preserve the cameras' native ONVIF
+credentials, which are different from their SSH/web login. Do not rotate the
+camera password merely to make these accounts match. Snapshot retrieval does
+not qualify PTZ, audio, every advertised switch or continuous recording.
+Canon's IPP sensors do not replace an actual printing test.
+
+### Ecobee Local HomeKit
+
+Ecobee uses HA's built-in **HomeKit Device** integration (`homekit_controller`),
+not the Ecobee cloud-account integration. Keep it at `10.0.50.10` on
+`owl.red-iot-cloud`; HA communication is local and does not require Ecobee MFA.
+Before initial pairing, open the thermostat's HomeKit / Add to Home screen and
+leave it active. Store its current eight-digit code in Secrets Manager's
+`ecobee-homekit-code` entry. The code and service port can change when pairing
+mode is reopened, so do not reuse an old displayed code or hard-code its port.
+
+The runner queries the genuine service through the existing pinned router SSH
+account on VLAN 50, checks its configured HomeKit ID, model and IPv4 address,
+and verifies HA can reach the advertised TCP port. It delivers only those
+service records to HA's local mDNS listener for initial discovery. No persistent
+multicast relay, firewall exception or host networking is enabled. The bootstrap
+requires `kubectl`, existing router SSH access and the running HA pod's DNS
+library. Existing paired entries bypass discovery and PIN retrieval.
+
+HA owns the resulting pairing keys on the retained config PVC. Do not reset
+HomeKit, remove another controller's pairing or edit HA authentication storage
+to recover discovery. Pairing and verification do not change HVAC modes or
+setpoints. Never put the HomeKit code in source, shell arguments or chat.
+
+### Bambu LAN Setup
+
+The approved third-party integration is
+[greghesp/ha-bambulab](https://github.com/greghesp/ha-bambulab), release `v2.2.26`,
+commit `cd67ed90e08561175a831f35b45773fe427996d7`. The manifest's `install-bambu`
+initializer verifies the source archive's SHA-256 before installing only
+`/config/custom_components/bambu_lab`. It preserves upstream licensing, sets
+the release version in its packaged manifest and records owned file hashes.
+Repeat runs leave matching files unchanged; unmanaged installations, modified
+files and unreviewed version replacements are refused. No HACS is installed.
+
+In the existing **Bambu Lab** Bitwarden Password Manager item, add hidden custom
+fields named `printer_serial` and `lan_access_code`, using the A1's own LAN
+settings. The cloud account password is not a LAN access code. The runner uses
+only these fields, the pinned working Bitwarden CLI `2026.7.0` and its existing
+copied profile; it never submits cloud-account credentials for LAN pairing.
+
+Keep the A1 at `10.0.40.11` on `owl.red-iot-local`. Enable its LAN access in the
+printer UI if it is not already enabled. Firmware updates remain disabled in
+the integration and TLS verification stays enabled. An actual authentication
+or certificate failure requires review, not repeated guesses or a silent TLS
+bypass. The runner does not reset, update or move the printer to cloud Wi-Fi.
+
+The boot initializer takes effect only after this manifest is published through
+Fleet. An installed component persists on the config PVC across restarts;
+publishing code is not the same as pairing the printer with its private LAN
+fields. Do not apply partial ConfigMap data under Fleet's field manager.

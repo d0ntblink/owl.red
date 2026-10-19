@@ -18,6 +18,7 @@ This directory contains Phase 1 automation scaffold only. No topology changes ar
 - `playbooks/02-proxmox-prep.yml`: pre-Phase-2 Proxmox repo remediation and health artifact collection.
 - `playbooks/03-proxmox-upgrade.yml`: controlled package update/dist-upgrade workflow for Proxmox hosts.
 - `playbooks/ups-monitor.yml`: opt-in storage-host UPS telemetry with no shutdown or outlet actions; see [power and recovery](../docs/guides/power-and-recovery.md).
+- `playbooks/thingino-cameras.yml`: serial camera Wi-Fi reconciliation with private Bitwarden inputs and timed rollback; see [Thingino cameras](../docs/guides/thingino-cameras.md).
 - `playbooks/90-validate-platform.yml`: route/DNS/service validation with JSON output artifact.
 - `roles/common_baseline/`: baseline package/chrony/host-fact collection role.
 - `roles/proxmox_prep/`: Proxmox package repository prep and SMART/sensor visibility collection.

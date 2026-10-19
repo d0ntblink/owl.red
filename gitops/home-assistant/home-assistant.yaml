@@ -60,6 +60,91 @@ data:
         print('Git-managed HTTP proxy settings confirmed in stable storage.')
 
     asyncio.run(main())
+  install-bambu.py: |
+    import hashlib
+    import io
+    import json
+    import os
+    from pathlib import Path, PurePosixPath
+    import sys
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    COMMIT = 'cd67ed90e08561175a831f35b45773fe427996d7'
+    DIGEST = '98ee93523ba5422d669a6545edf8e6d98b1dbd264edca21ea9c92fc0e4fdb2cc'
+    VERSION = '2.2.26'
+
+    def files(directory):
+      result = {}
+      for filename in sorted(directory.rglob('*')):
+        if '__pycache__' in filename.parts or filename.name == '.owl-red-install.json':
+          continue
+        if filename.is_symlink():
+          raise RuntimeError('Component symlinks require review.')
+        if filename.is_file():
+          result[filename.relative_to(directory).as_posix()] = hashlib.sha256(filename.read_bytes()).hexdigest()
+      return result
+
+    def main():
+      root = Path(sys.argv[1] if len(sys.argv) > 1 else '/config/custom_components')
+      destination = root / 'bambu_lab'
+      marker = destination / '.owl-red-install.json'
+      if destination.is_symlink():
+        raise RuntimeError('Unmanaged component location; installation refused.')
+      if destination.exists():
+        if not marker.is_file():
+          raise RuntimeError('Unmanaged Bambu installation; overwrite refused.')
+        previous = json.loads(marker.read_text())
+        if previous.get('archive_sha256') != DIGEST or previous.get('files') != files(destination):
+          raise RuntimeError('Bambu version or files differ; replacement requires review.')
+        print(json.dumps({'component': 'bambu_lab', 'version': VERSION, 'changed': False}))
+        return
+      url = 'https://codeload.github.com/greghesp/ha-bambulab/tar.gz/' + COMMIT
+      with urllib.request.urlopen(url, timeout=60) as response:
+        archive = response.read(32 * 1024 * 1024 + 1)
+      if hashlib.sha256(archive).hexdigest() != DIGEST:
+        raise RuntimeError('Bambu archive checksum mismatch; installation refused.')
+      root.mkdir(parents=True, exist_ok=True)
+      with tempfile.TemporaryDirectory(prefix='.owl-red-bambu-', dir=root) as temporary:
+        staged = Path(temporary) / 'bambu_lab'
+        staged.mkdir()
+        prefix = 'ha-bambulab-' + COMMIT + '/custom_components/bambu_lab/'
+        total = 0
+        with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as source:
+          for member in source:
+            if not member.name.startswith(prefix):
+              continue
+            relative = PurePosixPath(member.name[len(prefix):])
+            if relative.is_absolute() or '..' in relative.parts or member.issym() or member.islnk():
+              raise RuntimeError('Unsafe Bambu archive member.')
+            if member.isdir():
+              continue
+            total += member.size
+            if not member.isfile() or total > 64 * 1024 * 1024:
+              raise RuntimeError('Unsupported Bambu archive contents.')
+            target = staged.joinpath(*relative.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with source.extractfile(member) as contents:
+              target.write_bytes(contents.read())
+          license_file = source.getmember('ha-bambulab-' + COMMIT + '/LICENSE')
+          with source.extractfile(license_file) as contents:
+            (staged / 'LICENSE').write_bytes(contents.read())
+        manifest_file = staged / 'manifest.json'
+        manifest = json.loads(manifest_file.read_text())
+        if manifest.get('domain') != 'bambu_lab' or manifest.get('requirements') != ['beautifulsoup4']:
+          raise RuntimeError('Unexpected Bambu manifest; installation refused.')
+        manifest['version'] = VERSION
+        manifest_file.write_text(json.dumps(manifest, indent=2) + '\n')
+        (staged / '.owl-red-install.json').write_text(json.dumps({
+          'commit': COMMIT, 'archive_sha256': DIGEST, 'version': VERSION, 'files': files(staged)
+        }, sort_keys=True) + '\n')
+        if destination.exists():
+          raise RuntimeError('Concurrent Bambu installation; overwrite refused.')
+        os.rename(staged, destination)
+      print(json.dumps({'component': 'bambu_lab', 'version': VERSION, 'changed': True}))
+
+    main()
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -93,6 +178,23 @@ spec:
           operator: Exists
           effect: NoSchedule
       initContainers:
+        - name: install-bambu
+          image: ghcr.io/home-assistant/home-assistant:2026.10.2@sha256:33afb0659d786213264c2211f8d91c5fe87461c56eba6a3a546eb05fc71e89f4
+          command: [python3, /bootstrap/install-bambu.py]
+          env:
+            - {name: PYTHONDONTWRITEBYTECODE, value: '1'}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '1', memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: configuration, mountPath: /bootstrap, readOnly: true}
+            - {name: temporary, mountPath: /tmp}
         - name: configure-http
           image: ghcr.io/home-assistant/home-assistant:2026.10.2@sha256:33afb0659d786213264c2211f8d91c5fe87461c56eba6a3a546eb05fc71e89f4
           command: [python3, /bootstrap/configure-http.py]
