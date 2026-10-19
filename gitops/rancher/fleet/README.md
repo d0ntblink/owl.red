@@ -70,8 +70,26 @@ Fleet should begin reconciling:
 - `gitops/dashboards`
 - `gitops/bitwarden-operator`
 - `gitops/bitwarden-secrets`
+- `gitops/csi-smb`
 - `gitops/pdm`
 - `gitops/platform-resilience`
+
+## Local Agent Scheduling
+
+Apply the supported Cluster settings after the local cluster is registered:
+
+```bash
+kubectl -n fleet-local patch clusters.fleet.cattle.io local \
+  --type=merge --field-manager=fleetagent \
+  --patch-file=gitops/rancher/fleet/cluster-local-agent-patch.yaml
+kubectl -n cattle-fleet-local-system rollout status deployment/fleet-agent
+```
+
+The patch adds the control-plane toleration; Fleet's agent-management
+controller regenerates its own Bundle and Deployment. It does not replace
+registration credentials, namespaces or controller-generated resources.
+The current agent remains single-replica; the platform PDB permits its
+rescheduling rather than claiming three-replica HA.
 
 ## Adoption Notes
 
