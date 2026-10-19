@@ -3,3 +3,7 @@ ingress:
     source: secret
   extraAnnotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+extraTolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
