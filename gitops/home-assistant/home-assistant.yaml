@@ -20,9 +20,6 @@ metadata:
 data:
   configuration.yaml: |
     default_config:
-    homeassistant:
-      external_url: https://ha.owl.red
-      internal_url: https://ha.owl.red
     recorder:
       db_url: !env_var HOMEASSISTANT_DB_URL
       purge_keep_days: 10
