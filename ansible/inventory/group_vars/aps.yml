@@ -20,6 +20,7 @@ openwrt_bss_bridges:
   phy1-ap0: br-private
   phy0-ap1: br-iot-local
   phy0-ap2: br-iot-cloud
+  phy1-ap1: br-iot-cloud
 openwrt_coverage_target_sqft: 900
 openwrt_coverage_target_rssi_dbm: -67
 openwrt_radio_profiles:
@@ -66,7 +67,7 @@ openwrt_wifi_networks:
   iot_cloud:
     vlan: 50
     ssid: owl.red-iot-cloud
-    radios: [radio0]
+    radios: [radio0, radio1]
     enabled: true
     isolate: true
     key_source: iot_cloud

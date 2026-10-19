@@ -167,7 +167,7 @@
           - >-
             openwrt_wireless_runtime.stdout | from_json | dict2items | map(attribute='value.interfaces') |
             flatten | map(attribute='config.ssid') | list | sort ==
-            ['owl.red', 'owl.red', 'owl.red-iot-cloud', 'owl.red-iot-local']
+            ['owl.red', 'owl.red', 'owl.red-iot-cloud', 'owl.red-iot-cloud', 'owl.red-iot-local']
         fail_msg: The exact AP target, wired interface or active radio/SSID state did not converge.
       when: openwrt_phase == 'verify'
 

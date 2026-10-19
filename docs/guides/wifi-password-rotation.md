@@ -11,7 +11,7 @@ put it in Git, a command argument, a temporary script or chat.
 |---------------|----------------|--------|
 | `owl.red` | `owl-red-wifi-private` | Private Wi-Fi on both bands |
 | `owl.red-iot-local` | `owl-red-wifi-iot-local` | Local-only IoT, VLAN 40 |
-| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50 |
+| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50, both bands |
 | `silence of the lans` | `owl-red-wifi-guest` | Stored guest key; changing it does not enable guest Wi-Fi |
 
 Change the item's **Password** field, not its name, username or notes. Save it
