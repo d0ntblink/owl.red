@@ -1,4 +1,16 @@
 defaultNamespace: cert-manager
+diff:
+  comparePatches:
+    - apiVersion: admissionregistration.k8s.io/v1
+      kind: MutatingWebhookConfiguration
+      name: cert-manager-webhook
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+    - apiVersion: admissionregistration.k8s.io/v1
+      kind: ValidatingWebhookConfiguration
+      name: cert-manager-webhook
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
 helm:
   releaseName: cert-manager
   repo: https://charts.jetstack.io
