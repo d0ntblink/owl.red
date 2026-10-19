@@ -1,0 +1,246 @@
+---
+- name: Manage shared PostgreSQL and isolated application databases
+  hosts: nas_unraid
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    postgresql_config: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../vars/postgresql.json') | from_json }}"
+    postgresql_applications: "{{ postgresql_config.applications | dict2items }}"
+    postgresql_passwords: "{{ lookup('ansible.builtin.env', 'POSTGRESQL_APPLICATION_PASSWORDS') | from_json }}"
+    postgresql_name: "{{ postgresql_config.server.container_name }}"
+    postgresql_path: "{{ postgresql_config.server.data_directory }}"
+    postgresql_docker_host: "{{ lookup('ansible.builtin.env', 'POSTGRESQL_DOCKER_HOST') }}"
+    postgresql_admin_password: "{{ lookup('ansible.builtin.env', 'POSTGRESQL_ADMIN_PASSWORD') }}"
+    postgresql_image: "{{ postgresql_config.server.image }}"
+  pre_tasks:
+    - name: Require the approved host, private socket and explicit apply
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'nas_unraid'
+          - ansible_host == '10.0.10.5'
+          - postgresql_apply | default(false) | bool
+          - postgresql_docker_host is match('^unix:///')
+          - postgresql_admin_password is match('^[a-f0-9]{64}$')
+      no_log: true
+
+    - name: Require distinct safe application database and role names
+      ansible.builtin.assert:
+        that:
+          - postgresql_applications | length > 0
+          - postgresql_applications | map(attribute='value.database') | unique | length == postgresql_applications | length
+          - postgresql_applications | map(attribute='value.role') | unique | length == postgresql_applications | length
+
+    - name: Validate each application before database changes
+      ansible.builtin.assert:
+        that:
+          - item.value.database is match('^[a-z][a-z0-9_]{0,62}$')
+          - item.value.role is match('^[a-z][a-z0-9_]{0,62}$')
+          - item.value.database not in ['postgres', 'template0', 'template1']
+          - item.value.role != 'postgres'
+          - not item.value.role.startswith('pg_')
+          - postgresql_passwords[item.key] is match('^[a-f0-9]{64}$')
+      loop: "{{ postgresql_applications }}"
+      no_log: true
+
+    - name: Inspect only the intended database container
+      community.docker.docker_container_info:
+        docker_host: "{{ postgresql_docker_host }}"
+        name: "{{ postgresql_name }}"
+      delegate_to: localhost
+      become: false
+      register: postgresql_existing
+      no_log: true
+
+    - name: Inspect the legacy name before an in-place rename
+      community.docker.docker_container_info:
+        docker_host: "{{ postgresql_docker_host }}"
+        name: home-assistant-postgres
+      delegate_to: localhost
+      become: false
+      register: postgresql_legacy
+      no_log: true
+
+    - name: Reject conflicting or unowned service containers
+      ansible.builtin.assert:
+        that:
+          - not (postgresql_existing.exists and postgresql_legacy.exists)
+          - >-
+            not postgresql_existing.exists or
+            postgresql_existing.container.Config.Labels.get('owl.red.component', '') in ['home-assistant-recorder', 'shared-postgresql']
+          - >-
+            not postgresql_legacy.exists or
+            postgresql_legacy.container.Config.Labels.get('owl.red.component', '') == 'home-assistant-recorder'
+      no_log: true
+
+    - name: Verify the legacy container uses the preserved database directory
+      ansible.builtin.assert:
+        that:
+          - >-
+            postgresql_legacy.container.Mounts |
+            selectattr('Destination', 'equalto', '/var/lib/postgresql/data') |
+            map(attribute='Source') | list == [postgresql_path ~ '/data']
+      when: postgresql_legacy.exists
+      no_log: true
+
+    - name: Rename only the verified legacy container
+      ansible.builtin.raw: >-
+        docker rename {{ postgresql_legacy.container.Id | quote }} {{ postgresql_name | quote }}
+      when: postgresql_legacy.exists and not postgresql_existing.exists
+      changed_when: true
+      no_log: true
+
+  tasks:
+    - name: Preserve the existing local data directory and ownership marker
+      ansible.builtin.raw: |
+        set -eu
+        base={{ postgresql_path | quote }}
+        if test -e "$base"; then
+          test -d "$base" && ! test -L "$base"
+          test -f "$base/.owl-red-recorder"
+          test "$(cat "$base/.owl-red-recorder")" = 'home-assistant-recorder'
+          test -d "$base/data" && ! test -L "$base/data"
+          printf 'existing\n'
+        else
+          test -d /mnt/ssd/appdata
+          mkdir -m 0700 "$base"
+          printf 'home-assistant-recorder\n' > "$base/.owl-red-recorder"
+          chmod 0600 "$base/.owl-red-recorder"
+          mkdir -m 0700 "$base/data"
+          printf 'created\n'
+        fi
+      register: postgresql_directory
+      changed_when: "'created' in postgresql_directory.stdout"
+
+    - name: Run shared PostgreSQL with its retained local data
+      community.docker.docker_container:
+        docker_host: "{{ postgresql_docker_host }}"
+        name: "{{ postgresql_name }}"
+        image: "{{ postgresql_image }}"
+        state: started
+        restart_policy: unless-stopped
+        stop_timeout: 60
+        memory: 768m
+        shm_size: 256m
+        labels:
+          owl.red.component: shared-postgresql
+          net.unraid.docker.icon: "{{ postgresql_config.server.icon }}"
+        published_ports:
+          - "{{ postgresql_config.server.host }}:{{ postgresql_config.server.port }}:5432"
+        mounts:
+          - type: bind
+            source: "{{ postgresql_path }}/data"
+            target: /var/lib/postgresql/data
+        env:
+          POSTGRES_PASSWORD: "{{ postgresql_admin_password }}"
+          POSTGRES_DB: postgres
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+        command:
+          - postgres
+          - -c
+          - shared_buffers=128MB
+          - -c
+          - max_connections=30
+        security_opts:
+          - no-new-privileges:true
+        healthcheck:
+          test: [CMD-SHELL, 'pg_isready -U postgres -d postgres']
+          interval: 10s
+          timeout: 5s
+          retries: 6
+          start_period: 30s
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Wait for only this database server to accept connections
+      community.docker.docker_container_info:
+        docker_host: "{{ postgresql_docker_host }}"
+        name: "{{ postgresql_name }}"
+      delegate_to: localhost
+      become: false
+      register: postgresql_health
+      until: postgresql_health.container.State.Health.Status == 'healthy'
+      retries: 12
+      delay: 5
+      no_log: true
+
+    - name: Populate only this service's Unraid icon caches
+      ansible.builtin.raw: |
+        php <<'PHP'
+        <?php
+        $url = {{ postgresql_config.server.icon | to_json }};
+        $name = {{ postgresql_name | to_json }};
+        if ($name !== 'postgresql') { exit(2); }
+        $paths = [
+          '/var/lib/docker/unraid/images/'.$name.'-icon.png',
+          '/usr/local/emhttp/state/plugins/dynamix.docker.manager/images/'.$name.'-icon.png'
+        ];
+        $image = is_file($paths[0]) ? file_get_contents($paths[0]) : false;
+        if (!$image || bin2hex(substr($image, 0, 8)) !== '89504e470d0a1a0a') {
+          $request = curl_init($url);
+          curl_setopt_array($request, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FAILONERROR => true, CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2]);
+          $image = curl_exec($request);
+          curl_close($request);
+          if (!$image || bin2hex(substr($image, 0, 8)) !== '89504e470d0a1a0a') { exit(3); }
+        }
+        $changed = false;
+        foreach ($paths as $target) {
+          if (!is_dir(dirname($target)) && !mkdir(dirname($target), 0755, true)) { exit(4); }
+          if (!is_file($target) || hash_file('sha256', $target) !== hash('sha256', $image)) {
+            if (file_put_contents($target, $image) !== strlen($image) || !chmod($target, 0644)) { exit(5); }
+            $changed = true;
+          }
+        }
+        echo $changed ? 'changed' : 'unchanged';
+        PHP
+      register: postgresql_icon_cache
+      changed_when: "postgresql_icon_cache.stdout | trim == 'changed'"
+
+    - name: Create separate least-privilege application roles
+      community.postgresql.postgresql_user:
+        login_host: "{{ postgresql_config.server.host }}"
+        login_port: "{{ postgresql_config.server.port }}"
+        login_user: postgres
+        login_password: "{{ postgresql_admin_password }}"
+        login_db: postgres
+        name: "{{ item.value.role }}"
+        password: "{{ postgresql_passwords[item.key] }}"
+        role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+        state: present
+      delegate_to: localhost
+      become: false
+      loop: "{{ postgresql_applications }}"
+      no_log: true
+
+    - name: Create separate application-owned UTF-8 databases
+      community.postgresql.postgresql_db:
+        login_host: "{{ postgresql_config.server.host }}"
+        login_port: "{{ postgresql_config.server.port }}"
+        login_user: postgres
+        login_password: "{{ postgresql_admin_password }}"
+        name: "{{ item.value.database }}"
+        owner: "{{ item.value.role }}"
+        encoding: UTF8
+        template: template0
+        state: present
+      delegate_to: localhost
+      become: false
+      loop: "{{ postgresql_applications }}"
+      no_log: true
+
+    - name: Revoke public database access for managed applications
+      community.postgresql.postgresql_privs:
+        login_host: "{{ postgresql_config.server.host }}"
+        login_port: "{{ postgresql_config.server.port }}"
+        login_user: postgres
+        login_password: "{{ postgresql_admin_password }}"
+        login_db: postgres
+        type: database
+        objs: "{{ item.value.database }}"
+        roles: PUBLIC
+        privs: ALL
+        state: absent
+      delegate_to: localhost
+      become: false
+      loop: "{{ postgresql_applications }}"
+      no_log: true

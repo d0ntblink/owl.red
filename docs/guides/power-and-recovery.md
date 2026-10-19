@@ -1,8 +1,10 @@
 # Power And Recovery
 
+Power and backup work is deferred while application and storage work proceeds.
+Existing monitor-only UPS behavior stays unchanged. Deferral does not authorize
+destructive migration, data cleanup or changes to production media.
 Power monitoring is not shutdown protection, and retained NAS data is not an
-independent backup. Production application-state migration remains gated on
-confirmed power dependencies and a usable recovery copy.
+independent backup.
 
 ## UPS Monitoring
 
@@ -76,6 +78,12 @@ behavior until its hardware semantics and recovery path are explicitly verified.
 
 ## Backup Destination
 
+Future offsite backups will use cloud storage with rclone; provider selection
+and implementation are deferred. No cloud remote, upload job or credential is
+configured by this decision. Plan encryption, independently recoverable keys,
+retention/versioning and restore checks before enabling transfers. An ordinary
+mirror or destructive sync is not a versioned backup.
+
 No independent backup destination is available yet. Do not provision PBS or
 schedule jobs against an arbitrary local/NAS path merely to mark backups active.
 The NAS `backups` share and retained SMB PVC directories do not protect against
@@ -91,7 +99,7 @@ Once a destination is selected:
 3. Use application-consistent capture where needed, with restricted credentials
    and an independently recoverable copy of configuration and encryption keys.
 4. Restore into an isolated target and verify data and service behavior before
-   relying on the schedule or migrating production state.
+   treating the scheduled backups as a dependable recovery copy.
 
 Neither configuration preimages nor a successful temporary-file storage test
 replace an application-consistent backup and restore test.

@@ -1,0 +1,43 @@
+{
+  "endpoint": "https://ha.owl.red",
+  "token_secret_id": "05591a1b-1e91-45a8-91a5-b4e80141c6d0",
+  "devices": {
+    "canon": {
+      "integration": "ipp",
+      "host": "10.0.40.10",
+      "port": 631,
+      "base_path": "/ipp/print",
+      "ssl": false,
+      "verify_ssl": false
+    },
+    "camera_foyer": {
+      "integration": "onvif",
+      "name": "WUUK Foyer",
+      "mac": "02:7f:f6:05:40:fc",
+      "host": "10.0.40.12",
+      "port": 80,
+      "credential_secret_id": "0e38c95a-79cb-4700-b015-b4e801443d54"
+    },
+    "camera_office": {
+      "integration": "onvif",
+      "name": "WUUK Office",
+      "mac": "02:2d:1f:56:ee:b8",
+      "host": "10.0.40.13",
+      "port": 80,
+      "credential_secret_id": "7e8e9e5b-6f83-46fb-840b-b4e801443d91"
+    },
+    "ecobee": {
+      "integration": "homekit_controller",
+      "name": "ecobee",
+      "host": "10.0.50.10",
+      "homekit_id": "77:d3:42:fd:69:74",
+      "service_name": "ecobee._hap._tcp.local.",
+      "credential_secret_id": "7d088c02-3b5f-46d5-849d-b4e8014add85"
+    },
+    "bambu_a1": {
+      "integration": "bambu_lab",
+      "host": "10.0.40.11",
+      "credential_item": "5d4f3e7d-4798-4db7-8600-b210018b452c"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+---
+thingino_camera_item: 79c52c46-77d5-46b6-8d7d-b4dd00ff75ae
+thingino_wifi_item: 9a8a2769-6c84-48a7-bf9e-b4e70030d1af
+thingino_wifi_profile:
+  ssid: owl.red-iot-local
+  frequencies: [2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462]
+  expected_bssid: 12:be:f5:d9:1e:35
+  gateway: 10.0.40.1
+  dns: 10.0.40.30
+thingino_rollback_seconds: 300
