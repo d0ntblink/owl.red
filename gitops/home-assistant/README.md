@@ -24,6 +24,13 @@ For adding integrations/modules, areas, zones and YAML packages, use the
   integration state, automations, scripts and scenes remain on the config PVC.
   The initializer creates missing YAML files only; it never replaces existing ones.
 
+Home name, location, region and internal/external URLs remain in HA's own core
+storage, editable through its settings pages. Do not put the URL fields back
+under `homeassistant:` in base YAML: this HA release treats that as YAML ownership
+of the whole General page and disables otherwise unrelated controls. Both URLs
+remain `https://ha.owl.red`; these core settings are separate from ingress and
+the Git-managed HTTP proxy configuration below.
+
 HTTP proxy settings live in the ConfigMap's `http.yaml`. Before HA starts, the
 `configure-http` initializer uses HA's own storage API to migrate and confirm
 them as stable settings. This release migrates HTTP YAML only once and otherwise
@@ -118,6 +125,13 @@ Plans do not create integration entries; apply requires exactly one named
 device, checks for an existing entry and cleans up incomplete setup flows.
 Existing entries are not deleted or overwritten. This manages supported setup
 flows, not every option subsequently editable in HA.
+
+An optional `area` on a device names an existing HA area exactly. Plan reports
+assignment drift; apply updates the existing device and its attached children
+without re-pairing. Area creation and per-entity overrides remain HA-managed.
+Pushing JSON does not run the script: explicitly run plan and apply from the
+controller after a change. The runner requires Node 22+ with native WebSocket
+support. See the [area procedure](../../docs/guides/home-assistant.md#assign-existing-devices-from-json).
 
 ONVIF uses port 80 and per-camera Secrets Manager entries
 `home-assistant__camera-foyer__onvif` and
