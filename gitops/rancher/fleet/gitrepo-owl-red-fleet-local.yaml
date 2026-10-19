@@ -17,5 +17,6 @@ spec:
     - gitops/bitwarden-operator
     - gitops/bitwarden-secrets
     - gitops/csi-smb
+    - gitops/home-assistant
     - gitops/pdm
     - gitops/platform-resilience
