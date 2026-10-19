@@ -284,6 +284,7 @@ MAC rather than its permanent address.
 | id | `ups-rack` |
 | kind | power-appliance |
 | model | CyberPower LX1500GU |
+| serial | `QAKLO7008640` |
 | platform | USB HID UPS |
 | role | Rack battery-backed power |
 | parent | None |

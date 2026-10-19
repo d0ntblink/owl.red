@@ -1,0 +1,201 @@
+---
+- name: Monitor the storage-host UPS without power actions
+  hosts: storage_pve
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    ups_monitor_name: cyberpower
+    ups_monitor_marker: /etc/nut/.owl-red-monitor-only
+  pre_tasks:
+    - name: Require the intended host and explicit apply opt-in
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'storage_pve'
+          - ansible_host == '10.0.10.4'
+          - platform == 'proxmox'
+          - ansible_check_mode or (ups_monitor_apply | default(false) | bool)
+
+    - name: Verify exactly one expected USB UPS is present
+      ansible.builtin.command:
+        argv: [lsusb, -d, '0764:0501']
+      register: ups_monitor_usb
+      changed_when: false
+      check_mode: false
+
+    - name: Require an unambiguous UPS connection
+      ansible.builtin.assert:
+        that:
+          - ups_monitor_usb.stdout_lines | length == 1
+
+    - name: Check for existing UPS shutdown monitors
+      ansible.builtin.command:
+        argv: [pgrep, -x, 'upsmon|apcupsd']
+      register: ups_monitor_shutdown_processes
+      changed_when: false
+      failed_when: ups_monitor_shutdown_processes.rc not in [0, 1]
+      check_mode: false
+
+    - name: Inspect existing NUT ownership and powerdown flags
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/nut/nut.conf
+        - "{{ ups_monitor_marker }}"
+        - /etc/killpower
+        - /etc/nut/killpower
+        - /run/nut/killpower
+      register: ups_monitor_paths
+
+    - name: Refuse existing unowned configuration or shutdown state
+      ansible.builtin.assert:
+        that:
+          - ups_monitor_shutdown_processes.rc == 1
+          - not ups_monitor_paths.results[0].stat.exists or ups_monitor_paths.results[1].stat.exists
+          - not ups_monitor_paths.results[2].stat.exists
+          - not ups_monitor_paths.results[3].stat.exists
+          - not ups_monitor_paths.results[4].stat.exists
+        fail_msg: Existing UPS monitoring or shutdown configuration requires a separate reviewed adoption.
+
+  tasks:
+    - name: Install only the monitor-server package and required dependencies
+      ansible.builtin.apt:
+        name: nut-server
+        state: present
+        install_recommends: false
+        policy_rc_d: 101
+      register: ups_monitor_package
+
+    - name: Configure and verify loopback-only telemetry
+      when: not ansible_check_mode or ups_monitor_paths.results[1].stat.exists
+      block:
+        - name: Disable and mask automatic shutdown monitoring
+          ansible.builtin.systemd_service:
+            name: nut-monitor.service
+            state: stopped
+            enabled: false
+            masked: true
+
+        - name: Configure the selected USB driver
+          ansible.builtin.copy:
+            dest: /etc/nut/ups.conf
+            owner: root
+            group: nut
+            mode: '0640'
+            content: |
+              maxretry = 3
+              [{{ ups_monitor_name }}]
+                driver = usbhid-ups
+                port = auto
+                vendorid = 0764
+                productid = 0501
+                desc = "CyberPower UPS connected to storage.pve"
+          register: ups_monitor_driver_config
+
+        - name: Configure local read-only service policy
+          ansible.builtin.copy:
+            dest: "{{ item.path }}"
+            content: "{{ item.content }}"
+            owner: root
+            group: nut
+            mode: '0640'
+          loop:
+            - path: /etc/nut/nut.conf
+              content: "MODE=netserver\n"
+            - path: /etc/nut/upsd.conf
+              content: "LISTEN 127.0.0.1 3493\nLISTEN ::1 3493\n"
+            - path: /etc/nut/upsd.users
+              content: ''
+            - path: /etc/nut/upsmon.conf
+              content: ''
+          register: ups_monitor_service_config
+
+        - name: Record ownership of this monitor-only configuration
+          ansible.builtin.copy:
+            dest: "{{ ups_monitor_marker }}"
+            content: "owl.red monitor-only; no automatic shutdown or write accounts\n"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Apply installed device permissions only to the selected UPS
+          ansible.builtin.command:
+            argv:
+              - udevadm
+              - trigger
+              - --action=change
+              - --subsystem-match=usb
+              - --attr-match=idVendor=0764
+              - --attr-match=idProduct=0501
+          when: ups_monitor_package.changed
+          changed_when: true
+
+        - name: Start the selected UPS telemetry driver
+          ansible.builtin.systemd_service:
+            name: "nut-driver@{{ ups_monitor_name }}.service"
+            enabled: true
+            state: "{{ 'restarted' if ups_monitor_driver_config.changed else 'started' }}"
+
+        - name: Start the loopback telemetry server
+          ansible.builtin.systemd_service:
+            name: nut-server.service
+            enabled: true
+            state: "{{ 'restarted' if ups_monitor_service_config.changed else 'started' }}"
+
+        - name: Read UPS telemetry without commands or power tests
+          ansible.builtin.command:
+            argv: [upsc, '{{ ups_monitor_name }}@localhost']
+          register: ups_monitor_telemetry
+          changed_when: false
+          check_mode: false
+          until: ups_monitor_telemetry.rc == 0
+          retries: 6
+          delay: 2
+
+        - name: Require valid UPS status before accepting monitoring
+          ansible.builtin.assert:
+            that:
+              - "'ups.status:' in ups_monitor_telemetry.stdout"
+              - "'battery.charge:' in ups_monitor_telemetry.stdout"
+              - "'driver.flag.allow_killpower: 0' in ups_monitor_telemetry.stdout"
+
+        - name: Verify the shutdown monitor remains masked
+          ansible.builtin.command:
+            argv: [systemctl, is-enabled, nut-monitor.service]
+          register: ups_monitor_mask
+          changed_when: false
+          failed_when: ups_monitor_mask.rc not in [0, 1]
+          check_mode: false
+
+        - name: Verify NUT listener addresses
+          ansible.builtin.command:
+            argv: [ss, -H, -lnt, '( sport = :3493 )']
+          register: ups_monitor_listeners
+          changed_when: false
+          check_mode: false
+
+        - name: Verify control and shutdown configuration is empty
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop:
+            - /etc/nut/upsd.users
+            - /etc/nut/upsmon.conf
+          register: ups_monitor_control_files
+
+        - name: Require disabled shutdown and control paths
+          ansible.builtin.assert:
+            that:
+              - ups_monitor_mask.stdout == 'masked'
+              - ups_monitor_listeners.stdout_lines | length > 0
+              - ups_monitor_control_files.results[0].stat.size == 0
+              - ups_monitor_control_files.results[1].stat.size == 0
+
+        - name: Require every UPS listener to be loopback-only
+          ansible.builtin.assert:
+            that:
+              - "item.split()[3] in ['127.0.0.1:3493', '[::1]:3493', '::1:3493']"
+          loop: "{{ ups_monitor_listeners.stdout_lines }}"
+
+        - name: Report current read-only UPS measurements
+          ansible.builtin.debug:
+            msg: "{{ ups_monitor_telemetry.stdout_lines }}"

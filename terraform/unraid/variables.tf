@@ -51,9 +51,9 @@ variable "connect_access_type" {
   default     = "DISABLED"
 }
 
-# --- UPS (NUT currently disabled / no UPS wired) ---
+# --- UPS management (hardware and shutdown policy must be qualified first) ---
 variable "ups_present" {
-  description = "Set true only when a UPS is wired and NUT should be managed."
+  description = "Set true only after the UPS connection, monitoring and shutdown policy are qualified for Terraform management."
   type        = bool
   default     = false
 }
