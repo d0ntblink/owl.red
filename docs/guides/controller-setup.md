@@ -143,10 +143,11 @@ password as an operating-system command argument.
 The Kubernetes SMB credential pair is privately read-back verified in Secrets
 Manager. Unraid's non-login `k8s` account and private appdata access are applied;
 NAS-local SMB3 write/read and guest rejection pass. The Bitwarden operator has
-delivered the exact two-field Kubernetes secret. SMB CSI is staged and passes
-render/server dry-run, but no driver or PVC rollout is claimed. Private evidence:
-`~/.local/state/owl-red/unraid-smb-GmLEvd/`; see
-[the release runbook](../../gitops/csi-smb/README.md).
+delivered the exact two-field Kubernetes secret. Fleet now deploys SMB CSI;
+a disposable PVC passed cross-node persistence, permission and retention checks.
+Keep `helm.disablePreProcess: true` so Fleet preserves the CSI subdirectory
+placeholders. See [the release runbook](../../gitops/csi-smb/README.md) for
+volume requests and storage constraints.
 
 ## Ubuntu And WSL Installation
 

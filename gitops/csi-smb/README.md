@@ -5,33 +5,19 @@ Fleet owns the upstream `csi-driver-smb` Helm release, pinned to `1.20.3`, in
 namespace and credential mapping are declared under
 [the Bitwarden bundle](../bitwarden-secrets/generated/storage-system/unraid-smb-credentials-bitwardensecret.yaml).
 
-## Status (2026-10-18)
+## Deployment
 
-- NAS account `k8s` exists with UID/GID `1001:100` and `/bin/false`.
-- Appdata is private SMB; only `d0ntblink` and `k8s` have write grants. NAS-local
-  SMB3 authentication, a temporary write/read and guest rejection pass.
-- Media and all other share configurations, root/owner credentials and
-  disk/array/network/global settings match the protected preimage. No existing
-  application files were moved or ownership-reset. NFS stays disabled.
-- The replacement Bitwarden token is verified. The operator delivered exactly
-  `username` and `password` to `storage-system/unraid-smb-credentials`, with a
-  private value comparison against the intended vault entries.
-- The real chart renders 12 resources; its Kubernetes 1.31.1 server dry-run
-  passes. The CSI workloads legitimately require privileged/host-network access;
-  the dedicated namespace allows this, while restricted-policy audit warnings
-  remain visible. Do not host ordinary applications in this namespace.
-- The driver and StorageClass are **staged, not installed**. No PVC mount,
-  Kubernetes write or cross-node rescheduling acceptance is claimed.
+The Fleet bundle is active with two controllers and node plugins on all four
+nodes. `nas-appdata-smb` is available for explicitly selected workloads.
+The non-login NAS account `k8s` uses UID/GID `1001:100`; private appdata grants
+remain limited to `d0ntblink` and `k8s`. Bitwarden supplies the two-field
+`storage-system/unraid-smb-credentials` secret.
 
-Native Unraid changed authorization during the bootstrap. Switching private
-security cleared the grant list; explicit grants were reapplied and accepted.
-It also omitted legacy `shareFruit=no` while global Fruit stayed disabled and
-materialized an empty secondary-pool key. Those normalizations were checked
-against effective SMB behavior rather than treated as new storage policy.
-
-Private controller evidence:
-`~/.local/state/owl-red/unraid-smb-GmLEvd/`. This is not a data backup or NAS
-fallback. Account and share preimages also remain privately on the NAS.
+A disposable PVC passed authenticated writes, UID/GID/mode checks and
+persistence between `worker1-talos` and `cp3-talos`. Its NAS files remained
+after claim deletion under the Retain policy. Only that test's files and
+resources were removed; protected NAS configuration remained unchanged.
+NFS stays disabled and production media is unchanged.
 
 ## Requirements
 
@@ -47,6 +33,9 @@ fallback. Account and share preimages also remain privately on the NAS.
   put passwords or machine tokens in values, Git, logs or command arguments.
 - Node DNS for `nas.owl.red` and TCP 445 connectivity to the NAS. Qualify
   SMB 3.1.1 mounts from actual workloads before production use.
+
+The CSI workloads require privileged/host-network access. Keep ordinary
+applications outside `storage-system`; do not relax their namespace policies.
 
 ## Storage Contract
 
@@ -70,6 +59,32 @@ SQLite/network-filesystem concerns still apply. Shared storage is not permission
 for multiple active Home Assistant writers, and retained directories are not
 application-consistent backups or protection against NAS loss.
 
+## Request A Volume
+
+Add a claim to the application's Fleet bundle, using its own namespace:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: appdata
+  namespace: example-app
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nas-appdata-smb
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+Reference `appdata` through the workload's `persistentVolumeClaim.claimName`.
+Run qualified clients as UID/GID `1001:100`, or explicitly review their
+permission requirements. The size is a provisioning request, not an SMB quota.
+`ReadWriteMany` permits mounting from multiple nodes; it does not make an
+application safe for concurrent writers. Keep retained PV/data reclamation
+separate from ordinary application removal.
+
 ## Activation And Acceptance
 
 Publish the reviewed source before applying the active
@@ -78,6 +93,11 @@ The Fleet-default file is the alternate namespace template, not a second
 GitRepo to activate for this cluster. The existing Bitwarden bundle's
 `takeOwnership` setting permits adoption of the source-defined bootstrap
 namespace/mapping; the token itself remains a private bootstrap secret.
+
+Keep `helm.disablePreProcess: true` in [fleet.yaml](fleet.yaml). The SMB driver
+must receive literal `${pvc.metadata.namespace}`, `${pvc.metadata.name}` and
+`${pv.metadata.name}` placeholders; Fleet must not interpret them as its own
+values templates.
 
 Require this bundle's desired/applied revision and ready workloads. Then use a
 dedicated test namespace/PVC to prove authenticated create/read/delete,
