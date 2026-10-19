@@ -146,30 +146,25 @@ Account creation remains in the Unraid-supported manual lane from
 [ADR 021](../decisions/021-unraid-hybrid-iac.md), not generic `useradd` or direct
 edits to password databases. Store new credentials privately in Bitwarden and
 map them only to the selected consumer; never record passwords in Git or tool
-output. The subsequent accepted account/share change is recorded below.
+output.
 
-Accepted checkpoint (2026-10-18, `19:50:37Z`): the owner rotated the exposed
-Bitwarden machine token, and replacement access was verified with captured
-output. The existing SMB credentials were reused, `k8s` was created through
-Unraid's native handler and appdata was made private. SMB3 authentication,
-temporary write/read, guest rejection and probe cleanup pass. Root/owner
-account hashes, other shares, media and disk/array/network/global settings are
-unchanged. Switching private security initially cleared the grant list;
-explicit `d0ntblink,k8s` grants were reapplied before acceptance. Native legacy
-metadata normalization was checked against unchanged effective behavior.
+The [SMB CSI bundle](../../gitops/csi-smb/README.md) is active through Fleet,
+with two controllers, node plugins on all four nodes and the non-default
+`nas-appdata-smb` StorageClass. The Bitwarden operator supplies the private
+two-field credential secret. Appdata remains private to its existing
+`d0ntblink,k8s` grants; NFS remains disabled.
 
-At `19:58:29Z`, the Bitwarden operator delivered the exact two-field Kubernetes
-secret, privately compared with its source values. The namespace/mapping are
-bootstrapped for adoption by their existing Fleet bundle. The driver itself is
-staged in [the SMB CSI bundle](../../gitops/csi-smb/README.md), with rendering and
-Kubernetes 1.31 server dry-run passing; no driver installation or PVC acceptance
-is claimed. Source publication and the active GitRepo path update remain ahead.
+A disposable PVC passed authenticated writes, UID/GID `1001:100` and
+file/directory mode checks, and persistence after pod recreation from
+`worker1-talos` to `cp3-talos`. Claim deletion left its NAS files intact under
+the Retain policy. Only the uniquely identified test files and Kubernetes
+resources were cleaned up. Other shares, media and protected NAS system/account
+configuration remained unchanged. This qualifies the storage path, not an
+application's database, multi-writer layout or backup strategy.
 
 The SDK incident and continuing logging controls remain documented in the
 [SDK logging safeguard](controller-setup.md#sdk-logging-safety-and-smb-checkpoint).
-Talos 1.8.1 CIFS support is confirmed, but the successful NAS-local SMB test is
-not a Kubernetes mount or cross-node rescheduling test. Private accepted
-evidence remains under `~/.local/state/owl-red/unraid-smb-GmLEvd/`.
+Talos 1.8.1 CIFS support and Kubernetes cross-node mounts are confirmed.
 
 ## Who configures what (which IaC lane)
 
@@ -190,11 +185,10 @@ evidence remains under `~/.local/state/owl-red/unraid-smb-GmLEvd/`.
 2. Qualify power/shutdown and restrict intended exports, excluding `system`.
    Resolve the protected-media activation blocker before enabling NFS; global
    enable is not approved while it would activate that public export.
-3. **k8s smoke test:** after SMB qualification, create the required account and
-   private secret mapping, deploy SMB CSI through Fleet and verify a retained
-   test PVC survives rescheduling. Validate authorized writes, private-share
-   denials and application ownership/locking; media remains unchanged. Global
-   NFS activation is not required for Kubernetes.
+3. **Kubernetes workloads:** use the accepted SMB StorageClass, qualifying each
+   application's ownership, locking, database placement and restore procedure
+   before migration. Do not reuse production media for tests. Global NFS
+   activation is not required for Kubernetes.
 4. **Proxmox shared storage:** `pvesm add nfs nas-vms … --content images,rootdir` (+ `isos`, `backup`) on each node;
    verify a CT can migrate/HA-failover between nodes (unblocks PDM HA — ROADMAP 11/13).
 5. **Personal:** confirm SMB mounts; (optional) NFS for Linux desktops.
