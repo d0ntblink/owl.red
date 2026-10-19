@@ -19,6 +19,10 @@ data:
             href: https://rancher.owl.red
             description: Kubernetes operations and lifecycle
             icon: rancher
+        - Home Assistant:
+          href: https://ha.owl.red
+          description: Home automation
+          icon: home-assistant
         - Technitium DNS:
             href: https://dns.owl.red
             description: Authoritative DNS management UI

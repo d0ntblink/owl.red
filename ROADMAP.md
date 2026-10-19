@@ -5,20 +5,24 @@ the relevant guides and configuration sources.
 
 ## Execution Order
 
-1. Establish power protection, backups and storage recovery before moving
-   production application state.
-2. Deploy Home Assistant and migrate applications in small, reversible batches.
+1. Inventory application storage and active writers; qualify permissions and
+  database placement without changing existing data.
+2. Complete Home Assistant onboarding/integrations and migrate applications in
+  small, reversible batches.
 
 <a id="stabilization-gates"></a>
 
-## Platform And Recovery
+## Deferred Power And Recovery
 
 - [ ] Confirm battery-backed power paths and qualify shutdown ordering/restart
   recovery for the NAS, hypervisors and essential network services without
   unsafe power-loss testing. Keep automatic power actions disabled until qualified.
-- [ ] Select an independent backup destination, then establish application-consistent
-  backups and restore tests. Deploy PBS and schedule protected guest backups
-  only after its datastore and recovery path are defined.
+- [ ] Implement future cloud offsite backups with rclone: select a provider,
+  configure encryption and retention, capture application-consistent data and
+  verify restores before relying on the copy. Do not treat a destructive sync
+  as a versioned backup.
+- [ ] Define a PBS datastore and guest recovery path before deploying PBS or
+  scheduling protected guest backups.
 
 Reference: [power monitoring and recovery requirements](docs/guides/power-and-recovery.md).
 
@@ -39,10 +43,10 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Home Assistant And Applications
 
-- [ ] Deploy Home Assistant through Fleet with one active instance, persistent
-  configuration and a supported database layout after storage acceptance.
-- [ ] Select an unused Home Assistant hostname, configure trusted HTTPS/proxy
-  access and add only the required IoT discovery/service paths.
+- [ ] Complete owner onboarding at `https://ha.owl.red` and review the intended
+  client access policy before expanding beyond administration sources.
+- [ ] Add only the device-specific IoT discovery/service paths needed by Home
+  Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
 - [ ] Inventory remaining NAS applications and migrate selected services:
   Plex, Arr applications, qBittorrent, slskd, Seer, Tautulli, Reclaimerr,
