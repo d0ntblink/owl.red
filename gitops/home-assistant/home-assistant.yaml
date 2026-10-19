@@ -23,10 +23,6 @@ data:
     homeassistant:
       external_url: https://ha.owl.red
       internal_url: https://ha.owl.red
-    http:
-      use_x_forwarded_for: true
-      trusted_proxies:
-        - 10.244.0.0/16
     recorder:
       db_url: !env_var HOMEASSISTANT_DB_URL
       purge_keep_days: 10
@@ -34,6 +30,36 @@ data:
     automation: !include automations.yaml
     script: !include scripts.yaml
     scene: !include scenes.yaml
+  http.yaml: |
+    use_x_forwarded_for: true
+    trusted_proxies:
+      - 10.244.0.0/16
+  configure-http.py: |
+    import asyncio
+    from pathlib import Path
+
+    import yaml
+
+    from homeassistant.components.http import CONFIG_SCHEMA
+    from homeassistant.components.http.config import (
+        ActiveConfigType,
+        async_get_and_load_store,
+    )
+    from homeassistant.core import HomeAssistant
+
+    async def main():
+        settings = yaml.safe_load(Path('/bootstrap/http.yaml').read_text())
+        validated = CONFIG_SCHEMA({'http': settings})['http']
+        hass = HomeAssistant('/config')
+        store = await async_get_and_load_store(hass)
+        await store.async_migrate_yaml(validated)
+        await store.async_activate_config()
+        if store.active_config_type is ActiveConfigType.PENDING:
+            await store.async_promote_pending()
+        await hass.async_block_till_done()
+        print('Git-managed HTTP proxy settings confirmed in stable storage.')
+
+    asyncio.run(main())
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,6 +93,23 @@ spec:
           operator: Exists
           effect: NoSchedule
       initContainers:
+        - name: configure-http
+          image: ghcr.io/home-assistant/home-assistant:2026.10.2@sha256:33afb0659d786213264c2211f8d91c5fe87461c56eba6a3a546eb05fc71e89f4
+          command: [python3, /bootstrap/configure-http.py]
+          env:
+            - {name: PYTHONDONTWRITEBYTECODE, value: '1'}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: configuration, mountPath: /bootstrap, readOnly: true}
+            - {name: temporary, mountPath: /tmp}
         - name: prepare-config
           image: busybox:1.37.0
           command:
