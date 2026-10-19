@@ -312,12 +312,12 @@ scripts/ansible-run.sh ansible-playbook \
 - Inspect a run: `journalctl -u technitium-sync.service --no-pager -n 200`.
 - Confirm the timer: `systemctl list-timers technitium-sync.timer`.
 - Update the SOA serial in `zones/owl.red.zone` whenever the zone changes.
-- Keep VLAN 10 reservations in `dhcp-reservations.json` aligned with `README.md`.
+- Keep VLAN 10 reservations aligned with the [device inventory](../../docs/mac-inventory.md).
 
 ## Device Allocation And Migration
 
-- Keep target allocations aligned across the registry, zone, root README, and
-  [MAC inventory](../../docs/mac-inventory.md). Recorded addresses are not fresh
+- Keep target allocations aligned across the registry, zone, and
+  [device inventory](../../docs/mac-inventory.md). Recorded addresses are not fresh
   evidence of VLAN membership.
 - The tablet is staged at `10.0.20.12` with `status: pending` and lease MAC `TBD`.
   Verify its MAC on the target SSID before confirming the reservation and adding
