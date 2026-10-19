@@ -85,9 +85,9 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Public DNS And External Access
 
-- [ ] Extend [Cloudflare IaC](https://github.com/d0ntblink/cloudflare-iac) to the
-  remaining zones, existing Pages websites and account services using a separate
-  account-read token and no-change imports; retain the scoped DNS automation token.
+- [ ] Complete [Cloudflare IaC](https://github.com/d0ntblink/cloudflare-iac)
+  discovery for Web Analytics and legacy Page Rules with compatible read access;
+  retain the separate scoped DNS automation token.
 - [ ] Review wildcard/DDNS consumers and remove obsolete public-origin exposure
   without breaking services that still depend on it.
 - [ ] Select services for external publication, then configure Cloudflare Tunnel,
