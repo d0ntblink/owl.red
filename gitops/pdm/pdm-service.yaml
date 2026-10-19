@@ -3,6 +3,9 @@ kind: Service
 metadata:
   name: pdm-external
   namespace: infra-services
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: infra-services-pdm-insecure@kubernetescrd
   labels:
     app.kubernetes.io/name: pdm
     app.kubernetes.io/part-of: infra-services
