@@ -28,17 +28,19 @@ choose the matching procedure below.
 |---------------|----------------|
 | Deployment, image pins, ingress, PVC and base YAML | [HA manifest](../../gitops/home-assistant/home-assistant.yaml), reconciled by Fleet |
 | Bundle namespace and dependencies | [Fleet configuration](../../gitops/home-assistant/fleet.yaml) |
-| Supported device setup inputs and credential references | [Device registry](../../gitops/home-assistant/devices.json) |
+| Supported device setup inputs, desired device areas and credential references | [Device registry](../../gitops/home-assistant/devices.json) |
 | Qualified setup flows | [Device runner](../../scripts/home-assistant-devices.mjs), explicitly run from the controller |
-| Areas, floors, labels, UI zones, dashboards and integration state | HA UI/API, persisted on the retained `/config` PVC |
+| Home name, location, region and HA URLs | HA core storage, managed through Settings/UI or the supported core API |
+| Area definitions, floors, labels, UI zones, dashboards and integration state | HA UI/API, persisted on the retained `/config` PVC |
 | UI automations, scripts and scenes | HA-managed files on `/config`; initialized only when missing |
 | Recorder database and role | [Shared PostgreSQL registry](../../ansible/vars/postgresql.json) and [PostgreSQL guide](postgresql.md) |
 | Passwords, access codes, tokens and pairing PINs | Bitwarden; source contains references, not values |
 | Device reservations and DNS | [DHCP registry](../../gitops/technitium/dhcp-reservations.json) and [DNS zone](../../gitops/technitium/zones/owl.red.zone) |
 
-The device registry is not a Fleet controller: committing a new entry does not
-pair it. The runner provisions supported setup flows; it does not reconcile all
-UI options, areas or zones. UI state is persistent, but is not automatically
+The device registry is not a Fleet controller: pushing a change does not run
+the script, pair a device or assign an area. The runner provisions supported
+setup flows and reconciles declared device-area assignments; it does not create
+area definitions or reconcile all UI options or zones. UI state is persistent, but is not automatically
 exported to Git or recreated from this registry after losing `/config`.
 
 HA runs as **Container**, not HA OS. There is no Supervisor/add-on store, HACS,
@@ -77,6 +79,10 @@ node scripts/home-assistant-devices.mjs plan canon
 node scripts/home-assistant-devices.mjs apply canon
 ```
 
+The device runner requires Node 22 or newer with native WebSocket support,
+`bws` and the existing private controller credentials. Use the configured
+controller Node executable if the default `node` is older.
+
 Replace `canon` with an existing registry key: `camera_foyer`, `camera_office`,
 `ecobee` or `bambu_a1`. Apply requires exactly one named device. Plans do not
 create integrations or initiate pairing; they do authenticate and may read the
@@ -89,6 +95,7 @@ its reserved address in place of the placeholder:
 ```json
 {
   "office_printer": {
+      "area": "Office",
     "integration": "ipp",
     "host": "<reserved-printer-ip>",
     "port": 631,
@@ -99,7 +106,8 @@ its reserved address in place of the placeholder:
 }
 ```
 
-This is a template, not a complete replacement registry. Confirm the actual IPP
+This is a template, not a complete replacement registry. Create the `Office`
+area in HA before applying it. Confirm the actual IPP
 path and TLS support; the example matches the existing Canon's local setup,
 not a universal recommendation to disable verification.
 
@@ -166,7 +174,8 @@ HA through the relevant integration. Use the
 
 ## Add An Area Or Floor
 
-Areas are currently HA-managed, not declared by the device registry.
+Create area definitions in HA. Device assignments can then be declared with
+the optional `area` field in the device registry.
 
 1. Go to **Settings > Areas, labels & zones** and open **Areas**.
 2. Select **Add > Create area**. Choose a room name such as `Office`, an icon,
@@ -183,10 +192,39 @@ belong to areas rather than directly to floors. Use labels for cross-room
 groupings such as `security` instead of creating duplicate physical devices.
 Keep the foyer camera in Foyer and the office camera in Office, for example.
 
+### Assign Existing Devices From JSON
+
+Set `area` to the exact existing HA area name on each device entry. For example,
+use `"area": "Office"` for the printers and office camera. This field is runner
+metadata, not a field sent to an integration's setup form.
+
+```bash
+node scripts/home-assistant-devices.mjs plan
+node scripts/home-assistant-devices.mjs apply canon
+node scripts/home-assistant-devices.mjs apply camera_office
+node scripts/home-assistant-devices.mjs apply bambu_a1
+node scripts/home-assistant-devices.mjs plan
+```
+
+Plans report `wouldUpdateArea`; successful repeats report `false`. Apply updates
+the existing HA device registry without deleting or re-pairing integrations.
+It includes attached child devices in one verified parent tree, such as the
+A1's External Spool, and refuses unrelated device roots. Missing or ambiguous
+area names are errors; the runner does not silently create rooms.
+
+Omitting `area` leaves the current assignment untouched. Empty values do not
+clear it. A declared value takes precedence over a manual device-area change
+on the next explicit apply. Per-entity area overrides are preserved and may
+still put individual entities elsewhere; check **Use device area** when needed.
+
+Pushing this JSON through Git/Fleet does not execute these commands. There is
+no automatic registry reconciliation Job or watcher. After running apply,
+refresh the HA dashboard; no HA restart is required for an area assignment.
+
 Deleting an area unassigns its devices and can break automation targets. Review
-references first. Git-managed areas would require a separate declared registry
-and supported API reconciler; that capability is not implemented by the current
-runner. Never hand-edit HA's area/device/entity registry storage files.
+references first. Area creation/deletion and floor/label reconciliation are not
+implemented by the runner. Never hand-edit HA's area/device/entity registry
+storage files.
 
 ## Add Or Edit A Geographic Zone
 
@@ -212,8 +250,18 @@ unsupported `unique_id` setting.
 - Edit the home name through **Settings > System > General**.
 - Check time zone and units separately after moving the location.
 
-Home cannot be deleted or made passive. Defining its name/location or a Home
-zone in YAML can lock the corresponding UI controls; choose a single owner.
+Home cannot be deleted or made passive. Keep core home settings in HA storage.
+Even setting only `internal_url` or `external_url` under `homeassistant:` in YAML
+marks core configuration as YAML-owned in this release and locks the entire
+General page, including unrelated name/location/region controls. Do not assume
+that omitting latitude and longitude alone keeps the page editable.
+
+Manage both HA URLs under **Settings > System > Network**; retain
+`https://ha.owl.red` for this installation. If migrating existing YAML-owned
+values, first preserve them through HA's supported `config/core/update` API,
+remove the core YAML overrides through Fleet, then restart once and verify
+`config_source` is `storage`. Do not edit `.storage/core.config` directly or
+replace the existing location with guessed coordinates.
 
 ### Deliberately Manage A Zone In YAML
 
@@ -242,19 +290,22 @@ Packages group related helpers, automations and other YAML-supported
 integration configuration. They do not install Python integrations, add-ons,
 areas or network services. No package-directory include is currently enabled.
 
-For a small package, merge this **under the existing `homeassistant:` mapping**
-in the manifest's `configuration.yaml`, preserving its existing URL settings:
+For a small package, add this inside the manifest's `configuration.yaml`.
+If a `homeassistant:` mapping already exists, merge `packages` into it rather
+than creating a duplicate key:
 
 ```yaml
-packages:
-  guest_controls:
-    input_boolean:
-      guest_mode:
-        name: Guest mode
-        icon: mdi:account-group
+homeassistant:
+   packages:
+      guest_controls:
+         input_boolean:
+            guest_mode:
+               name: Guest mode
+               icon: mdi:account-group
 ```
 
-Do not add a second `homeassistant:` key. This example creates a YAML-owned
+Do not reintroduce URL, name, location or region overrides alongside the package:
+those core settings must remain UI/storage-owned. This example creates a YAML-owned
 helper; avoid also creating a UI helper for the same purpose. Integrations in
 a package must actually support YAML configuration.
 

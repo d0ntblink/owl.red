@@ -75,6 +75,61 @@ async function main() {
     ensure(response.ok, 'Home Assistant API request failed: HTTP ' + response.status);
     return response.status === 204 ? null : response.json();
   }
+  async function registry(command) {
+    const socket = new WebSocket(config.endpoint.replace('https:', 'wss:') + '/api/websocket');
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => finish(new Error('HA registry request timed out.')), 15000);
+      function finish(error, value) {
+        clearTimeout(timeout);
+        socket.close();
+        if (error) reject(error);
+        else resolve(value);
+      }
+      socket.addEventListener('error', () => finish(new Error('HA registry connection failed.')));
+      socket.addEventListener('message', event => {
+        let message;
+        try { message = JSON.parse(event.data); }
+        catch { finish(new Error('Invalid HA registry response; details withheld.')); return; }
+        if (message.type === 'auth_required') socket.send(JSON.stringify({ type: 'auth', access_token: token }));
+        if (message.type === 'auth_invalid') finish(new Error('HA registry authentication failed.'));
+        if (message.type === 'auth_ok') socket.send(JSON.stringify({ id: 1, ...command }));
+        if (message.type === 'result' && message.id === 1) {
+          if (message.success) finish(null, message.result);
+          else finish(new Error('HA registry operation failed; private output withheld.'));
+        }
+      });
+    });
+  }
+  async function reconcileArea(name, device, entry) {
+    if (device.area === undefined) return false;
+    ensure(typeof device.area === 'string' && device.area.trim().length > 0, 'Area must name an existing HA area.');
+    const areas = await registry({ type: 'config/area_registry/list' });
+    const matchingAreas = areas.filter(area => area.name === device.area);
+    ensure(matchingAreas.length === 1, 'Create exactly one HA area named ' + device.area + ' before applying this device.');
+    const devices = await registry({ type: 'config/device_registry/list' });
+    const matchingDevices = devices.filter(registered => registered.config_entries.includes(entry.entry_id));
+    const roots = matchingDevices.filter(registered => !registered.via_device_id);
+    ensure(roots.length === 1, 'Area assignment requires one device root for ' + name + '; review unrelated devices separately.');
+    const connected = new Set([roots[0].id]);
+    for (let pass = 0; pass < matchingDevices.length; pass++) {
+      for (const registered of matchingDevices) {
+        if (connected.has(registered.via_device_id)) connected.add(registered.id);
+      }
+    }
+    ensure(connected.size === matchingDevices.length, 'Area assignment found an unrelated device for ' + name + '; review its parent mapping.');
+    const target = matchingAreas[0];
+    const different = matchingDevices.filter(registered => registered.area_id !== target.area_id);
+    if (different.length && phase === 'apply') {
+      for (const registered of different) {
+        await registry({ type: 'config/device_registry/update', device_id: registered.id, area_id: target.area_id });
+      }
+      const updated = await registry({ type: 'config/device_registry/list' });
+      ensure(matchingDevices.every(registered => updated.some(candidate => candidate.id === registered.id && candidate.area_id === target.area_id)), 'HA area update could not be verified.');
+    }
+    console.log(JSON.stringify({ device: name, area: target.name, registeredDevices: matchingDevices.length,
+      ...(phase === 'plan' ? { wouldUpdateArea: different.length > 0 } : {}), changed: phase === 'apply' && different.length > 0 }));
+    return phase === 'apply' && different.length > 0;
+  }
   function homekitCode(id) {
     const response = spawnSync('bws', ['secret', 'get', id, '--output', 'json'], {
       env: { ...process.env, BWS_ACCESS_TOKEN: stored.BWS_ACCESS_TOKEN },
@@ -166,7 +221,8 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
     const existing = entries.filter(entry => entry.domain === device.integration && entry.title === title);
     ensure(existing.length <= 1, 'Duplicate device entries require review.');
     if (existing.length) {
-      console.log(JSON.stringify({ device: name, configured: true, state: existing[0].state, changed: false }));
+      const changed = await reconcileArea(name, device, existing[0]);
+      console.log(JSON.stringify({ device: name, configured: true, state: existing[0].state, changed }));
       continue;
     }
     if (phase === 'plan') {
@@ -190,7 +246,7 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair' }[device.integration];
       ensure(flow.type === 'form' && flow.step_id === step, 'Unexpected integration setup step.');
       ensure(!Object.keys(flow.errors ?? {}).length, 'Integration setup returned errors before credential submission.');
-      const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, ...settings } = device;
+      const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, area, ...settings } = device;
       if (integration === 'onvif') Object.assign(settings, cameraLogin(credential_secret_id));
       const pairing = integration === 'homekit_controller' ? { pairing_code: homekitCode(credential_secret_id) } : null;
       const configured = await api('config/config_entries/flow/' + flow.flow_id, 'POST', pairing ?? lan ?? settings);
@@ -198,6 +254,12 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       ensure(configured.type === 'create_entry' || (configured.type === 'abort' && configured.reason === 'already_configured'), 'Integration setup did not complete.');
       console.log(JSON.stringify({ device: name, integration, configured: true, changed: configured.type === 'create_entry', entryId: configured.result?.entry_id }));
       flow = undefined;
+      if (device.area !== undefined) {
+        const current = await api('config/config_entries/entry');
+        const created = current.filter(entry => entry.domain === integration && entry.title === title);
+        ensure(created.length === 1, 'Configured integration requires review before assigning an area.');
+        await reconcileArea(name, device, created[0]);
+      }
     } finally {
       if (flow?.flow_id) {
         try { await api('config/config_entries/flow/' + flow.flow_id, 'DELETE'); } catch { }
