@@ -1,0 +1,5 @@
+ingress:
+  tls:
+    source: secret
+  extraAnnotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
