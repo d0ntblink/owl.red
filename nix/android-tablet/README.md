@@ -13,7 +13,7 @@ HA-200 dock and stock 60% charging limit have not been validated on another ROM.
 | Boot security | Bootloader unlocked; dm-verity disabled; SELinux enforcing |
 | System | Read-only after the approved reboot on 2026-10-14 |
 | Management | Wi-Fi ADB `10.0.10.166:5555`; key-only SSH `d0ntblink@10.0.10.166:8022` |
-| Network | DHCP; hardware identities and address plan are in the [device inventory](../../docs/mac-inventory.md) |
+| Network | DHCP; hardware identities and address plan are in the [device inventory](../../docs/device-inventory.md) |
 | Target allocation | VLAN 20, planned `tablet.owl.red` at `10.0.20.12`; pending target-SSID MAC verification, no active reservation or DNS record |
 | Charging | `battery_protected_charge=1`; stock UI specifies a 60% limit |
 | Reboot test | After the scheduling fix, SSH and Wi-Fi ADB returned automatically on the approved 2026-10-14 reboot |

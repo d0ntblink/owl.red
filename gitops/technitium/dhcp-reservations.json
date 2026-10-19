@@ -206,7 +206,7 @@
           "ipAddress": "10.0.20.10",
           "hostName": "w1ngz.owl.red",
           "comments": "Main workstation - Intel WiFi. Target VLAN 20 allocation; the older VLAN 10 address is an observation, not this reservation.",
-          "macSource": "docs/mac-inventory.md - recorded workstation WiFi MAC",
+          "macSource": "docs/device-inventory.md - recorded workstation WiFi MAC",
           "status": "confirmed"
         },
 
@@ -215,7 +215,7 @@
           "ipAddress": "10.0.20.11",
           "hostName": "paranoid-android.owl.red",
           "comments": "Personal LG phone. Target VLAN 20 allocation; the older 10.0.10.166 observation does not establish a current conflict with the tablet.",
-          "macSource": "docs/mac-inventory.md - recorded LG phone WiFi MAC",
+          "macSource": "docs/device-inventory.md - recorded LG phone WiFi MAC",
           "status": "confirmed"
         },
 
@@ -234,7 +234,7 @@
           "hardwareAddress": "BC-CD-99-2B-3C-A7",
           "hostName": "KAM1WL102916",
           "comments": "Work laptop - VLAN 20 target, dynamic DHCP only. Metadata for allocation coverage; do not create a fixed lease or static DNS record.",
-          "macSource": "docs/mac-inventory.md - recorded work laptop WiFi MAC",
+          "macSource": "docs/device-inventory.md - recorded work laptop WiFi MAC",
           "status": "confirmed"
         }
       ]
@@ -276,7 +276,7 @@
           "ipAddress": "10.0.40.12",
           "hostName": "wuuk-ptz-foyer.owl.red",
           "comments": "WUUK Y0510 foyer camera - approved local-only VLAN 40 target. Prior recorded reservation 10.0.10.186 is not migrated by adding this target; inspect and remove any legacy reservation during the approved cutover.",
-          "macSource": "docs/mac-inventory.md - recorded foyer camera MAC",
+          "macSource": "docs/device-inventory.md - recorded foyer camera MAC",
           "status": "confirmed"
         },
 
@@ -285,7 +285,7 @@
           "ipAddress": "10.0.40.13",
           "hostName": "wuuk-ptz-office.owl.red",
           "comments": "WUUK Y0510 office camera - approved local-only VLAN 40 target. Prior recorded reservation 10.0.10.124 is not migrated by adding this target; inspect and remove any legacy reservation during the approved cutover.",
-          "macSource": "docs/mac-inventory.md - recorded office camera MAC",
+          "macSource": "docs/device-inventory.md - recorded office camera MAC",
           "status": "confirmed"
         }
 
@@ -312,7 +312,7 @@
           "ipAddress": "10.0.50.11",
           "hostName": "shield.owl.red",
           "comments": "NVIDIA Shield TV - internet required. Target VLAN 50 allocation; access to local media services requires explicit inter-VLAN policy.",
-          "macSource": "docs/mac-inventory.md - recorded Shield network MAC",
+          "macSource": "docs/device-inventory.md - recorded Shield network MAC",
           "status": "confirmed"
         }
 
