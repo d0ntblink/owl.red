@@ -15,7 +15,7 @@ metadata:
   name: fleet-agent
   namespace: cattle-fleet-local-system
 spec:
-  minAvailable: 2
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: fleet-agent

@@ -1,25 +1,15 @@
 # Platform Resilience
 
-This bundle holds resilience primitives for critical platform workloads that are
-intended not to compete with another release. The source currently includes
-PodDisruptionBudgets and a legacy Fleet-agent Bundle override; that override is
-not a successfully enforced HA configuration.
-
-**Observed 2026-10-14:** the bundle was blocked by a Bundle ownership conflict.
-The live Fleet agent had one replica and no control-plane toleration, while its
-PDB required two available replicas. Reconcile tuning through the owning Rancher/
-Fleet release and verify live Deployment/PDB behavior before dependent node
-maintenance. See [G3](../../ROADMAP.md#stabilization-gates) and the
-[audit](../../docs/issues/008-live-state-vs-repository.md). This work is independent
-of VLAN preparation unless a specific operation depends on it.
+This bundle owns PodDisruptionBudgets, not another controller's generated
+Bundles or Helm-managed Deployments. Replica counts and workload scheduling
+belong to their owning releases.
 
 ## Scope
 
 | File | Purpose |
 |------|---------|
 | `pdbs.yaml` | PodDisruptionBudgets for `cattle-system/rancher`, `cattle-fleet-local-system/fleet-agent`, `metallb-system/metallb-controller` |
-| `fleet-agent-local-bundle-override.yaml` | Desired three-replica/toleration workaround; conflicts with Fleet's ownership and remains pending relocation to the owning release |
-| `fleet.yaml` | Requests `helm.takeOwnership: true`; source intent does not prove adoption or resolve cross-controller ownership |
+| `fleet.yaml` | Adopts the existing PDBs into this release |
 
 ## Why no Deployment overrides here
 
@@ -38,17 +28,27 @@ values**, where it survives upgrades and does not fight Helm ownership:
 | Workload | Where to set tolerations / replicas / resources |
 |----------|--------------------------------------------------|
 | Traefik | `gitops/traefik/values.yaml` |
-| Rancher / Fleet | Rancher Helm values (incl. `fleet-agent` count) |
+| Rancher | Rancher Helm values |
+| Fleet agent | Supported Cluster settings in the [Fleet bootstrap lane](../rancher/fleet/README.md) |
 | MetalLB | MetalLB Helm values |
 | cert-manager | cert-manager Helm values |
 
-## Intended Enforcement And Remaining Work
+## Fleet Agent
 
-- Reconcile legitimate PodDisruptionBudget ownership and verify live desired/
-  current availability. A PDB does not create replicas or prove failover.
-- Put Fleet-agent replicas/tolerations in the owning release, then retire the
-  conflicting workaround after a reviewed ownership transition. Do not claim HA
-  from the override file or `takeOwnership` flag alone.
+Fleet generates and reconciles `fleet-local/fleet-agent-local`. Do not copy
+that Bundle or its embedded Deployment into this release. Configure its
+control-plane toleration using the supported Cluster bootstrap patch.
+
+The current agent has one replica. Its PDB permits one unavailable replica,
+allowing a voluntary eviction and rescheduling instead of requiring two
+healthy replicas that do not exist. Reconciliation can pause while the agent
+restarts; existing application pods continue running. This is not agent HA.
+Rancher and MetalLB retain their separate two-available-replica budgets.
+
+Before retiring any previously Helm-managed generated resource, preserve it
+with `helm.sh/resource-policy: keep` and verify that policy in the stored
+release manifest. Confirm the generated resource survives the transition;
+never delete the Bundle or uninstall the agent to repair ownership.
 
 ## Notes
 
