@@ -4,13 +4,23 @@ diff:
     - apiVersion: admissionregistration.k8s.io/v1
       kind: MutatingWebhookConfiguration
       name: cert-manager-webhook
-      jsonPointers:
-        - /webhooks/0/clientConfig/caBundle
+      operations:
+        - op: remove
+          path: /webhooks/0/clientConfig/caBundle
+        - op: remove
+          path: /webhooks/0/namespaceSelector
+        - op: remove
+          path: /webhooks/0/objectSelector
+        - op: remove
+          path: /webhooks/0/reinvocationPolicy
     - apiVersion: admissionregistration.k8s.io/v1
       kind: ValidatingWebhookConfiguration
       name: cert-manager-webhook
-      jsonPointers:
-        - /webhooks/0/clientConfig/caBundle
+      operations:
+        - op: remove
+          path: /webhooks/0/clientConfig/caBundle
+        - op: remove
+          path: /webhooks/0/objectSelector
 helm:
   releaseName: cert-manager
   repo: https://charts.jetstack.io
