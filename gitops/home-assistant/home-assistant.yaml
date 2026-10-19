@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config
+  namespace: home-assistant
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nas-appdata-smb
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-config
+  namespace: home-assistant
+data:
+  configuration.yaml: |
+    default_config:
+    homeassistant:
+      external_url: https://ha.owl.red
+      internal_url: https://ha.owl.red
+    http:
+      use_x_forwarded_for: true
+      trusted_proxies:
+        - 10.244.0.0/16
+    recorder:
+      db_url: !env_var HOMEASSISTANT_DB_URL
+      purge_keep_days: 10
+      commit_interval: 30
+    automation: !include automations.yaml
+    script: !include scripts.yaml
+    scene: !include scenes.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home-assistant
+  namespace: home-assistant
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: home-assistant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: home-assistant
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 100
+        fsGroup: 100
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      initContainers:
+        - name: prepare-config
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -ec
+            - |
+              umask 007
+              if ! test -e /config/automations.yaml; then printf '[]\n' > /config/automations.yaml; fi
+              if ! test -e /config/scripts.yaml; then printf '{}\n' > /config/scripts.yaml; fi
+              if ! test -e /config/scenes.yaml; then printf '[]\n' > /config/scenes.yaml; fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+      containers:
+        - name: home-assistant
+          image: ghcr.io/home-assistant/home-assistant:2026.10.2@sha256:33afb0659d786213264c2211f8d91c5fe87461c56eba6a3a546eb05fc71e89f4
+          command: [python3, -m, homeassistant, --config, /config]
+          env:
+            - name: TZ
+              value: UTC
+            - name: HOME
+              value: /config
+            - name: PYTHONDONTWRITEBYTECODE
+              value: '1'
+            - name: HOMEASSISTANT_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: home-assistant-recorder
+                  key: db_url
+          ports:
+            - {name: http, containerPort: 8123}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 30
+            failureThreshold: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: '2', memory: 2Gi}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - name: configuration
+              mountPath: /config/configuration.yaml
+              subPath: configuration.yaml
+              readOnly: true
+            - {name: temporary, mountPath: /tmp}
+      volumes:
+        - name: config
+          persistentVolumeClaim: {claimName: config}
+        - name: configuration
+          configMap: {name: home-assistant-config}
+        - name: temporary
+          emptyDir: {sizeLimit: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: home-assistant
+  namespace: home-assistant
+spec:
+  selector:
+    app.kubernetes.io/name: home-assistant
+  ports:
+    - {name: http, port: 8123, targetPort: http}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: administration-access
+  namespace: home-assistant
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: home-assistant
+  namespace: home-assistant
+spec:
+  secretName: home-assistant-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: [ha.owl.red]
+  privateKey:
+    rotationPolicy: Always
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: home-assistant
+  namespace: home-assistant
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`ha.owl.red`)
+      kind: Rule
+      middlewares:
+        - name: administration-access
+      services:
+        - {name: home-assistant, port: 8123}
+  tls:
+    secretName: home-assistant-tls
