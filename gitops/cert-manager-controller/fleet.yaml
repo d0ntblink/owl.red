@@ -13,6 +13,10 @@ diff:
           path: /webhooks/0/objectSelector
         - op: remove
           path: /webhooks/0/reinvocationPolicy
+        - op: remove
+          path: /webhooks/0/clientConfig/service/port
+        - op: remove
+          path: /webhooks/0/rules/0/scope
     - apiVersion: admissionregistration.k8s.io/v1
       kind: ValidatingWebhookConfiguration
       name: cert-manager-webhook
@@ -21,6 +25,10 @@ diff:
           path: /webhooks/0/clientConfig/caBundle
         - op: remove
           path: /webhooks/0/objectSelector
+        - op: remove
+          path: /webhooks/0/clientConfig/service/port
+        - op: remove
+          path: /webhooks/0/rules/0/scope
 helm:
   releaseName: cert-manager
   repo: https://charts.jetstack.io
