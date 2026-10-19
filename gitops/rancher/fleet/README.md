@@ -65,6 +65,7 @@ Fleet should begin reconciling:
 
 - `gitops/technitium-ingress`
 - `gitops/metallb`
+- `gitops/cert-manager-controller`
 - `gitops/cert-manager`
 - `gitops/traefik`
 - `gitops/dashboards`
@@ -101,4 +102,33 @@ rescheduling rather than claiming three-replica HA.
   `before-first-apply` field manager owns the field. Re-assert ownership with:
   `kubectl apply --server-side --force-conflicts --field-manager=fleetagent -f <desired.yaml>`
   then force a sync. Full procedure in [issue 006](../../../docs/issues/006-fleet-ssa-field-ownership-conflict.md).
+
+Preserve the complete field set already owned by `fleetagent` when using
+server-side apply. A partial ConfigMap under that same manager can prune its
+omitted data keys. Compare the full server dry-run result before applying.
+Metadata-only adoption should preserve specifications and credential values.
+
+If `waitingForValues` is set, inspect the controller-owned options Secret and
+the desired/applied deployment IDs. Do not delete a BundleDeployment to recover
+missing cached values: its finalizer can uninstall the working release.
+
+## Rancher Certificate And Scheduling
+
+Rancher retains its separate bootstrap Helm release. Apply the small
+[management overlay](../management-tls-values.yaml) through that owning release,
+reusing its private values rather than exporting the bootstrap password:
+
+```bash
+helm upgrade rancher rancher \
+  --repo https://releases.rancher.com/server-charts/stable \
+  --version 2.14.1 --namespace cattle-system \
+  --reuse-values --server-side=false \
+  --values gitops/rancher/management-tls-values.yaml --wait
+```
+
+The overlay selects the DNS-01 ClusterIssuer for `tls-rancher-ingress` and uses
+the chart's `extraTolerations` setting to preserve control-plane eligibility.
+Check live scheduling as well as stored Helm manifests before upgrades: manual
+Deployment changes are not represented by old release values. Keep the existing
+hostname, private bootstrap value, three replicas and application image intact.
 
