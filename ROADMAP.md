@@ -122,7 +122,7 @@ Reference: [Mailgun configuration](terraform/mailgun/README.md).
 ## Cabinet And Physical Documentation
 
 - [ ] Complete and label the patch-panel map, trace remaining cable runs and
-  verify switch-to-device paths against the [device inventory](docs/mac-inventory.md).
+  verify switch-to-device paths against the [device inventory](docs/device-inventory.md).
 - [ ] Create logical/physical network and rack diagrams, a floor plan and
   labelled front/rear photographs; tidy cable management.
 

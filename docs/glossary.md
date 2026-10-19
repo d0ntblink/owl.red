@@ -363,4 +363,4 @@ A short doc capturing a decision, its context, and trade-offs. All in
 | `switch.owl.red` | `10.0.10.2` | MikroTik CSS326 |
 | `ap.owl.red` | `10.0.10.40` | OpenWrt WAP |
 
-See the [device inventory](mac-inventory.md) for hardware, interfaces and placement.
+See the [device inventory](device-inventory.md) for hardware, interfaces and placement.

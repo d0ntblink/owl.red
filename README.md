@@ -42,7 +42,7 @@ production data during infrastructure changes.
 ## Documentation
 
 - [Roadmap](ROADMAP.md): unfinished work and priorities.
-- [Device inventory](docs/mac-inventory.md): hardware, interfaces and placement.
+- [Device inventory](docs/device-inventory.md): hardware, interfaces and placement.
 - [Change guide](docs/guides/changing-owl-red.md): which tool to use for a change.
 - [Controller setup](docs/guides/controller-setup.md): tools and prerequisites.
 - [Architecture decisions](docs/decisions/): design rationale.

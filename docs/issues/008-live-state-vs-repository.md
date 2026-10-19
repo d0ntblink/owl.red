@@ -1102,7 +1102,7 @@ and unrelated service changes are outside this work.
 The observations above remain the dated audit baseline. Linking remediation
 gates does not mark any live fault fixed or authorize infrastructure changes.
 
-Related sources: [roadmap](../../ROADMAP.md), [inventory](../mac-inventory.md),
+Related sources: [roadmap](../../ROADMAP.md), [inventory](../device-inventory.md),
 [change ownership](../guides/changing-owl-red.md),
 [Technitium](../../gitops/technitium/README.md),
 [Fleet ownership](../decisions/014-fleet-bundle-ownership-boundaries.md),

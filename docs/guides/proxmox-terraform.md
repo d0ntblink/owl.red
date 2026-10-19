@@ -85,7 +85,7 @@ plan adds only the new node; existing cluster/LXC drift must not be applied with
    from that single entry.
 3. **Repo bookkeeping** (keep these in sync — they are not auto-derived):
    - `ansible/inventory/hosts.yml` — add `worker2_pve` and `worker2_k8s`
-   - [Device inventory](../mac-inventory.md) — physical host and guest records
+   - [Device inventory](../device-inventory.md) — physical host and guest records
    - `gitops/technitium/zones/owl.red.zone` — `worker2.k8s A 10.0.10.25` + **bump SOA serial**
    - `gitops/technitium/dhcp-reservations.json` — MAC reservation
    - `talos/patches/worker2.yaml` — standalone patch (mirror of the `main.tf` inline patch)
