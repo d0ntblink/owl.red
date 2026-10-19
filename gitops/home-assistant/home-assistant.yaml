@@ -331,3 +331,19 @@ spec:
         - {name: home-assistant, port: 8123}
   tls:
     secretName: home-assistant-tls
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openwrt-luci
+  namespace: home-assistant
+  labels:
+    app.kubernetes.io/component: openwrt-luci
+spec:
+  secretName: openwrt-luci-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: [ap.owl.red]
+  privateKey:
+    rotationPolicy: Always

@@ -68,7 +68,7 @@ qualified, device-specific discovery path.
 
 ### Use An Existing Runner Flow
 
-The supported integration domains are `ipp`, `onvif`, `bambu_lab` and
+The supported integration domains are `ipp`, `onvif`, `bambu_lab`, `luci` and
 `homekit_controller`. The HomeKit bootstrap is specifically restricted to the
 known Ecobee; adding another HomeKit device requires extending that code safely.
 
@@ -84,7 +84,7 @@ The device runner requires Node 22 or newer with native WebSocket support,
 controller Node executable if the default `node` is older.
 
 Replace `canon` with an existing registry key: `camera_foyer`, `camera_office`,
-`ecobee` or `bambu_a1`. Apply requires exactly one named device. Plans do not
+`ecobee`, `bambu_a1` or `openwrt`. Apply requires exactly one named device. Plans do not
 create integrations or initiate pairing; they do authenticate and may read the
 configured vault fields. The HA token is referenced by the existing Secrets
 Manager entry `homeassitant-iac-long-live-token` (spelling intentional).
@@ -211,6 +211,10 @@ the existing HA device registry without deleting or re-pairing integrations.
 It includes attached child devices in one verified parent tree, such as the
 A1's External Spool, and refuses unrelated device roots. Missing or ambiguous
 area names are errors; the runner does not silently create rooms.
+
+OpenWrt LuCI is an exception: its built-in integration creates client trackers,
+not an AP device. Its `area` is placement metadata only and is explicitly
+reported as not applied; it must not move all tracked clients into the AP's room.
 
 Omitting `area` leaves the current assignment untouched. Empty values do not
 clear it. A declared value takes precedence over a manual device-area change

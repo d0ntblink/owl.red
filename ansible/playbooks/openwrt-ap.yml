@@ -207,6 +207,14 @@
           done
           sysctl -q -w net.ipv4.ip_forward=0
           sysctl -q -w net.ipv6.conf.all.forwarding=0
+            printf 'nameserver {{ openwrt_management_dns }}\n' > /tmp/owl-red-resolv.conf
+            if ! cmp -s /tmp/owl-red-resolv.conf /etc/resolv.conf; then
+              cp /tmp/owl-red-resolv.conf /etc/resolv.conf.owl-red-new
+              chmod 644 /etc/resolv.conf.owl-red-new
+              mv /etc/resolv.conf.owl-red-new /etc/resolv.conf
+              changed=1
+            fi
+            rm /tmp/owl-red-resolv.conf
           mkdir -p /etc/sysctl.d
           printf 'net.ipv4.ip_forward=0\nnet.ipv6.conf.all.forwarding=0\n' > /etc/sysctl.d/90-owl-ap.conf
             if pidof dnsmasq odhcpd opennds >/dev/null 2>&1; then
