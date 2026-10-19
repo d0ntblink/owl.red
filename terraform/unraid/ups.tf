@@ -1,5 +1,5 @@
-# UPS / NUT — count-gated OFF (no UPS wired; NUT disabled). Flip var.ups_present=true
-# and extend UPSConfigInput when a UPS is connected. configureUps returns Boolean (no selection).
+# UPS management remains count-gated until the device, power topology and shutdown policy are qualified.
+# configureUps returns Boolean (no selection).
 resource "graphql_mutation" "ups" {
   count = var.ups_present ? 1 : 0
 

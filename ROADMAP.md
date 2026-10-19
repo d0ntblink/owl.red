@@ -5,19 +5,22 @@ the relevant guides and configuration sources.
 
 ## Execution Order
 
-1. Finish Fleet reconciliation and the NAS-backed Kubernetes storage rollout.
-2. Establish power protection, backups and storage recovery before moving
+1. Establish power protection, backups and storage recovery before moving
    production application state.
-3. Deploy Home Assistant and migrate applications in small, reversible batches.
+2. Deploy Home Assistant and migrate applications in small, reversible batches.
 
 <a id="stabilization-gates"></a>
 
 ## Platform And Recovery
 
-- [ ] Verify UPS monitoring, shutdown ordering and restart recovery for the NAS,
-  hypervisors and essential network services without unsafe power-loss testing.
-- [ ] Establish application-consistent backups, an independent copy for NAS
-  loss and restore tests. Deploy PBS and schedule protected guest backups.
+- [ ] Confirm battery-backed power paths and qualify shutdown ordering/restart
+  recovery for the NAS, hypervisors and essential network services without
+  unsafe power-loss testing. Keep automatic power actions disabled until qualified.
+- [ ] Select an independent backup destination, then establish application-consistent
+  backups and restore tests. Deploy PBS and schedule protected guest backups
+  only after its datastore and recovery path are defined.
+
+Reference: [power monitoring and recovery requirements](docs/guides/power-and-recovery.md).
 
 ## Shared Storage
 
