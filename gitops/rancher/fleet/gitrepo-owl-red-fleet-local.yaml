@@ -10,6 +10,7 @@ spec:
   paths:
     - gitops/technitium-ingress
     - gitops/metallb
+    - gitops/cert-manager-controller
     - gitops/cert-manager
     - gitops/traefik
     - gitops/dashboards
