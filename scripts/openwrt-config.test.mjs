@@ -35,8 +35,18 @@ for name, network in profile['openwrt_wifi_networks'].items():
 assert profile['openwrt_bss_bridges'] == {
     'phy0-ap0': 'br-private', 'phy1-ap0': 'br-private',
     'phy0-ap1': 'br-iot-local', 'phy0-ap2': 'br-iot-cloud',
+  'phy1-ap1': 'br-iot-cloud',
 }
 assert profile['openwrt_wifi_networks']['guest']['enabled'] is False
+profile['openwrt_wifi_keys'] = {name: 'test-only-' + name + '-passphrase' for name in ['private', 'guest', 'iot_local', 'iot_cloud']}
+wireless = module.parse_config(environment.from_string(Path('ansible/templates/openwrt-wireless.j2').read_text()).render(**profile))
+assert wireless['iot_cloud_radio0']['disabled'] == '0'
+assert wireless['iot_cloud_radio1']['disabled'] == '0'
+assert wireless['iot_cloud_radio1']['network'] == 'iot_cloud'
+assert wireless['iot_cloud_radio1']['device'] == 'radio1'
+assert wireless['iot_cloud_radio1']['isolate'] == '1'
+assert 'iot_local_radio1' not in wireless
+assert wireless['guest_radio0']['disabled'] == wireless['guest_radio1']['disabled'] == '1'
 `], { cwd: repository, encoding: 'utf8' });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });

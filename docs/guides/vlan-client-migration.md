@@ -55,8 +55,10 @@ on ports 53/853 is denied in both families; arbitrary DoH over 443 is not blocke
 
 ## Home Assistant Device Batch
 
-Move these devices one at a time. Both IoT SSIDs are 2.4 GHz; use their
-existing Bitwarden Wi-Fi credentials. Leave addressing on DHCP so the canonical
+Move these devices one at a time. Local IoT is 2.4 GHz only; cloud IoT is
+available on both 2.4 and 5 GHz. Use the existing Bitwarden Wi-Fi credentials.
+Prefer 5 GHz for compatible media players; older IoT clients can stay on
+2.4 GHz with the same SSID and VLAN. Leave addressing on DHCP so the canonical
 reservations supply the intended addresses rather than setting static IPs on
 the devices.
 
