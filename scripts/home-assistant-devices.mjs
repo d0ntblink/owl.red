@@ -13,7 +13,7 @@ const selected = process.argv[3];
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 
 async function main() {
-  ensure(['inspect', 'plan', 'apply'].includes(phase), 'Use inspect, plan or apply.');
+  ensure(['inspect', 'plan', 'apply', 'pair'].includes(phase), 'Use inspect, plan, pair or apply.');
   const config = JSON.parse(fs.readFileSync(path.join(repository, 'gitops/home-assistant/devices.json'), 'utf8'));
   ensure(config.endpoint === 'https://ha.owl.red', 'Unexpected Home Assistant endpoint.');
   ensure(!selected || config.devices[selected], 'Unknown device.');
@@ -108,7 +108,7 @@ async function main() {
     if (device.area === undefined) return false;
     ensure(typeof device.area === 'string' && device.area.trim().length > 0, 'Area must name an existing HA area.');
     if (device.integration === 'luci') {
-      console.log(JSON.stringify({ device: name, area: device.area, areaAssignment: 'not_applied_luci_has_client_trackers_not_an_ap_device', changed: false }));
+      console.log(JSON.stringify({ device: name, area: device.area, areaAssignment: 'not_applied_service_has_client_entities_not_one_physical_device', changed: false }));
       return false;
     }
     const areas = await registry({ type: 'config/area_registry/list' });
@@ -216,17 +216,24 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
     })) }, null, 2));
     return;
   }
-  ensure(phase !== 'apply' || selected, 'Apply requires one explicitly named device.');
+  ensure(!['apply', 'pair'].includes(phase) || selected, 'Apply/pair requires one explicitly named device.');
   for (const [name, device] of Object.entries(config.devices).filter(([name]) => !selected || name === selected)) {
-    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller', 'luci'].includes(device.integration), 'This device flow has not been qualified.');
+    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller', 'luci', 'androidtv_remote'].includes(device.integration), 'This device flow has not been qualified.');
+    ensure(phase !== 'pair' || device.integration === 'androidtv_remote', 'Pair is only for Android TV Remote.');
     const lan = device.integration === 'bambu_lab' ? bambuSettings(device) : null;
     if (device.integration === 'bambu_lab' && !lan) {
       ensure(phase !== 'apply', 'Add hidden printer_serial and lan_access_code fields to the existing Bambu Lab vault item; no printer changes made.');
       console.log(JSON.stringify({ device: name, pending: 'private_lan_credentials', requiredFields: ['printer_serial', 'lan_access_code'], changed: false }));
       continue;
     }
-    const title = device.integration === 'homekit_controller' ? device.name : device.integration === 'bambu_lab' ? lan.serial : device.integration === 'onvif' ? device.name + ' - ' + device.mac : device.host;
-    const existing = entries.filter(entry => entry.domain === device.integration && entry.title === title);
+    const title = ['homekit_controller', 'androidtv_remote'].includes(device.integration) ? device.name : device.integration === 'bambu_lab' ? lan.serial : device.integration === 'onvif' ? device.name + ' - ' + device.mac : device.host;
+    let existing = entries.filter(entry => entry.domain === device.integration && entry.title === title);
+    if (device.integration === 'androidtv_remote') {
+      const devices = await registry({ type: 'config/device_registry/list' });
+      const matched = devices.filter(registered => registered.connections.some(([kind, value]) => kind === 'mac' && value.toLowerCase() === device.mac));
+      const byMac = entries.filter(entry => entry.domain === device.integration && matched.some(registered => registered.config_entries.includes(entry.entry_id)));
+      if (byMac.length) existing = byMac;
+    }
     ensure(existing.length <= 1, 'Duplicate device entries require review.');
     if (existing.length) {
       const changed = await reconcileArea(name, device, existing[0]);
@@ -237,10 +244,39 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       console.log(JSON.stringify({ device: name, integration: device.integration, host: device.host, wouldAdd: true, changed: false }));
       continue;
     }
+    let tvPairing;
+    if (device.integration === 'androidtv_remote' && phase === 'apply') {
+      const list = spawnSync('bws', ['secret', 'list', '--output', 'json'], { env: { ...process.env, BWS_ACCESS_TOKEN: stored.BWS_ACCESS_TOKEN }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 });
+      ensure(list.status === 0, 'Private pairing-secret lookup failed.');
+      const matches = JSON.parse(list.stdout).filter(secret => secret.key === device.pairing_secret_key);
+      ensure(matches.length === 1, 'Store the current TV PIN in Secrets Manager under ' + device.pairing_secret_key + '.');
+      const response = spawnSync('bws', ['secret', 'get', matches[0].id, '--output', 'json'], { env: { ...process.env, BWS_ACCESS_TOKEN: stored.BWS_ACCESS_TOKEN }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      ensure(response.status === 0, 'Private TV PIN lookup failed.');
+      const pin = JSON.parse(response.stdout).value.trim();
+      ensure(/^[A-Fa-f0-9]{6}$/.test(pin), 'TV PIN must be six hexadecimal characters; value withheld.');
+      tvPairing = { pin };
+    }
     let flow;
+    const pairingFile = path.join(os.homedir(), '.local/state/owl-red/ha-androidtv-' + name + '.json');
     try {
       if (device.integration === 'homekit_controller') discoverHomekit(device);
-      flow = await api('config/config_entries/flow', 'POST', { handler: device.integration, show_advanced_options: true });
+      if (device.integration === 'androidtv_remote' && phase === 'apply') {
+        ensure(fs.existsSync(pairingFile), 'Run pair for this device before applying its current private PIN.');
+        const pending = JSON.parse(fs.readFileSync(pairingFile, 'utf8'));
+        ensure(pending.host === device.host && Date.now() - pending.created < 15 * 60000, 'Android TV pairing expired; start a fresh pair flow.');
+        flow = { type: 'form', step_id: 'pair', flow_id: pending.flow_id };
+      } else {
+        flow = await api('config/config_entries/flow', 'POST', { handler: device.integration, show_advanced_options: true });
+      }
+      if (device.integration === 'androidtv_remote' && phase === 'pair') {
+        ensure(flow.type === 'form' && flow.step_id === 'user', 'Unexpected Android TV setup step.');
+        flow = await api('config/config_entries/flow/' + flow.flow_id, 'POST', { host: device.host });
+        ensure(flow.type === 'form' && flow.step_id === 'pair' && !Object.keys(flow.errors ?? {}).length, 'Android TV is not ready for private pairing.');
+        fs.writeFileSync(pairingFile, JSON.stringify({ flow_id: flow.flow_id, host: device.host, created: Date.now() }), { mode: 0o600 });
+        console.log(JSON.stringify({ device: name, awaitingPrivatePin: true, secretKey: device.pairing_secret_key, changed: false }));
+        flow = undefined;
+        continue;
+      }
       if (device.integration === 'homekit_controller') {
         ensure(flow.type === 'form' && flow.step_id === 'user', 'Ecobee was not discovered by HA; no pairing attempt made.');
         flow = await api('config/config_entries/flow/' + flow.flow_id, 'POST', { device: device.name });
@@ -251,10 +287,11 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       if (device.integration === 'bambu_lab' && flow.type === 'form' && flow.step_id === 'user') {
         flow = await api('config/config_entries/flow/' + flow.flow_id, 'POST', { printer_mode: 'lan' });
       }
-      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair', luci: 'user' }[device.integration];
+      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair', luci: 'user', androidtv_remote: 'pair' }[device.integration];
       ensure(flow.type === 'form' && flow.step_id === step, 'Unexpected integration setup step.');
       ensure(!Object.keys(flow.errors ?? {}).length, 'Integration setup returned errors before credential submission.');
-      const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, area, ...settings } = device;
+      const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, area, name: deviceName, pairing_secret_key, ...settings } = device;
+      if (['onvif', 'homekit_controller'].includes(integration)) settings.name = deviceName;
       if (integration === 'onvif') Object.assign(settings, cameraLogin(credential_secret_id));
       if (integration === 'luci') {
         ensure(settings.ssl === true && settings.verify_ssl === true && settings.host === 'ap.owl.red', 'Use the verified AP HTTPS endpoint.');
@@ -262,15 +299,17 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
         ensure(item.login?.username && item.login.password, 'OpenWrt credential is incomplete.');
         Object.assign(settings, { username: item.login.username, password: item.login.password });
       }
-      const pairing = integration === 'homekit_controller' ? { pairing_code: homekitCode(credential_secret_id) } : null;
+      let pairing = integration === 'homekit_controller' ? { pairing_code: homekitCode(credential_secret_id) } : null;
+      if (integration === 'androidtv_remote') pairing = tvPairing;
       const configured = await api('config/config_entries/flow/' + flow.flow_id, 'POST', pairing ?? lan ?? settings);
       if (configured.type === 'form') throw new Error('Integration requires attention: ' + JSON.stringify(configured.errors ?? {}));
       ensure(configured.type === 'create_entry' || (configured.type === 'abort' && configured.reason === 'already_configured'), 'Integration setup did not complete.');
       console.log(JSON.stringify({ device: name, integration, configured: true, changed: configured.type === 'create_entry', entryId: configured.result?.entry_id }));
       flow = undefined;
+      if (integration === 'androidtv_remote') fs.rmSync(pairingFile, { force: true });
       if (device.area !== undefined) {
         const current = await api('config/config_entries/entry');
-        const created = current.filter(entry => entry.domain === integration && entry.title === title);
+        const created = current.filter(entry => entry.domain === integration && (configured.result?.entry_id ? entry.entry_id === configured.result.entry_id : entry.title === title));
         ensure(created.length === 1, 'Configured integration requires review before assigning an area.');
         await reconcileArea(name, device, created[0]);
       }

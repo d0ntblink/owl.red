@@ -2,6 +2,13 @@
   "endpoint": "https://ha.owl.red",
   "token_secret_id": "05591a1b-1e91-45a8-91a5-b4e80141c6d0",
   "devices": {
+    "shield": {
+      "integration": "androidtv_remote",
+      "name": "SHIELD Android TV",
+      "host": "10.0.50.11",
+      "mac": "3c:6d:66:0e:1f:67",
+      "pairing_secret_key": "shield-ha-pairing-code"
+    },
     "openwrt": {
       "area": "Office",
       "integration": "luci",
