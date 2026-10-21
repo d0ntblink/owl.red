@@ -332,3 +332,41 @@ have persistent state requiring application-specific database/storage checks.
 qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
 copy their config directories onto SMB and assume SQLite, locking, paths or
 VPN isolation remain correct. GPU apps remain on the NAS.
+
+## Longhorn Database Volumes
+
+Longhorn is selected for database-safe single-writer volumes. Ordinary config
+files remain live on NAS `appdata` over SMB. Split database state onto a block
+volume only where the application supports a separate path or a qualified mount
+layout. SQLite WAL/shared-memory files must remain with their database on the
+same filesystem. An inseparable app needs an explicit per-app decision first.
+
+The Fleet bundle pins Longhorn `1.12.1`, compatible with Kubernetes `1.31.1`.
+Longhorn `1.13.0` requires Kubernetes `1.34+` and is not selected. The retained,
+non-default `longhorn-appdata` class requests three replicas and ext4 with the V1
+engine. Replicas use dedicated local disks, not SMB-mounted directories.
+
+Each Talos VM has a new 64 GiB `scsi1` data disk from its own physical PVE host.
+The original 40 GiB `scsi0` system disks are preserved. The
+[storage patch](../../talos/patches/longhorn.yaml) mounts only the verified new
+`/dev/sdb` at `/var/mnt/longhorn` with kubelet shared propagation. Do not apply
+it to a different disk layout. Node zone labels describe physical PVE hosts;
+update them if VM placement changes.
+
+Talos remains `1.8.1`. Its source-controlled image-factory schematic adds only
+official `iscsi-tools` and `util-linux-tools`. Use a matching Talos `1.8.1`
+client for the rollout: the controller's newer `1.13.0` watcher encountered a
+gRPC keepalive mismatch. Stage the minimal patch, upgrade to the same-version
+extension image, and require Ready, active iSCSI and the dedicated mount before
+changing the next guest. Private node config preimages are recovery inputs,
+not application-data backups.
+
+Before production databases move, a disposable claim must pass write/read and
+planned detach/reattach on another physical node, with three healthy replicas.
+This is not a test of every unclean-failure case. Keep one application writer;
+never force-detach without confirming the previous writer is stopped/fenced.
+Control-plane taints also require deliberate workload placement/tolerations.
+
+No backup target or schedule is enabled by installation alone. Replication is
+not backup, and Longhorn backups are not a live editable NAS config tree. Global
+NFS remains disabled and production media settings remain unchanged.

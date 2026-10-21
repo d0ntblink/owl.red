@@ -116,6 +116,15 @@ resource "proxmox_virtual_environment_vm" "control_planes" {
     file_format  = "raw"
   }
 
+  disk {
+    datastore_id = "local-lvm"
+    interface    = "scsi1"
+    size         = 64
+    file_format  = "raw"
+    ssd          = true
+    discard      = "on"
+  }
+
   cdrom {
     enabled   = true
     file_id   = "local:iso/talos-v1.7.5-metal-amd64.iso"
@@ -161,6 +170,15 @@ resource "proxmox_virtual_environment_vm" "workers" {
     file_format  = "raw"
   }
 
+  disk {
+    datastore_id = "local-lvm"
+    interface    = "scsi1"
+    size         = 64
+    file_format  = "raw"
+    ssd          = true
+    discard      = "on"
+  }
+
   cdrom {
     enabled   = true
     file_id   = "local:iso/talos-v1.7.5-metal-amd64.iso"
@@ -192,8 +210,12 @@ resource "talos_machine_configuration_apply" "control_planes" {
   endpoint                    = split("/", each.value.ip)[0]
 
   config_patches = [
+    file("${path.module}/../../../talos/patches/longhorn.yaml"),
     yamlencode({
       machine = {
+        nodeLabels = {
+          "topology.kubernetes.io/zone" = each.value.node
+        }
         network = {
           hostname = each.key
           interfaces = [{
@@ -227,8 +249,12 @@ resource "talos_machine_configuration_apply" "workers" {
   endpoint                    = split("/", each.value.ip)[0]
 
   config_patches = [
+    file("${path.module}/../../../talos/patches/longhorn.yaml"),
     yamlencode({
       machine = {
+        nodeLabels = {
+          "topology.kubernetes.io/zone" = each.value.node
+        }
         network = {
           hostname = each.key
           interfaces = [{

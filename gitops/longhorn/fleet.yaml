@@ -1,0 +1,32 @@
+defaultNamespace: longhorn-system
+helm:
+  releaseName: longhorn
+  disablePreProcess: true
+  chart: longhorn
+  repo: https://charts.longhorn.io
+  version: 1.12.1
+  values:
+    persistence:
+      createStorageClass: false
+      defaultClass: false
+    defaultSettings:
+      defaultDataPath: /var/mnt/longhorn
+      createDefaultDiskLabeledNodes: true
+      defaultReplicaCount: 3
+      replicaSoftAntiAffinity: false
+      replicaZoneSoftAntiAffinity: false
+      replicaAutoBalance: least-effort
+      storageReservedPercentageForDefaultDisk: 15
+      storageMinimalAvailablePercentage: 20
+      storageOverProvisioningPercentage: 100
+      taintToleration: node-role.kubernetes.io/control-plane:NoSchedule
+      v1DataEngine: true
+      v2DataEngine: false
+    longhornManager:
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+    longhornDriver:
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+    ingress:
+      enabled: false

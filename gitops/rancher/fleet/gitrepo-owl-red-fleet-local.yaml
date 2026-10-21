@@ -17,6 +17,7 @@ spec:
     - gitops/bitwarden-operator
     - gitops/bitwarden-secrets
     - gitops/csi-smb
+    - gitops/longhorn
     - gitops/home-assistant
     - gitops/open-webui
     - gitops/flaresolverr
