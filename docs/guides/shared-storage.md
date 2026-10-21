@@ -283,7 +283,8 @@ Talos 1.8.1 CIFS support and Kubernetes cross-node mounts are confirmed.
 - Keep retired `sharefiles` absent from the Ansible share inventory and snapshot.
 - Confirm SMB service-account consumers and private-share grants before creation.
 - `no_root_squash` scope per export (PVCs/VM-disks need it; personal must not have it).
-- Longhorn evaluation post Unraid→VM migration (removes the NAS SPOF) — ADR 018 / ROADMAP §4.
+- Per-app config/database separation before using Longhorn: ordinary configuration
+   remains live on NAS `appdata`; an inseparable app requires an explicit decision.
 
 ## Proxmox ISO And Template SMB
 
@@ -341,10 +342,16 @@ volume only where the application supports a separate path or a qualified mount
 layout. SQLite WAL/shared-memory files must remain with their database on the
 same filesystem. An inseparable app needs an explicit per-app decision first.
 
-The Fleet bundle pins Longhorn `1.12.1`, compatible with Kubernetes `1.31.1`.
+The active Fleet bundle pins Longhorn `1.12.1`, compatible with Kubernetes `1.31.1`.
 Longhorn `1.13.0` requires Kubernetes `1.34+` and is not selected. The retained,
 non-default `longhorn-appdata` class requests three replicas and ext4 with the V1
 engine. Replicas use dedicated local disks, not SMB-mounted directories.
+
+The controller Helm bundle and dependent raw StorageClass bundle have separate
+Fleet owners. Only the Longhorn namespace is privileged for host storage access;
+its policy is declared in Fleet namespace labels. An existing namespace may
+require those same labels once during bootstrap. Application namespaces remain
+restricted.
 
 Each Talos VM has a new 64 GiB `scsi1` data disk from its own physical PVE host.
 The original 40 GiB `scsi0` system disks are preserved. The
@@ -366,6 +373,17 @@ planned detach/reattach on another physical node, with three healthy replicas.
 This is not a test of every unclean-failure case. Keep one application writer;
 never force-detach without confirming the previous writer is stopped/fenced.
 Control-plane taints also require deliberate workload placement/tolerations.
+
+Initial acceptance passed: a disposable claim was written on `cp1-talos`,
+detached after deleting its writer pod, then attached on `cp2-talos` with identical
+data. Three healthy replicas occupied distinct physical hosts. The test namespace,
+retained PV and Longhorn volume were removed. No production database moved.
+
+Worker maintenance exposed application placement constraints. Certificate
+components and FlareSolverr now declare control-plane tolerations in their own
+bundles. Verify Homepage's live replica count and disruption budget before a
+future worker drain; desired replicas are two. Tolerations alone do not guarantee
+safe application failover.
 
 No backup target or schedule is enabled by installation alone. Replication is
 not backup, and Longhorn backups are not a live editable NAS config tree. Global

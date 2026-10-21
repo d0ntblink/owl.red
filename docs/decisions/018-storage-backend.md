@@ -52,14 +52,15 @@ infrastructure consumers, not Kubernetes. NFS exports are host-restricted
 cluster/Proxmox exports. Unraid NFS enable + export config is owned by the **Ansible file-lane**
 (`unraid_settings`); array/disk layout stays **manual**.
 
-Accept the NAS as a **short-term single point of failure** for HA workloads. Plan **Longhorn**
-(cluster-native, replicated) medium-term — after the Unraid→VM migration — to remove that SPOF for
-cluster PVCs; the NAS would then back media/backups/bulk rather than live HA state.
+Longhorn is active for qualified database block volumes, with three replicas
+across physical compute hosts and planned cross-node reattachment verified.
+Ordinary configuration remains live on NAS `appdata` by the owner's amendment.
+The NAS therefore remains a dependency for those configurations and media;
+replicated database storage alone does not make an application independent of
+the NAS. Qualify database paths and single-writer recovery before migration.
 
 ## Alternatives rejected
 
-- **Longhorn now** — the better long-term answer (no SPOF), but wants the Unraid→VM migration done and
-  more cluster capacity first; deferred, not dropped.
 - **Ceph** — resilient but operationally heavy for four small ThinkCentre nodes.
 - **Per-node local storage only** — no failover; defeats the HA goal.
 - **A new dedicated share scheme** — rejected in favor of reusing existing shares (less churn); a dedicated
@@ -68,7 +69,8 @@ cluster PVCs; the NAS would then back media/backups/bulk rather than live HA sta
 ## Consequences
 
 - Simple and works today; unblocks k8s stateful apps and Proxmox CT/VM HA failover.
-- **The NAS is a SPOF for everything HA** until Longhorn — documented and accepted short-term.
+- **The NAS remains a dependency for live SMB configuration and media.** Longhorn
+  supplies replicated database volumes; it does not replicate NAS SMB exports.
 - NFS is plaintext and host-restricted. Resolve protected media's latent public
   export through a separately agreed approach before enabling NFS; do not
   silently activate it or change media permissions under the storage work.
