@@ -12,6 +12,7 @@
   "cpus": 3,
   "authenticated_port": 8971,
   "tls_hostname": "nas.owl.red",
+  "webui": "https://nvr.owl.red",
   "tls_secret": "frigate-tls",
   "admin_password_secret_key": "frigate__admin-password",
   "detector": "openvino_cpu",
