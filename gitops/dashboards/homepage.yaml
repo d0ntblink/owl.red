@@ -171,7 +171,7 @@ metadata:
     app.kubernetes.io/name: homepage
     app.kubernetes.io/part-of: dashboards
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: homepage
