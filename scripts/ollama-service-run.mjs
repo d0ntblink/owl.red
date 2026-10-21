@@ -110,8 +110,13 @@ async function combined(config) {
       for await (const chunk of generation.body) stream += Buffer.from(chunk).toString();
       const events = stream.split('\n').filter(line => line.startsWith('data:') && line.slice(5).trim() !== '[DONE]').map(line => JSON.parse(line.slice(5).trim()));
       ensure(events.some(event => event.choices?.[0]?.delta?.content?.trim()), 'Combined WebUI returned no generated text.');
-      const loaded = JSON.parse(ssh('docker exec open-webui curl --fail --silent http://127.0.0.1:11434/api/ps'));
-      const after = Number(ssh('nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits'));
+      let loaded;
+      let after;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        loaded = JSON.parse(ssh('docker exec open-webui curl --fail --silent http://127.0.0.1:11434/api/ps'));
+        after = Number(ssh('nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits'));
+        if (loaded.models.length === 0 && after <= before + 32) break;
+      }
       const current = JSON.parse(ssh("docker inspect --format '{{json .State}}' open-webui"));
       ensure(loaded.models.length === 0 && after <= before + 32 && current.Running && current.Pid === application.Pid, 'Combined idle GPU release failed.');
       console.log(JSON.stringify({ existingOwnerVerified: true, nativeApiKeyVerified: true, bundledGpuInferenceVerified: true, beforeMiB: before, afterMiB: after, loadedModelsAfter: 0, applicationStayedRunning: true, unauthenticatedDenied: true }));
