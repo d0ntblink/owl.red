@@ -68,6 +68,54 @@ async function combined(config) {
   const privateKey = Buffer.from(tls.data['tls.key'], 'base64').toString();
   const identity = new X509Certificate(certificate);
   ensure(identity.checkHost('nas.owl.red') && identity.checkPrivateKey(createPrivateKey(privateKey)) && Date.parse(identity.validTo) > Date.now() + 7 * 86400000, 'Valid NAS TLS material is required.');
+  if (['combined-configure', 'combined-verify', 'combined-restore-connection'].includes(phase)) {
+    const endpoint = 'https://nas.owl.red:' + service.https_port;
+    async function api(route, method = 'GET', token, body) {
+      const response = await fetch(endpoint + route, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(180000) });
+      ensure(response.ok, 'Native WebUI operation failed: ' + route + ' (HTTP ' + response.status + ').');
+      return response.json();
+    }
+    const login = await api('/api/v1/auths/signin', 'POST', undefined, { email: environment.WEBUI_ADMIN_EMAIL, password: environment.WEBUI_ADMIN_PASSWORD });
+    ensure(login.token && login.role === 'admin', 'Existing owner login failed.');
+    const connection = await api('/ollama/config', 'GET', login.token);
+    const localUrl = 'http://127.0.0.1:11434';
+    if (['combined-configure', 'combined-restore-connection'].includes(phase)) {
+      const snapshot = path.join(home, '.local/state/owl-red/open-webui-connection-before.json');
+      if (!fs.existsSync(snapshot)) fs.writeFileSync(snapshot, JSON.stringify(connection), { mode: 0o600 });
+      const desired = phase === 'combined-configure' ? { ENABLE_OLLAMA_API: true, OLLAMA_BASE_URLS: [localUrl], OLLAMA_API_CONFIGS: { 0: { enable: true } } } : JSON.parse(fs.readFileSync(snapshot, 'utf8'));
+      await api('/ollama/config/update', 'POST', login.token, desired);
+      console.log(JSON.stringify({ existingOwnerVerified: true, savedConnectionUpdatedThroughNativeApi: true, originalConnectionRestored: phase === 'combined-restore-connection' }));
+      return;
+    }
+    ensure(connection.OLLAMA_BASE_URLS.length === 1 && connection.OLLAMA_BASE_URLS[0] === localUrl, 'WebUI is not using its bundled model server.');
+    const models = await api('/api/models', 'GET', login.token);
+    ensure(Object.values(config.profiles).every(profile => models.data.some(model => model.id === profile.model)), 'Pinned model choices unavailable.');
+    const unauthenticated = await fetch(endpoint + '/api/models', { signal: AbortSignal.timeout(10000) });
+    ensure([401, 403].includes(unauthenticated.status), 'Unauthenticated API access was not denied.');
+    const existingKey = await fetch(endpoint + '/api/v1/auths/api_key', { headers: { Authorization: 'Bearer ' + login.token }, signal: AbortSignal.timeout(10000) });
+    ensure(existingKey.ok || existingKey.status === 404, 'Native API key inspection failed.');
+    const created = existingKey.status === 404;
+    const key = created ? (await api('/api/v1/auths/api_key', 'POST', login.token)).api_key : (await existingKey.json()).api_key;
+    const ssh = command => execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', command]);
+    try {
+      const before = Number(ssh('nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits'));
+      const application = JSON.parse(ssh("docker inspect --format '{{json .State}}' open-webui"));
+      const generation = await fetch(endpoint + '/api/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: config.model, messages: [{ role: 'user', content: 'Explain why event retention in days does not impose a fixed disk quota. Use one short paragraph.' }], stream: true, params: { num_ctx: 4096, num_predict: 160, keep_alive: 0, temperature: 0.1 } }), signal: AbortSignal.timeout(180000) });
+      ensure(generation.ok, 'Combined native API inference failed.');
+      const during = JSON.parse(ssh('docker exec open-webui curl --fail --silent http://127.0.0.1:11434/api/ps'));
+      ensure(during.models.some(model => model.size_vram > 0), 'Actual bundled GPU inference was not observed.');
+      let stream = '';
+      for await (const chunk of generation.body) stream += Buffer.from(chunk).toString();
+      const events = stream.split('\n').filter(line => line.startsWith('data:') && line.slice(5).trim() !== '[DONE]').map(line => JSON.parse(line.slice(5).trim()));
+      ensure(events.some(event => event.choices?.[0]?.delta?.content?.trim()), 'Combined WebUI returned no generated text.');
+      const loaded = JSON.parse(ssh('docker exec open-webui curl --fail --silent http://127.0.0.1:11434/api/ps'));
+      const after = Number(ssh('nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits'));
+      const current = JSON.parse(ssh("docker inspect --format '{{json .State}}' open-webui"));
+      ensure(loaded.models.length === 0 && after <= before + 32 && current.Running && current.Pid === application.Pid, 'Combined idle GPU release failed.');
+      console.log(JSON.stringify({ existingOwnerVerified: true, nativeApiKeyVerified: true, bundledGpuInferenceVerified: true, beforeMiB: before, afterMiB: after, loadedModelsAfter: 0, applicationStayedRunning: true, unauthenticatedDenied: true }));
+    } finally { if (created) await api('/api/v1/auths/api_key', 'DELETE', login.token); }
+    return;
+  }
   const nginx = `events {}\nhttp {\n access_log off;\n map $http_upgrade $connection_upgrade { default upgrade; '' close; }\n server {\n  listen 8443 ssl;\n  ssl_certificate /tls/fullchain.pem;\n  ssl_certificate_key /tls/privkey.pem;\n  client_max_body_size 1m;\n  location / {\n   proxy_pass http://open-webui:8080;\n   proxy_http_version 1.1;\n   proxy_set_header Host $host;\n   proxy_set_header X-Forwarded-Proto https;\n   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n   proxy_set_header Upgrade $http_upgrade;\n   proxy_set_header Connection $connection_upgrade;\n   proxy_buffering off;\n   proxy_read_timeout 600s;\n  }\n }\n}\n`;
   const payload = { phase, config, files: { 'runtime.env': Object.entries(environment).map(([key, value]) => key + '=' + value).join('\n') + '\n', 'nginx.conf': nginx, 'fullchain.pem': certificate, 'privkey.pem': privateKey } };
   const php = String.raw`<?php
@@ -88,7 +136,7 @@ if($request['phase']==='combined-prepare'){
  if(!is_dir($base)){mkdir($base,0700,true);file_put_contents($base.'/.owl-red-open-webui','open-webui-service');}
  foreach($request['files'] as $filename=>$value){$destination=$base.'/'.$filename;if(is_file($destination))check(file_get_contents($destination)===$value,'Prepared runtime changed; review required');else{file_put_contents($destination,$value);chmod($destination,0600);}}
  check((json_decode(run(['docker','network','inspect','owl-llm-proxy']),true)[0]['Labels']['owl.red.component']??'')==='llm-proxy-network','Owned proxy network required');
- run(['docker','run','--rm','--network','none','--entrypoint','/usr/local/bin/ollama',$service['image'],'--version']);
+ run(['docker','run','--rm','--network','none','--entrypoint','/bin/ollama',$service['image'],'--version']);
  echo json_encode(['imagePulled'=>true,'privateRuntimePrepared'=>true,'liveServicesChanged'=>false]).PHP_EOL;exit(0);
 }
 if($request['phase']==='combined-apply'){
@@ -112,7 +160,7 @@ if($request['phase']==='combined-rollback'){
   console.log(execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=5', 'root@10.0.10.5', 'php'], { input: php.replace('REQUEST', Buffer.from(JSON.stringify(payload)).toString('base64')) }));
 }
 async function main() {
-  ensure(['prepare', 'plan', 'apply', 'verify', 'combined-plan', 'combined-prepare', 'combined-apply', 'combined-rollback'].includes(phase), 'Unknown service phase.');
+  ensure(['prepare', 'plan', 'apply', 'verify', 'combined-plan', 'combined-prepare', 'combined-apply', 'combined-rollback', 'combined-configure', 'combined-verify', 'combined-restore-connection'].includes(phase), 'Unknown service phase.');
   const config = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/llm.json'), 'utf8'));
   ensure(config.host === '10.0.10.5' && config.model_directory === '/mnt/ssd/appdata/llm-models', 'Unexpected GPU/storage target.');
   ensure(config.image === 'ollama/ollama:0.40.7@sha256:2e6cc92ffa43b4b1a2e70e315407e00ac97ec125afc71277d73c7efe01c4f31b', 'Use the qualified backend image.');
