@@ -18,5 +18,6 @@ spec:
     - gitops/bitwarden-secrets
     - gitops/csi-smb
     - gitops/home-assistant
+    - gitops/open-webui
     - gitops/pdm
     - gitops/platform-resilience

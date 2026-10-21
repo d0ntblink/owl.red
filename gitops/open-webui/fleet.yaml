@@ -1,0 +1,4 @@
+defaultNamespace: open-webui
+dependsOn:
+  - name: owl-red-gitops-bitwarden-secrets
+  - name: owl-red-gitops-csi-smb
