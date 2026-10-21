@@ -62,6 +62,7 @@ async function combined(config) {
   const environment = Object.fromEntries(deployment.spec.template.spec.containers[0].env.map(entry => [entry.name, entry.value]));
   for (const [key, value] of Object.entries(runtime.data)) environment[key] = Buffer.from(value, 'base64').toString();
   Object.assign(environment, { OLLAMA_BASE_URL: 'http://127.0.0.1:11434', OLLAMA_BASE_URLS: 'http://127.0.0.1:11434', OLLAMA_API_CONFIGS: '{"0":{"enable":true}}', OLLAMA_HOST: '127.0.0.1:11434', OLLAMA_MODELS: '/root/.ollama/models', OLLAMA_KEEP_ALIVE: '0', OLLAMA_NUM_PARALLEL: '1', OLLAMA_MAX_LOADED_MODELS: '1', OLLAMA_CONTEXT_LENGTH: '4096', OLLAMA_MAX_QUEUE: '8', OLLAMA_NO_CLOUD: '1', USE_OLLAMA_DOCKER: 'true', FORWARDED_ALLOW_IPS: '*', HF_HOME: '/tmp/huggingface' });
+  Object.assign(environment, { WEBUI_TLS_SERVER_NAME: 'nas.owl.red', WEBUI_HEALTH_URL: 'https://nas.owl.red:8080/health' });
   ensure(Object.values(environment).every(value => typeof value === 'string' && !/[\r\n]/.test(value)), 'Unsupported multiline runtime value.');
   const tls = JSON.parse(execute('kubectl', ['-n', 'home-assistant', 'get', 'secret', 'frigate-tls', '-o', 'json']));
   const certificate = Buffer.from(tls.data['tls.crt'], 'base64').toString();
@@ -69,7 +70,7 @@ async function combined(config) {
   const identity = new X509Certificate(certificate);
   ensure(identity.checkHost('nas.owl.red') && identity.checkPrivateKey(createPrivateKey(privateKey)) && Date.parse(identity.validTo) > Date.now() + 7 * 86400000, 'Valid NAS TLS material is required.');
   if (['combined-configure', 'combined-verify', 'combined-restore-connection'].includes(phase)) {
-    const endpoint = 'https://nas.owl.red:' + service.https_port;
+    const endpoint = phase === 'combined-verify' && process.argv.includes('--ingress') ? 'https://ai.owl.red' : 'https://nas.owl.red:' + service.https_port;
     async function api(route, method = 'GET', token, body) {
       const response = await fetch(endpoint + route, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(180000) });
       ensure(response.ok, 'Native WebUI operation failed: ' + route + ' (HTTP ' + response.status + ').');
@@ -81,6 +82,7 @@ async function combined(config) {
     const localUrl = 'http://127.0.0.1:11434';
     if (['combined-configure', 'combined-restore-connection'].includes(phase)) {
       const snapshot = path.join(home, '.local/state/owl-red/open-webui-connection-before.json');
+      ensure(phase !== 'combined-restore-connection' || fs.existsSync(snapshot), 'Original connection snapshot is required for rollback.');
       if (!fs.existsSync(snapshot)) fs.writeFileSync(snapshot, JSON.stringify(connection), { mode: 0o600 });
       const desired = phase === 'combined-configure' ? { ENABLE_OLLAMA_API: true, OLLAMA_BASE_URLS: [localUrl], OLLAMA_API_CONFIGS: { 0: { enable: true } } } : JSON.parse(fs.readFileSync(snapshot, 'utf8'));
       await api('/ollama/config/update', 'POST', login.token, desired);
@@ -101,7 +103,7 @@ async function combined(config) {
       const before = Number(ssh('nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits'));
       const application = JSON.parse(ssh("docker inspect --format '{{json .State}}' open-webui"));
       const generation = await fetch(endpoint + '/api/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: config.model, messages: [{ role: 'user', content: 'Explain why event retention in days does not impose a fixed disk quota. Use one short paragraph.' }], stream: true, params: { num_ctx: 4096, num_predict: 160, keep_alive: 0, temperature: 0.1 } }), signal: AbortSignal.timeout(180000) });
-      ensure(generation.ok, 'Combined native API inference failed.');
+      ensure(generation.ok, 'Combined native API inference failed (HTTP ' + generation.status + ').');
       const during = JSON.parse(ssh('docker exec open-webui curl --fail --silent http://127.0.0.1:11434/api/ps'));
       ensure(during.models.some(model => model.size_vram > 0), 'Actual bundled GPU inference was not observed.');
       let stream = '';
@@ -117,7 +119,7 @@ async function combined(config) {
     return;
   }
   const nginx = `events {}\nhttp {\n access_log off;\n map $http_upgrade $connection_upgrade { default upgrade; '' close; }\n server {\n  listen 8443 ssl;\n  ssl_certificate /tls/fullchain.pem;\n  ssl_certificate_key /tls/privkey.pem;\n  client_max_body_size 1m;\n  location / {\n   proxy_pass http://open-webui:8080;\n   proxy_http_version 1.1;\n   proxy_set_header Host $host;\n   proxy_set_header X-Forwarded-Proto https;\n   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n   proxy_set_header Upgrade $http_upgrade;\n   proxy_set_header Connection $connection_upgrade;\n   proxy_buffering off;\n   proxy_read_timeout 600s;\n  }\n }\n}\n`;
-  const payload = { phase, config, files: { 'runtime.env': Object.entries(environment).map(([key, value]) => key + '=' + value).join('\n') + '\n', 'nginx.conf': nginx, 'fullchain.pem': certificate, 'privkey.pem': privateKey } };
+  const payload = { phase, config, files: { 'runtime.env': Object.entries(environment).map(([key, value]) => key + '=' + value).join('\n') + '\n', 'fullchain.pem': certificate, 'privkey.pem': privateKey } };
   const php = String.raw`<?php
 ini_set('zend.exception_ignore_args','1');
 set_exception_handler(function($error){file_put_contents('php://stderr','Combined service operation failed: '.$error->getMessage().PHP_EOL);exit(1);});
@@ -128,13 +130,16 @@ function container($name,$component){$found=run(['docker','ps','-a','--filter','
 check(run(['findmnt','-n','-o','TARGET','--target','/mnt/ssd'])==='/mnt/ssd','SSD not mounted');check(realpath($service['data_directory'])===$service['data_directory'],'Existing WebUI directory is required');check(is_file($config['model_directory'].'/.owl-red-llm'),'Model ownership marker missing');
 $lock=fopen('/var/run/owl-red-llm.lock','c');check(flock($lock,LOCK_EX|LOCK_NB),'A diagnostic job is running');
 $old=container('ollama','ollama');$application=container('open-webui','open-webui-ollama');$proxy=container('open-webui-https','open-webui-proxy');
-if($application)check($application['Config']['Image']===$service['image'],'Combined application image differs; reviewed update required');
+if($application&&$application['Config']['Image']!==$service['image']){
+ check($request['phase']==='combined-prepare'&&!$application['State']['Running'],'Stop the owned combined application before replacing its image');
+ run(['docker','rm','open-webui']);$application=null;
+}
 if(file_exists($base))check(is_dir($base)&&!is_link($base)&&is_file($base.'/.owl-red-open-webui'),'Unmanaged service directory');
 if($request['phase']==='combined-plan'){echo json_encode(['image'=>$service['image'],'existingDataReused'=>true,'combinedExists'=>(bool)$application,'oldBackendRunning'=>$old['State']['Running']??false,'changed'=>false]).PHP_EOL;exit(0);}
 if($request['phase']==='combined-prepare'){
  run(['docker','pull',$service['image']]);
  if(!is_dir($base)){mkdir($base,0700,true);file_put_contents($base.'/.owl-red-open-webui','open-webui-service');}
- foreach($request['files'] as $filename=>$value){$destination=$base.'/'.$filename;if(is_file($destination))check(file_get_contents($destination)===$value,'Prepared runtime changed; review required');else{file_put_contents($destination,$value);chmod($destination,0600);}}
+ foreach($request['files'] as $filename=>$value){$destination=$base.'/'.$filename;if(is_file($destination)&&file_get_contents($destination)!==$value){check(!$application,'Stop and retire the old owned application before preparing a changed runtime');$preimage=$destination.'.before-'.bin2hex(random_bytes(6));check(copy($destination,$preimage),'Cannot retain runtime preimage');chmod($preimage,0600);}file_put_contents($destination,$value);chmod($destination,0600);}
  check((json_decode(run(['docker','network','inspect','owl-llm-proxy']),true)[0]['Labels']['owl.red.component']??'')==='llm-proxy-network','Owned proxy network required');
  run(['docker','run','--rm','--network','none','--entrypoint','/bin/ollama',$service['image'],'--version']);
  echo json_encode(['imagePulled'=>true,'privateRuntimePrepared'=>true,'liveServicesChanged'=>false]).PHP_EOL;exit(0);
@@ -143,10 +148,9 @@ if($request['phase']==='combined-apply'){
  foreach($request['files'] as $filename=>$value)check(is_file($base.'/'.$filename)&&file_get_contents($base.'/'.$filename)===$value,'Run combined-prepare with matching runtime first');
  if($old&&$old['State']['Running'])run(['docker','stop','--time','30','ollama']);
  try{
-  if(!$application)run(['docker','run','-d','--name','open-webui','--restart','unless-stopped','--label','owl.red.component=open-webui-ollama','--network','owl-llm-proxy','--runtime','nvidia','--gpus','all','--user','0:100','--cpus',(string)$config['cpus'],'--memory',$config['memory_limit_mib'].'m','--cap-drop','ALL','--security-opt','no-new-privileges:true','--read-only','--tmpfs','/tmp:rw,nosuid,nodev,size=268435456,mode=1777','--log-opt','max-size=10m','--log-opt','max-file=2','--env-file',$base.'/runtime.env','-v',$config['model_directory'].':/root/.ollama','-v',$service['data_directory'].':/app/backend/data',$service['image']]);
+  check(!$proxy||!$proxy['State']['Running'],'Stop the old HTTPS sidecar before the one-container cutover');
+  if(!$application)run(['docker','run','-d','--name','open-webui','--restart','unless-stopped','--label','owl.red.component=open-webui-ollama','--label','net.unraid.docker.webui='.$service['webui'],'--label','net.unraid.docker.icon='.$service['icon'],'--network','owl-llm-proxy','--runtime','nvidia','--gpus','all','--user','0:100','--cpus',(string)$config['cpus'],'--memory',$config['memory_limit_mib'].'m','--cap-drop','ALL','--security-opt','no-new-privileges:true','--read-only','--tmpfs','/tmp:rw,nosuid,nodev,size=268435456,mode=1777','--log-opt','max-size=10m','--log-opt','max-file=2','--health-cmd','curl --fail --silent --resolve nas.owl.red:8080:127.0.0.1 https://nas.owl.red:8080/health > /dev/null && curl --fail --silent http://127.0.0.1:11434/api/version > /dev/null','--env-file',$base.'/runtime.env','-v',$config['model_directory'].':/root/.ollama','-v',$service['data_directory'].':/app/backend/data','-v',$base.'/fullchain.pem:/tls/fullchain.pem:ro','-v',$base.'/privkey.pem:/tls/privkey.pem:ro','-p','10.0.10.5:'.$service['https_port'].':8080',$service['image'],'bash','start.sh','--ssl-certfile','/tls/fullchain.pem','--ssl-keyfile','/tls/privkey.pem','--workers','1','--ws-per-message-deflate','true']);
   elseif(!$application['State']['Running'])run(['docker','start','open-webui']);
-  if(!$proxy)run(['docker','run','-d','--name','open-webui-https','--restart','unless-stopped','--label','owl.red.component=open-webui-proxy','--network','owl-llm-proxy','--cpus','0.25','--memory','128m','--security-opt','no-new-privileges:true','--cap-drop','NET_RAW','--log-opt','max-size=10m','--log-opt','max-file=2','-v',$base.'/nginx.conf:/etc/nginx/nginx.conf:ro','-v',$base.'/fullchain.pem:/tls/fullchain.pem:ro','-v',$base.'/privkey.pem:/tls/privkey.pem:ro','-p','10.0.10.5:'.$service['https_port'].':8443','nginx:1.28.1-alpine@sha256:52e3ada4d978443601f286cc2f9e7b95c82aa3ad5a78ce9c6b94ce00258e68cc']);
-  elseif(!$proxy['State']['Running'])run(['docker','start','open-webui-https']);
  }catch(Throwable $error){if($application=container('open-webui','open-webui-ollama'))if($application['State']['Running'])run(['docker','stop','open-webui']);if($old)run(['docker','start','ollama']);throw $error;}
  echo json_encode(['combinedStarted'=>true,'oldBackendStopped'=>true,'endpoint'=>'https://nas.owl.red:'.$service['https_port'],'existingDataReused'=>true]).PHP_EOL;exit(0);
 }
