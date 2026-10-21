@@ -1,0 +1,24 @@
+{
+  "source_container": "qbittorrentvpn",
+  "source_image_id": "sha256:ad0f1ecf8b9971251b9e9ed0702eee257b1e9deb094ace336efc7f60682f5c0d",
+  "rollback_container": "qbittorrentvpn-rollback",
+  "container": "qbittorrent",
+  "image": "binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592",
+  "version": "v5.3.0",
+  "config_directory": "/mnt/user/appdata/binhex-qbittorrentvpn",
+  "gateway_container": "gluetun",
+  "gateway_image": "qmcgaw/gluetun@sha256:c2ee4191762fca6b6a3c3359a731198a95d9c9af4db32d466e223bf3a84e779b",
+  "gateway_directory": "/mnt/user/appdata/gluetun",
+  "network": "pirate-arr-net",
+  "webui": "http://nas.owl.red:8080",
+  "private_directory": "/root/.local/state/owl-red/qbittorrent-migration",
+  "cluster": {
+    "namespace": "qbittorrent",
+    "deployment": "qbittorrent",
+    "webui": "https://qbittorrent.owl.red",
+    "api_host": "qbittorrent-direct.owl.red",
+    "api_port": 8080,
+    "shared_directory": "/mnt/user/appdata/qbittorrent-shared",
+    "private_directory": "/root/.local/state/owl-red/qbittorrent-cluster"
+  }
+}

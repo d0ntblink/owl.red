@@ -1,0 +1,281 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qbittorrent
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.31
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-config-nas
+spec:
+  capacity: {storage: 2Gi}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0770, file_mode=0660]
+  claimRef: {namespace: qbittorrent, name: config}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/appdata#binhex-qbittorrentvpn#qbittorrent-config#retain
+    volumeAttributes: {source: //nas.owl.red/appdata, subDir: binhex-qbittorrentvpn}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: config
+  namespace: qbittorrent
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: qbittorrent-config-nas
+  resources: {requests: {storage: 2Gi}}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gluetun-config-nas
+spec:
+  capacity: {storage: 2Gi}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=0, gid=0, dir_mode=0700, file_mode=0600]
+  claimRef: {namespace: qbittorrent, name: gateway}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/appdata#gluetun#qbittorrent-gateway#retain
+    volumeAttributes: {source: //nas.owl.red/appdata, subDir: gluetun}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gateway
+  namespace: qbittorrent
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: gluetun-config-nas
+  resources: {requests: {storage: 2Gi}}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-media-nas
+spec:
+  capacity: {storage: 100Ti}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0775, file_mode=0664]
+  claimRef: {namespace: qbittorrent, name: media}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/media#qbittorrent-media#retain
+    volumeAttributes: {source: //nas.owl.red/media}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media
+  namespace: qbittorrent
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: qbittorrent-media-nas
+  resources: {requests: {storage: 100Ti}}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-shared-nas
+spec:
+  capacity: {storage: 1Gi}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0770, file_mode=0660]
+  claimRef: {namespace: qbittorrent, name: shared}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/appdata#qbittorrent-shared#qbittorrent-shared#retain
+    volumeAttributes: {source: //nas.owl.red/appdata, subDir: qbittorrent-shared}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared
+  namespace: qbittorrent
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: qbittorrent-shared-nas
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: qbittorrent
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: qbittorrent}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: qbittorrent}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 150
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [127.0.0.1]
+        options: [{name: ndots, value: "1"}]
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: gluetun
+          restartPolicy: Always
+          image: qmcgaw/gluetun@sha256:c2ee4191762fca6b6a3c3359a731198a95d9c9af4db32d466e223bf3a84e779b
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [NET_ADMIN, NET_RAW, NET_BIND_SERVICE, CHOWN, DAC_OVERRIDE, SETUID, SETGID]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 384Mi}
+          env:
+            - {name: VPN_SERVICE_PROVIDER, value: custom}
+            - {name: VPN_TYPE, value: wireguard}
+            - {name: VPN_INTERFACE, value: wg0}
+            - {name: WIREGUARD_IMPLEMENTATION, value: kernelspace}
+            - {name: VPN_PORT_FORWARDING, value: "on"}
+            - {name: VPN_PORT_FORWARDING_PROVIDER, value: protonvpn}
+            - {name: HTTP_CONTROL_SERVER_ADDRESS, value: "127.0.0.1:8000"}
+            - {name: HTTP_CONTROL_SERVER_AUTH_CONFIG_FILEPATH, value: /gluetun/control.toml}
+            - {name: FIREWALL_INPUT_PORTS, value: "8080"}
+            - {name: FIREWALL_OUTBOUND_SUBNETS, value: "10.244.0.0/16,10.96.0.0/12,10.0.10.0/24,10.0.20.10/32"}
+            - {name: HTTPPROXY, value: "off"}
+            - {name: SHADOWSOCKS, value: "off"}
+            - name: VPN_PORT_FORWARDING_UP_COMMAND
+              value: >-
+                /bin/sh -c 'wget -qO /dev/null --retry-connrefused --tries=30 --waitretry=1 --timeout=2 --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"current_interface_address\":\"\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
+            - name: VPN_PORT_FORWARDING_DOWN_COMMAND
+              value: >-
+                /bin/sh -c 'wget -qO /dev/null --timeout=3 --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences'
+          startupProbe:
+            exec: {command: [/gluetun-entrypoint, healthcheck]}
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            exec: {command: [/gluetun-entrypoint, healthcheck]}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: gateway, mountPath: /gluetun}
+        - name: wait-for-gateway
+          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          command: [curl, --fail, --silent, --retry, "10", --retry-connrefused, --retry-delay, "2", --max-time, "5", http://127.0.0.1:9999/]
+          securityContext:
+            runAsUser: 99
+            runAsGroup: 100
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+      containers:
+        - name: qbittorrent
+          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          command: [/usr/bin/qbittorrent-nox]
+          args: [--profile=/config, --webui-port=8080]
+          env:
+            - {name: HOME, value: /config}
+            - {name: TZ, value: America/Edmonton}
+          securityContext:
+            runAsUser: 99
+            runAsGroup: 100
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          ports:
+            - {name: http, containerPort: 8080}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: media, mountPath: /media}
+            - {name: shared, mountPath: /shared}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: config}}
+        - {name: gateway, persistentVolumeClaim: {claimName: gateway}}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+        - {name: shared, persistentVolumeClaim: {claimName: shared}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: qbittorrent
+  annotations:
+    metallb.io/loadBalancerIPs: 10.0.10.203
+spec:
+  type: LoadBalancer
+  loadBalancerSourceRanges: [10.0.10.0/24, 10.0.20.10/32]
+  selector: {app.kubernetes.io/name: qbittorrent}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: administration-access
+  namespace: qbittorrent
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: qbittorrent
+  namespace: qbittorrent
+spec:
+  secretName: qbittorrent-tls
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  dnsNames: [qbittorrent.owl.red]
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: qbittorrent
+  namespace: qbittorrent
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`qbittorrent.owl.red`)
+      kind: Rule
+      middlewares: [{name: administration-access}]
+      services: [{name: qbittorrent, port: 8080}]
+  tls:
+    secretName: qbittorrent-tls
