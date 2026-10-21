@@ -36,6 +36,8 @@ Reference: [power monitoring and recovery requirements](docs/guides/power-and-re
   separate Proxmox NFS path. Keep media data, paths and access unchanged.
 - [ ] Configure restricted Proxmox shared storage and prove the intended guest
   migration/failover behavior before moving guest disks.
+- [ ] Review/import existing root-level ISO files into the Proxmox-visible
+  `nas-isos` directories without moving or deleting the originals implicitly.
 - [ ] Add backup and scanner service accounts when their consumers and exact
   share permissions are defined; choose a dedicated scanner inbox.
 
@@ -58,7 +60,7 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
   alongside Frigate/Plex before accepting broader use.
 - [ ] Inventory remaining NAS applications and migrate selected services:
   Plex, Arr applications, qBittorrent, slskd, Seer, Tautulli, Reclaimerr,
-  speedtest-tracker, Librespeed and FlareSolverr. Preserve application identity,
+  speedtest-tracker and Librespeed. Preserve application identity,
   state, media paths and any GPU requirements during each migration.
 - [ ] Choose a consistent certificate issuance/distribution method for
   off-cluster services and automate renewal through their configuration lanes.
