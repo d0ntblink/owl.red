@@ -1,0 +1,3 @@
+defaultNamespace: flaresolverr
+dependsOn:
+  - name: owl-red-gitops-metallb
