@@ -174,7 +174,7 @@ reads to a new account cannot currently be claimed.
 |-------|------|--------|-------|-------|
 | `appdata` | ssd | NAS-local apps + **k8s PVCs** | Local + authenticated SMB | One share with distinct app/PVC paths. Planned private access and `k8s` write grants; qualify ownership, locking and database storage rather than assuming SMB fixes network-filesystem constraints. |
 | `vms` | ssd | **Proxmox** HA VM/LXC disk images | NFS | shared disks = real CT/VM failover (e.g. PDM); Unraid's own VM manager is disabled, so the share is free to reuse. |
-| `isos` | ssd | **Proxmox** ISOs / CT templates | NFS | |
+| `isos` | ssd | **Proxmox** ISOs / CT templates | SMB 3.1.1 | Cluster storage `nas-isos`, dedicated `pve` identity; standard `template/iso` and `template/cache` layout. |
 | `backups` | array | **Proxmox** vzdump + PBS + personal backups | NFS + SMB | |
 | `media` | array | Existing production consumers | Existing access unchanged | Protected; no files, paths, placement, security or export changes in this work. |
 | `sharefiles` | Retired | None | Not exported | Owner-authorized retirement accepted 2026-10-18; zero files and one empty recycle-bin directory removed. |
@@ -206,7 +206,7 @@ users alone does not restrict it. Do not change protected media in response.
 | `d0ntblink` | Owner's PC over authenticated SMB; explicit per-share permissions | Existing; reuse, no password rotation |
 | `k8s` | SMB read/write grant on shared appdata for CSI provisioning/mounting; no management login | Created, UID/GID `1001:100`, shell `/bin/false`; NAS-local SMB3 write/read and guest denial accepted |
 | `svc-backup` | A named SMB backup client, limited to its backup destination | Planned; confirm consumer/grants before creation; not immutable backup protection |
-| Proxmox | Its own NFS host allowlist, with only required export privileges | Not an SMB account by default |
+| `pve` | SMB read/write on `isos` for PVE ISO/template storage | Created through Unraid's native handler; existing ISO-share policy and grants preserved; no production-media grants changed |
 | `svc-media-ro` | Optional future read-only SMB media consumer | Deferred; no permission change to production media |
 | `svc-scanner` | Scanner restricted to a dedicated inbox, not appdata | Planned; create when consumer/path is selected; validate write-only semantics |
 | Harbor robots | Registry project pull/push permissions, not NAS-wide permissions | Harbor identities if that service is selected, not Unraid users |
@@ -255,7 +255,7 @@ Talos 1.8.1 CIFS support and Kubernetes cross-node mounts are confirmed.
 | Enable NFS + per-share export/security | **Ansible file-lane** (`unraid_settings`, Phase 2) | `share.cfg` (`shareNFSEnabled="yes"`) + `shares/*.cfg` (`shareExportNFS`, `shareSecurityNFS`, `shareHostListNFS`) |
 | Array/disk/pool layout | **Manual** ⛔ | Unraid UI — never IaC |
 | k8s PVCs (CSI + StorageClass) | **GitOps/Fleet** | Pinned upstream `csi-driver-smb`; source `//nas.owl.red/appdata`, private provisioning/node-stage secret references, retained per-PVC directories and qualified Talos/CIFS support. No passwords in manifests. |
-| Proxmox NFS storage (disks/ISO/backup) | **Ansible** (or manual) | `pvesm add nfs …` per content type; bpg/proxmox has no storage resource, so script/Ansible it (codify in a role/playbook) |
+| Proxmox ISO/template storage | **Native API/controller** | [target registry](../../ansible/vars/proxmox-storage.json) and [guarded storage controller](../../scripts/proxmox-storage-run.mjs); cluster-wide CIFS definition with private password submission. Guest disks/backups remain separate review work. |
 | Personal SMB mounts | **Manual / documented** | already exported; fstab/Finder/Explorer |
 
 ## Phased rollout (safe order)
@@ -271,8 +271,9 @@ Talos 1.8.1 CIFS support and Kubernetes cross-node mounts are confirmed.
    application's ownership, locking, database placement and restore procedure
    before migration. Do not reuse production media for tests. Global NFS
    activation is not required for Kubernetes.
-4. **Proxmox shared storage:** `pvesm add nfs nas-vms … --content images,rootdir` (+ `isos`, `backup`) on each node;
-   verify a CT can migrate/HA-failover between nodes (unblocks PDM HA — ROADMAP 11/13).
+4. **Proxmox shared storage:** `nas-isos` is attached over SMB on all six PVE
+   nodes for ISO/template content only. Select and qualify guest-disk and backup
+   storage separately before moving guest disks or claiming guest HA/failover.
 5. **Personal:** confirm SMB mounts; (optional) NFS for Linux desktops.
 6. **Document the StorageClass name, NFS paths, and mount rules** back into this guide + README.
 
@@ -283,3 +284,45 @@ Talos 1.8.1 CIFS support and Kubernetes cross-node mounts are confirmed.
 - Confirm SMB service-account consumers and private-share grants before creation.
 - `no_root_squash` scope per export (PVCs/VM-disks need it; personal must not have it).
 - Longhorn evaluation post Unraid→VM migration (removes the NAS SPOF) — ADR 018 / ROADMAP §4.
+
+## Proxmox ISO And Template SMB
+
+`nas-isos` is one cluster-wide CIFS definition, active on `edge`, `storage`,
+`cp1`, `cp2`, `cp3` and `worker1`. It uses the existing `isos` share and SMB
+3.1.1, not global NFS. Its dedicated password is stored in Secrets Manager as
+`proxmox__nas-isos__password` and submitted to Proxmox over private stdin; it
+is not present in Git or process arguments.
+
+From the repository root, run `node scripts/proxmox-storage-run.mjs plan` or
+`verify` for inspection. `prepare` creates/reuses the private credential and
+native Unraid `pve` account/grant without rotating an existing account. `apply`
+creates the reviewed storage definition if absent, activates it on each node,
+and refuses incompatible existing definitions. NAS media/disk/network settings
+and existing ISO-share grants are protected during account preparation.
+
+Proxmox lists ISOs from `template/iso` and CT templates from `template/cache`.
+The existing root-level ISO files have not been moved, renamed or deleted and
+will not appear in Proxmox's ISO list until a separately reviewed import/copy.
+This storage attachment does not migrate VM disks or provide shared-disk HA.
+
+## Initial Application Migration
+
+FlareSolverr is the first selected CPU-only migration. Its Fleet bundle pins
+upstream `v3.5.2`, matching the NAS service version, with non-root execution and
+bounded CPU/memory. Browser state is ephemeral; this service does not place a
+SQLite database on SMB or need media mounts. Its private endpoint is
+`http://flaresolverr.owl.red:8191` at `10.0.10.202`, restricted to the NAS source
+address. There is no browser WebUI or public ingress.
+
+Before switching Prowlarr, validate the new service from the NAS, create/destroy
+a disposable browser session, and test its existing proxy using Prowlarr's
+supported API. Capture the private proxy preimage and change only its host.
+Then stop the old owned NAS container and disable its restart policy, retaining
+its data and definition for rollback. For rollback, start the old container and
+restore the proxy host `http://flaresolverr:8191` through the same native API.
+
+Librespeed has an external PostgreSQL dependency; Tautulli, Seerr and Arr apps
+have persistent state requiring application-specific database/storage checks.
+qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
+copy their config directories onto SMB and assume SQLite, locking, paths or
+VPN isolation remain correct. GPU apps remain on the NAS.

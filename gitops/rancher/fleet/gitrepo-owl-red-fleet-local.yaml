@@ -19,5 +19,6 @@ spec:
     - gitops/csi-smb
     - gitops/home-assistant
     - gitops/open-webui
+    - gitops/flaresolverr
     - gitops/pdm
     - gitops/platform-resilience
