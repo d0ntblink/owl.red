@@ -347,8 +347,9 @@ Seerr's database stage is complete: version `3.5.0` now uses its isolated `seerr
 PostgreSQL database/role, with a two-connection pool. All 14 application table
 counts and 36 users matched the consistent SQLite copy, including account and
 credential fields. The existing authenticated API key passed after restart.
-Seerr still runs on the NAS at this checkpoint; moving its container to Kubernetes
-is a separate cutover. Settings/logs remain in the existing NAS `appdata/seerr`.
+Seerr now runs in Kubernetes at `https://seerr.owl.red`. Settings/logs remain
+live in the existing NAS `appdata/seerr` directory through a retained static SMB
+claim; its database remains in shared PostgreSQL, not an SMB SQLite file.
 
 The [Seerr database controller](../../scripts/seerr-db-run.mjs) has `plan`,
 `prepare`, `apply` and `verify` phases. It uses the exact pinned app image and
@@ -367,6 +368,28 @@ automatic rollback after acceptance or run both writers. A later rollback must
 preserve any new PostgreSQL data first. `reset-target` is restricted to an owned
 pre-cutover conversion target while the original SQLite instance is running;
 it is not a production database reset command.
+
+The [Seerr host controller](../../scripts/seerr-run.mjs) prepares peers through
+native settings APIs, stops the old PostgreSQL NAS writer, and verifies the new
+TLS endpoint, existing API key, user/request counts and application/session
+identity. Radarr, Sonarr and Tautulli use the existing NAS DNS name and distinct
+published ports while they await their own migrations. Native API bodies omit
+read-only IDs and preserve integration keys/profiles/options.
+
+Only Seerr's non-database config tree received a named `k8s` ACL for SMB writes;
+ownership and unrelated appdata/media are unchanged. The initial settings-file
+grant is applied after native settings saves and after the old process stops,
+because Seerr replaces the file and narrows its inherited ACL mask. The original
+ACL preimage is private under `/root/.local/state/owl-red/seerr-host-migration`.
+
+The NAS PostgreSQL `Seerr` container is stopped with Docker restart disabled,
+retained with its definition for host rollback. To roll back hosting, set Fleet
+replicas to zero and wait for every Seerr pod to stop, then run
+`node scripts/seerr-run.mjs rollback`. It restores the old runtime user's
+non-database config access and starts the original PostgreSQL instance against
+the same current database. Do not restart the stale `Seerr-sqlite-rollback`
+container or enable two simultaneous writers. Original local migration copies
+and the stopped containers are recovery inputs, not independent backups.
 
 Longhorn is selected for database-safe single-writer volumes. Ordinary config
 files remain live on NAS `appdata` over SMB. Split database state onto a block
