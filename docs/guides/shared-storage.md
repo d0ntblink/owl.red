@@ -307,19 +307,25 @@ This storage attachment does not migrate VM disks or provide shared-disk HA.
 
 ## Initial Application Migration
 
-FlareSolverr is the first selected CPU-only migration. Its Fleet bundle pins
+FlareSolverr is the first completed CPU-only migration. Its Fleet bundle pins
 upstream `v3.5.2`, matching the NAS service version, with non-root execution and
 bounded CPU/memory. Browser state is ephemeral; this service does not place a
 SQLite database on SMB or need media mounts. Its private endpoint is
 `http://flaresolverr.owl.red:8191` at `10.0.10.202`, restricted to the NAS source
 address. There is no browser WebUI or public ingress.
 
-Before switching Prowlarr, validate the new service from the NAS, create/destroy
-a disposable browser session, and test its existing proxy using Prowlarr's
-supported API. Capture the private proxy preimage and change only its host.
-Then stop the old owned NAS container and disable its restart policy, retaining
-its data and definition for rollback. For rollback, start the old container and
-restore the proxy host `http://flaresolverr:8191` through the same native API.
+The service passed NAS reachability, disposable browser-session creation and
+Prowlarr's native proxy test. Prowlarr proxy `4` now uses the DNS endpoint; its
+other settings were preserved. The old NAS container is stopped with Docker's
+restart policy disabled; its files and container definition remain for rollback.
+Do not manually start it or re-enable it in Unraid's boot autostart list as an
+unreviewed second instance.
+
+Use `node scripts/flaresolverr-run.mjs plan` or `verify` for inspection. `apply`
+performs the guarded browser/proxy tests and native consumer switch. Private
+preimages remain under `/root/.local/state/owl-red/flaresolverr-migration` on
+the NAS. `rollback` starts the old container and restores the proxy host
+`http://flaresolverr:8191` through the native API. No application data is deleted.
 
 Librespeed has an external PostgreSQL dependency; Tautulli, Seerr and Arr apps
 have persistent state requiring application-specific database/storage checks.
