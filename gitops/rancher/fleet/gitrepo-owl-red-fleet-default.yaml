@@ -18,6 +18,7 @@ spec:
     - gitops/bitwarden-secrets
     - gitops/csi-smb
     - gitops/longhorn
+    - gitops/longhorn-config
     - gitops/home-assistant
     - gitops/open-webui
     - gitops/flaresolverr

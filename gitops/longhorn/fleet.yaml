@@ -1,4 +1,7 @@
 defaultNamespace: longhorn-system
+namespaceLabels:
+  pod-security.kubernetes.io/enforce: privileged
+  pod-security.kubernetes.io/enforce-version: v1.31
 helm:
   releaseName: longhorn
   disablePreProcess: true
