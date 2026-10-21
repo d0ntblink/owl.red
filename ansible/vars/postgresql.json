@@ -9,6 +9,13 @@
     "admin_password_secret": "home-assistant__postgres__admin-password"
   },
   "applications": {
+    "openwebui": {
+      "database": "openwebui",
+      "role": "openwebui",
+      "password_secret": "k8s__open-webui__postgres__password",
+      "url_secret": "k8s__open-webui__postgres__db-url",
+      "kubernetes_namespace": "open-webui"
+    },
     "homeassistant": {
       "database": "homeassistant",
       "role": "homeassistant",

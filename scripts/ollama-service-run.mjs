@@ -1,0 +1,136 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { randomBytes, X509Certificate, createPrivateKey } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
+
+process.umask(0o077);
+const home = os.homedir();
+const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const phase = process.argv[2] || 'plan';
+const ensure = (condition, message) => { if (!condition) throw new Error(message); };
+function execute(program, args, options = {}) {
+  const result = spawnSync(program, args, { cwd: repository, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024, ...options });
+  if (result.status !== 0) {
+    const directory = fs.mkdtempSync(path.join(home, '.local/state/owl-red/ollama-service-'));
+    fs.writeFileSync(path.join(directory, 'failure.log'), (result.stdout || '') + (result.stderr || ''), { mode: 0o600 });
+    throw new Error('Service operation failed; private diagnostics: ' + directory);
+  }
+  return result.stdout.trim();
+}
+async function secretWorker() {
+  let text = '';
+  for await (const chunk of process.stdin) text += chunk;
+  const request = JSON.parse(text);
+  const require = createRequire(import.meta.url);
+  const sdk = require(path.join(home, '.local/share/owl-red/tools/bitwarden-sdk/node_modules/@bitwarden/sdk-napi'));
+  const client = new sdk.BitwardenClient(undefined, 4);
+  await client.auth().loginAccessToken(request.token);
+  const organization = '202b0b27-b135-44cd-a969-b43a003ad670';
+  const project = '89090d54-807a-4168-b063-b43a004ba0c1';
+  const existing = (await client.secrets().list(organization)).data;
+  async function entry(key, value) {
+    const matches = existing.filter(secret => secret.key === key);
+    ensure(matches.length <= 1, 'Duplicate service credential.');
+    if (matches.length) return client.secrets().get(matches[0].id);
+    ensure(request.create, 'Service credentials have not been prepared.');
+    return client.secrets().create(organization, key, value(), 'Open WebUI / Ollama private service credential; preserve existing value.', [project]);
+  }
+  const backend = await entry('ollama__api-token', () => randomBytes(32).toString('hex'));
+  const session = await entry('open-webui__secret-key', () => randomBytes(32).toString('hex'));
+  const admin = await entry('open-webui__admin-password', () => randomBytes(24).toString('base64url'));
+  const apiConfigs = await entry('open-webui__ollama-api-configs', () => JSON.stringify({ 0: { enable: true, key: backend.value, auth_type: 'bearer' } }));
+  ensure(JSON.parse(apiConfigs.value)['0'].key === backend.value, 'Stored backend API config differs; rotation refused.');
+  process.stdout.write(JSON.stringify({ backend, session, admin, apiConfigs }));
+}
+async function main() {
+  ensure(['prepare', 'plan', 'apply', 'verify'].includes(phase), 'Use prepare, plan, apply or verify.');
+  const config = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/llm.json'), 'utf8'));
+  ensure(config.host === '10.0.10.5' && config.model_directory === '/mnt/ssd/appdata/llm-models', 'Unexpected GPU/storage target.');
+  ensure(config.image === 'ollama/ollama:0.40.7@sha256:2e6cc92ffa43b4b1a2e70e315407e00ac97ec125afc71277d73c7efe01c4f31b', 'Use the qualified backend image.');
+  const stored = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
+  const secrets = JSON.parse(execute(process.execPath, [fileURLToPath(import.meta.url), '--secret-worker'], { input: JSON.stringify({ token: stored.BWS_ACCESS_TOKEN, create: ['prepare', 'apply'].includes(phase) }) }));
+  if (phase === 'prepare') {
+    console.log(JSON.stringify(Object.fromEntries(Object.entries(secrets).map(([name, secret]) => [name, { key: secret.key, id: secret.id }])), null, 2));
+    return;
+  }
+  const tls = JSON.parse(execute('kubectl', ['-n', 'home-assistant', 'get', 'secret', 'frigate-tls', '-o', 'json']));
+  const certificate = Buffer.from(tls.data['tls.crt'], 'base64').toString();
+  const privateKey = Buffer.from(tls.data['tls.key'], 'base64').toString();
+  const identity = new X509Certificate(certificate);
+  ensure(identity.checkHost('nas.owl.red') && identity.checkPrivateKey(createPrivateKey(privateKey)) && Date.parse(identity.validTo) > Date.now() + 7 * 86400000, 'A valid NAS TLS identity is required.');
+  const nginx = `events {}\nhttp {\n access_log off;\n server {\n  listen 8443 ssl;\n  ssl_certificate /tls/fullchain.pem;\n  ssl_certificate_key /tls/privkey.pem;\n  client_max_body_size 1m;\n  if ($http_authorization != "Bearer ${secrets.backend.value}") { return 401; }\n  location / {\n   proxy_pass http://ollama:11434;\n   proxy_set_header Authorization "";\n   proxy_http_version 1.1;\n   proxy_buffering off;\n   proxy_read_timeout 600s;\n  }\n }\n}\n`;
+  const payload = { phase, config, nginx, certificate, privateKey };
+  const php = String.raw`<?php
+ini_set('zend.exception_ignore_args','1');
+set_exception_handler(function($error){$directory='/root/.local/state/owl-red/ollama-service-'.bin2hex(random_bytes(6));mkdir($directory,0700,true);file_put_contents($directory.'/failure.log',$error->getMessage());chmod($directory.'/failure.log',0600);file_put_contents('php://stderr','Private NAS diagnostics: '.$directory.PHP_EOL);exit(1);});
+$request=json_decode(base64_decode('REQUEST'),true,512,JSON_THROW_ON_ERROR);$config=$request['config'];
+function check($condition,$message){if(!$condition)throw new RuntimeException($message);}
+function run($args){$process=proc_open($args,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);fclose($pipes[0]);$output=stream_get_contents($pipes[1]);fclose($pipes[1]);$error=stream_get_contents($pipes[2]);fclose($pipes[2]);check(proc_close($process)===0,'Native command failed: '.($args[0]??'unknown'));return trim($output);}
+check(trim(run(['findmnt','-n','-o','TARGET','--target','/mnt/ssd']))==='/mnt/ssd','Model SSD is not mounted');
+check(is_file($config['model_directory'].'/.owl-red-llm'),'Existing model ownership marker is required');
+$lock=fopen('/var/run/owl-red-llm.lock','c');check(flock($lock,LOCK_EX|LOCK_NB),'An inference job is already running');
+check(trim(run(['docker','ps','-a','--filter','label=owl.red.component=llm-ephemeral','--format','{{.Names}}']))==='','Temporary inference workers are still present');
+$base='/mnt/ssd/appdata/ollama-service';if(file_exists($base))check(is_dir($base)&&!is_link($base)&&is_file($base.'/.owl-red-ollama'),'Unmanaged service directory; adoption refused');
+$expected=['ollama'=>'ollama','ollama-https'=>'ollama-proxy'];$present=[];
+foreach($expected as $name=>$component){$raw=run(['docker','ps','-a','--filter','name=^/'.$name.'$','--format','{{json .}}']);if($raw){$actual=json_decode(run(['docker','inspect',$name]),true)[0];check(($actual['Config']['Labels']['owl.red.component']??'')===$component,'Unmanaged container; adoption refused');$present[$name]=$actual;}}
+if($request['phase']==='plan'){echo json_encode(['backendExists'=>isset($present['ollama']),'proxyExists'=>isset($present['ollama-https']),'rawBackendPublished'=>false,'keepAlive'=>0]).PHP_EOL;exit(0);}
+if($request['phase']==='apply'){
+ if(!is_dir($base)){mkdir($base,0700,true);file_put_contents($base.'/.owl-red-ollama','ollama-service');}
+ $values=['nginx.conf'=>$request['nginx'],'fullchain.pem'=>$request['certificate'],'privkey.pem'=>$request['privateKey']];
+ foreach($values as $filename=>$value){$destination=$base.'/'.$filename;if(is_file($destination))check(file_get_contents($destination)===$value,'Service configuration changed; reviewed update required');else{file_put_contents($destination,$value);chmod($destination,0600);}}
+ $network=run(['docker','network','ls','--filter','name=^owl-llm$','--format','{{.Name}}']);if(!$network)run(['docker','network','create','--internal','--label','owl.red.component=llm-network','owl-llm']);
+ else check((json_decode(run(['docker','network','inspect','owl-llm']),true)[0]['Labels']['owl.red.component']??'')==='llm-network','Unmanaged network; adoption refused');
+ if(!isset($present['ollama']))run(['docker','run','-d','--name','ollama','--restart','unless-stopped','--label','owl.red.component=ollama','--network','owl-llm','--runtime','nvidia','--gpus','all','--cpus','2','--memory','6144m','--cap-drop','ALL','--security-opt','no-new-privileges:true','--log-opt','max-size=10m','--log-opt','max-file=2','-e','OLLAMA_HOST=0.0.0.0:11434','-e','OLLAMA_KEEP_ALIVE=0','-e','OLLAMA_NUM_PARALLEL=1','-e','OLLAMA_MAX_LOADED_MODELS=1','-e','OLLAMA_MAX_QUEUE=8','-e','OLLAMA_CONTEXT_LENGTH=4096','-e','OLLAMA_NO_CLOUD=1','-v',$config['model_directory'].':/root/.ollama',$config['image']]);
+ if(!isset($present['ollama-https'])){
+  check(trim(run(['docker','ps','--filter','publish=11434','--format','{{.Names}}']))==='','HTTPS backend port is in use');
+  run(['docker','run','--rm','--network','owl-llm','-v',$base.'/nginx.conf:/etc/nginx/nginx.conf:ro','-v',$base.':/tls:ro','nginx:1.28.1-alpine@sha256:52e3ada4d978443601f286cc2f9e7b95c82aa3ad5a78ce9c6b94ce00258e68cc','nginx','-t']);
+  run(['docker','run','-d','--name','ollama-https','--restart','unless-stopped','--label','owl.red.component=ollama-proxy','--network','owl-llm','--cpus','0.25','--memory','128m','--cap-drop','NET_RAW','--security-opt','no-new-privileges:true','--log-opt','max-size=10m','--log-opt','max-file=2','-v',$base.'/nginx.conf:/etc/nginx/nginx.conf:ro','-v',$base.':/tls:ro','-p','10.0.10.5:11434:8443','nginx:1.28.1-alpine@sha256:52e3ada4d978443601f286cc2f9e7b95c82aa3ad5a78ce9c6b94ce00258e68cc']);
+ }
+ $proxyNetwork=run(['docker','network','ls','--filter','name=^owl-llm-proxy$','--format','{{.Name}}']);
+ if(!$proxyNetwork)run(['docker','network','create','--label','owl.red.component=llm-proxy-network','owl-llm-proxy']);
+ else check((json_decode(run(['docker','network','inspect','owl-llm-proxy']),true)[0]['Labels']['owl.red.component']??'')==='llm-proxy-network','Unmanaged proxy network; adoption refused');
+ $proxy=json_decode(run(['docker','inspect','ollama-https']),true)[0];
+ if(!isset($proxy['NetworkSettings']['Networks']['owl-llm-proxy']))run(['docker','network','connect','owl-llm-proxy','ollama-https']);
+ echo json_encode(['backendStarted'=>true,'rawBackendPublished'=>false,'httpsProxy'=>'https://nas.owl.red:11434','keepAlive'=>0]).PHP_EOL;
+}
+`;
+  console.log(execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=5', 'root@10.0.10.5', 'php'], { input: php.replace('REQUEST', Buffer.from(JSON.stringify(payload)).toString('base64')) }));
+  if (phase === 'apply' || phase === 'verify') {
+    const endpoint = 'https://nas.owl.red:11434';
+    const unauthenticated = await fetch(endpoint + '/api/tags', { signal: AbortSignal.timeout(15000) });
+    ensure(unauthenticated.status === 401, 'Unauthenticated backend access was not denied.');
+    const response = await fetch(endpoint + '/api/tags', { headers: { Authorization: 'Bearer ' + secrets.backend.value }, signal: AbortSignal.timeout(15000) });
+    ensure(response.ok, 'Authenticated backend request failed.');
+    const models = await response.json();
+    ensure(Object.values(config.profiles).every(profile => models.models.some(model => model.name === profile.model && model.digest === profile.digest)), 'Expected pinned models are missing.');
+    console.log(JSON.stringify({ httpsVerified: true, unauthenticatedDenied: true, pinnedModelsAvailable: true }));
+    if (phase === 'verify') {
+      const headers = { Authorization: 'Bearer ' + secrets.backend.value, 'Content-Type': 'application/json' };
+      const gpu = () => Number(execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits']));
+      const inspect = () => JSON.parse(execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'docker inspect --format \'{{json .State}}\' ollama']));
+      const before = gpu();
+      const daemon = inspect();
+      const generation = await fetch(endpoint + '/api/generate', { method: 'POST', headers, body: JSON.stringify({ model: config.model, prompt: 'Explain why a three-day event recording retention policy is not a hard storage quota. Use a concise paragraph.', stream: true, keep_alive: 0, options: { num_ctx: 4096, num_predict: 160, temperature: 0.1 } }), signal: AbortSignal.timeout(180000) });
+      ensure(generation.ok, 'Persistent model inference failed.');
+      const during = await fetch(endpoint + '/api/ps', { headers, signal: AbortSignal.timeout(10000) }).then(response => response.json());
+      ensure(during.models.some(model => model.size_vram > 0), 'GPU model loading was not observed.');
+      let output = '';
+      for await (const chunk of generation.body) output += Buffer.from(chunk).toString();
+      const completion = output.trim().split('\n').map(line => JSON.parse(line));
+      ensure(completion.at(-1)?.done && completion.some(item => item.response?.trim()), 'Inference did not complete.');
+      const loaded = await fetch(endpoint + '/api/ps', { headers, signal: AbortSignal.timeout(10000) }).then(response => response.json());
+      const after = gpu();
+      const current = inspect();
+      ensure(loaded.models.length === 0 && after <= before + 32 && current.Running && daemon.Pid === current.Pid, 'Persistent-daemon GPU release check failed.');
+      console.log(JSON.stringify({ inferenceCompleted: true, gpuInferenceObserved: true, beforeMiB: before, afterMiB: after, loadedModelsAfter: 0, daemonStayedRunning: true }));
+    }
+  }
+}
+try {
+  if (phase === '--secret-worker') await secretWorker();
+  else await main();
+} catch (error) { console.error(phase === '--secret-worker' ? 'Private service credential operation failed; output withheld.' : error.message); process.exitCode = 1; }
