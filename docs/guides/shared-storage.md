@@ -336,6 +336,38 @@ VPN isolation remain correct. GPU apps remain on the NAS.
 
 ## Longhorn Database Volumes
 
+Prefer the existing shared PostgreSQL service where the application supports it
+and a verified migration preserves existing state. Use an isolated database/role
+per app. Seerr `3.5.0` supports PostgreSQL and documents a specific pgloader build
+for SQLite conversion; it must not start against an empty replacement database
+as a substitute for transferring users and request history. Longhorn is reserved
+for applications that still require file-based database storage.
+
+Seerr's database stage is complete: version `3.5.0` now uses its isolated `seerr`
+PostgreSQL database/role, with a two-connection pool. All 14 application table
+counts and 36 users matched the consistent SQLite copy, including account and
+credential fields. The existing authenticated API key passed after restart.
+Seerr still runs on the NAS at this checkpoint; moving its container to Kubernetes
+is a separate cutover. Settings/logs remain in the existing NAS `appdata/seerr`.
+
+The [Seerr database controller](../../scripts/seerr-db-run.mjs) has `plan`,
+`prepare`, `apply` and `verify` phases. It uses the exact pinned app image and
+upstream-recommended pgloader build, never a custom cross-database importer.
+Preparation uses SQLite's online backup API, not a copy of an actively written
+database file. Final apply stops the old writer and repeats conversion/checks.
+PostgreSQL's native migration-history table is retained; SQLite's `migrations`
+table must not overwrite it. Existing application data is otherwise transferred.
+
+Private snapshots, conversion logs and runtime credentials are under
+`/mnt/ssd/appdata/seerr-postgres-migration`, mode-restricted and not committed.
+They are migration/recovery inputs, not independent backups. Do not print their
+contents. The stopped `Seerr-sqlite-rollback` container and original SQLite files
+are retained, but are stale after new PostgreSQL writes: do not start them as an
+automatic rollback after acceptance or run both writers. A later rollback must
+preserve any new PostgreSQL data first. `reset-target` is restricted to an owned
+pre-cutover conversion target while the original SQLite instance is running;
+it is not a production database reset command.
+
 Longhorn is selected for database-safe single-writer volumes. Ordinary config
 files remain live on NAS `appdata` over SMB. Split database state onto a block
 volume only where the application supports a separate path or a qualified mount

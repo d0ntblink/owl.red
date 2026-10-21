@@ -9,6 +9,13 @@
     "admin_password_secret": "home-assistant__postgres__admin-password"
   },
   "applications": {
+    "seerr": {
+      "database": "seerr",
+      "role": "seerr",
+      "password_secret": "k8s__seerr__postgres__password",
+      "url_secret": "k8s__seerr__postgres__db-url",
+      "kubernetes_namespace": "seerr"
+    },
     "openwebui": {
       "database": "openwebui",
       "role": "openwebui",
