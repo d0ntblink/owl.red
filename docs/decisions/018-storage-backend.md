@@ -32,6 +32,15 @@ silently move all configuration away from `appdata`, or present Longhorn
 backups as an editable live configuration tree. Applications that cannot safely
 separate these paths require an explicit per-app decision before migration.
 
+Database preference (2026-10-21): use the existing shared PostgreSQL service
+when an application natively supports it and its existing data can be migrated
+safely. Give each app a separate database, nonprivileged role and private
+credentials. Longhorn is the fallback for apps that require a file-based
+database, not the default destination for every SQLite database. Changing
+`DB_TYPE` alone is not a data migration; preserve users, history and integration
+state and qualify the conversion before switching the running app. Ordinary
+configuration remains live in NAS `appdata` in either case.
+
 Longhorn replicas must use suitable node-local storage on different physical
 Proxmox hosts, not SMB-mounted replica directories. Talos system extensions,
 mount propagation, resource capacity and safe single-writer failover must be

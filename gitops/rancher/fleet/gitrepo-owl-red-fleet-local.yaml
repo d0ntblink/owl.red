@@ -22,5 +22,6 @@ spec:
     - gitops/home-assistant
     - gitops/open-webui
     - gitops/flaresolverr
+    - gitops/seerr
     - gitops/pdm
     - gitops/platform-resilience
