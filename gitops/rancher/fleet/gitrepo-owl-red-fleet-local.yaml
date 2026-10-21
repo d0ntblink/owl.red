@@ -23,5 +23,6 @@ spec:
     - gitops/open-webui
     - gitops/flaresolverr
     - gitops/seerr
+    - gitops/qbittorrent
     - gitops/pdm
     - gitops/platform-resilience
