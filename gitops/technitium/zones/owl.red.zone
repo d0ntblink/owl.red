@@ -1,7 +1,7 @@
 $ORIGIN owl.red.
 $TTL 300
 @ IN SOA ns1.owl.red. hostmaster.owl.red. (
-  2026102101 ; serial (update on every record change)
+  2026102102 ; serial (update on every record change)
   3600       ; refresh
   600        ; retry
   1209600    ; expire
@@ -15,6 +15,7 @@ rancher         IN A 10.0.10.201
 home            IN A 10.0.10.201
 ha              IN A 10.0.10.201
 ai              IN A 10.0.10.201
+nvr             IN A 10.0.10.201
 traefik         IN A 10.0.10.201
 edge            IN A 10.0.10.1
 switch          IN A 10.0.10.2
