@@ -1,0 +1,32 @@
+{
+  "host": "10.0.10.5",
+  "container_name": "frigate",
+  "image": "ghcr.io/blakeblackshear/frigate:0.18.2-tensorrt@sha256:1cafb6ebbaff0aaf275cc3f31951bcf7e29f3989f18a10ba9565091367d8736c",
+  "config_directory": "/mnt/ssd/appdata/frigate",
+  "recordings_directory": "/mnt/cache/frigate",
+  "minimum_recordings_free_gib": 100,
+  "retention_days": 3,
+  "recording_cache_mib": 512,
+  "shared_memory_mib": 512,
+  "memory_limit_mib": 3072,
+  "cpus": 3,
+  "authenticated_port": 8971,
+  "tls_hostname": "nas.owl.red",
+  "tls_secret": "frigate-tls",
+  "admin_password_secret_key": "frigate__admin-password",
+  "detector": "openvino_cpu",
+  "cameras": {
+    "foyer": {
+      "enabled": false,
+      "host": "10.0.40.12",
+      "onvif_port": 80,
+      "credential_secret_id": "0e38c95a-79cb-4700-b015-b4e801443d54"
+    },
+    "office": {
+      "enabled": true,
+      "host": "10.0.40.13",
+      "onvif_port": 80,
+      "credential_secret_id": "7e8e9e5b-6f83-46fb-840b-b4e801443d91"
+    }
+  }
+}

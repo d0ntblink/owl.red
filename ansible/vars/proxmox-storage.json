@@ -1,0 +1,19 @@
+{
+  "cluster": "owl-red",
+  "coordinator": "10.0.10.3",
+  "storage_id": "nas-isos",
+  "server": "10.0.10.5",
+  "share": "isos",
+  "username": "pve",
+  "password_secret_key": "proxmox__nas-isos__password",
+  "content": ["iso", "vztmpl"],
+  "content_dirs": "iso=template/iso,vztmpl=template/cache",
+  "nodes": {
+    "edge": "10.0.10.3",
+    "storage": "10.0.10.4",
+    "cp1": "10.0.10.11",
+    "cp2": "10.0.10.12",
+    "cp3": "10.0.10.13",
+    "worker1": "10.0.10.14"
+  }
+}
