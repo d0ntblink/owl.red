@@ -16,6 +16,88 @@ production media files, placement and access/export policy unchanged.
 > Short-term that's fine (simple, works today); medium-term, cluster-native HA storage (Longhorn) removes
 > the SPOF. See [ADR 018](../decisions/018-storage-backend.md).
 
+## Frigate Event Storage Plan
+
+For the two existing cameras, use three-day event recording retention on local
+SSD storage, not the array. This is the selected design, not a deployed Frigate
+instance. Qualify the available SSD capacity, GPU/backend compatibility and
+recording bitrate before provisioning it.
+
+The prospective limits and camera references are in the
+[Frigate target registry](../../ansible/vars/frigate.json). It is a draft input,
+not a deployment command or a validated running configuration. Require stable
+wired management access to PVE, Kubernetes and NAS throughout provisioning;
+do not loosen client-network firewall policy to compensate for lost access.
+Resolve and pin the image digest after the pull, then validate the rendered
+configuration and detector against that exact image before starting a recorder.
+
+Video decoding and object detection are separate compatibility gates. Do not
+assume current NVIDIA TensorRT supports the GTX 1060 merely because its driver
+can decode video. Qualify the proposed small OpenVINO CPU detector, low-resolution
+camera stream and NVIDIA decoding independently, without upgrading the host
+driver or changing PCI passthrough as an implicit prerequisite.
+
+- Use a bounded RAM-backed `/tmp/cache` for Frigate's temporary recording
+   segments. Recording streams are processed continuously; only segments matching
+   the retention policy are retained on SSD. RAM cache is transient, not a place
+   to retain the three days of recordings.
+- Keep Frigate's configuration and SQLite database on a qualified local SSD
+   filesystem. Keep retained recordings on an SSD-only location with no automatic
+   Mover transfer to the array. Do not change existing production media shares.
+- Configure three-day retention for the intended alert/detection recording
+   categories and review snapshots separately. Validate that no longer general
+   retention rule overrides the intended event expiry.
+- Monitor real free space and preserve headroom for other applications. A
+   three-day policy does not impose a hard storage quota or protect against a
+   busy scene filling a shared SSD.
+
+### Keep An Event Longer
+
+Use Frigate's existing UI rather than moving its internal recording segments:
+
+1. Before the footage expires, open its review item or the relevant time range
+    in History and select **Export**. Choose a normal-speed video clip when a
+    timelapse is not wanted.
+2. Find the completed clip under **Exports**. Exported clips are separate from
+    ordinary recordings and are not deleted by the three-day recording policy.
+3. Leave it on SSD or download it for longer-term storage. Exports remain until
+    explicitly deleted; inspect their usage so saved clips do not fill the pool.
+4. If archiving elsewhere, verify the downloaded/copied clip before removing
+    the SSD export through Frigate. Do not relocate raw recording segments or
+    edit its database to work around retention.
+
+Exporting a clip creates an additional file; it is not a zero-space pin of the
+existing footage or automatic protection against SSD failure. A future
+dedicated archive destination can be selected separately. Camera SD recording
+and automatic SD-to-Frigate imports are not part of this design. No new camera
+or storage hardware is required merely to use the native Export UI.
+
+Reference: [Frigate recording and exports](https://docs.frigate.video/configuration/record/).
+
+## On-Demand Text Summarizer Plan
+
+Use one small quantized text model for concise structured context and daily
+briefings. Keep the API private and authenticated. This service is not deployed;
+model, engine and CUDA-image selection remain qualification work.
+
+- Allow one inference job at a time with bounded input context, output tokens
+   and runtime. Offer brief and careful modes using the same model; a careful
+   mode may add a fact-checking pass, but slower execution is not an accuracy
+   guarantee.
+- Keep model downloads on SSD, not in the RAM recording cache. A model's disk
+   size is not its runtime VRAM requirement; measure weights, context cache and
+   runtime overhead alongside the other GPU consumers.
+- Prefer a per-job inference worker that exits on completion, cancellation or
+   timeout. Verify GPU allocations return to the pre-job baseline; do not claim
+   an idle API process proves the model has unloaded.
+- Evaluate a supported existing engine rather than implementing inference.
+   Ollama's `keep_alive: 0` is an alternative unloading mechanism, not a GPU
+   reservation or priority guarantee. Avoid an always-loaded model.
+- Keep the GTX 1060 in its existing guest and share it only through qualified
+   container runtimes. Do not change passthrough, reset the GPU or upgrade host
+   drivers to work around an incompatible image. Measure Frigate/Plex impact
+   before accepting simultaneous operation.
+
 ## Observed NAS Baseline (2026-10-18)
 
 Read-only SSH inspection at `2026-10-18T18:50:53Z` reached `nas` at

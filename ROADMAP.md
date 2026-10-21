@@ -48,6 +48,14 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
   Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
+- [ ] Deploy Frigate for the two cameras after hardware qualification: bounded
+  RAM recording cache, SSD-only three-day event retention and native UI exports
+  for footage kept longer; verify storage headroom and cleanup without changing
+  production media or adding a custom camera-SD recording pipeline.
+- [ ] Activate the Open WebUI Fleet bundle and internal DNS, complete owner/API
+  onboarding, and verify a WebUI request releases GPU memory without restarting
+  persistent Ollama. Review native model presets and the shared-GPU behavior
+  alongside Frigate/Plex before accepting broader use.
 - [ ] Inventory remaining NAS applications and migrate selected services:
   Plex, Arr applications, qBittorrent, slskd, Seer, Tautulli, Reclaimerr,
   speedtest-tracker, Librespeed and FlareSolverr. Preserve application identity,
