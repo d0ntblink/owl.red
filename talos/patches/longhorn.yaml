@@ -12,4 +12,4 @@ machine:
         source: /var/mnt/longhorn
         options: [bind, rshared, rw]
   nodeLabels:
-    longhorn.io/create-default-disk: "true"
+    node.longhorn.io/create-default-disk: "true"
