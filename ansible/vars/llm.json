@@ -20,10 +20,12 @@
   "memory_limit_mib": 6144,
   "cpus": 2,
   "service": {
-    "image": "d0ntblink/open-webui-ollama:sha-c704c63072fa0a896c3f9a1bf10c1f4326c0b3e6@sha256:ff9af4f31de06b413c746518b4701e3884ab37cd31013a2748a6e878f76dccc8",
+    "image": "d0ntblink/open-webui-ollama:sha-c7714779bc938fba694dd6a1aa1b8b4706801160@sha256:6050e4dc6052d095b115355927f8125ec5f161ee47beea9e5d1c2065a266eb99",
     "data_directory": "/mnt/ssd/appdata/open-webui-data-pvc-7089f40d-0c25-42bf-b72d-208ebb578e53",
     "configuration_directory": "/mnt/ssd/appdata/open-webui-service",
-    "https_port": 11436
+    "https_port": 11436,
+    "webui": "https://ai.owl.red",
+    "icon": "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/png/open-webui.png"
   },
   "modes": {
     "brief": {"output_tokens": 160, "passes": 1},
