@@ -36,6 +36,7 @@ if($phase==='prepare'){
 check(is_file($directory.'/baseline.json'),'Private migration baseline missing');
 if($phase==='stop'){check($container['State']['Running'],'Original service already stopped; inspect state before retry');run(['docker','update','--restart','no','Seerr']);run(['docker','stop','--time','60','Seerr']);run(['setfacl','-m','u:k8s:rw',$configFile]);echo json_encode(['oldPostgresContainerStopped'=>true,'configAndDatabaseUnchanged'=>true]).PHP_EOL;exit(0);}
 if($phase==='rollback'){
+ $root='/mnt/user/appdata/seerr';$iterator=new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),fn($entry)=>!$entry->isLink()&&$entry->getPathname()!==$root.'/db'),RecursiveIteratorIterator::SELF_FIRST);foreach($iterator as $entry)run(['setfacl','-m',$entry->isDir()?'u:nobody:rwx':'u:nobody:rw',$entry->getPathname()]);
  if(!$container['State']['Running'])run(['docker','start','Seerr']);run(['curl','--fail','--silent','--retry','8','--retry-all-errors','--retry-max-time','60','--max-time','10',$old.'/api/v1/status']);$previous=json_decode(file_get_contents($directory.'/container-before.json'),true);run(['docker','update','--restart',$previous['HostConfig']['RestartPolicy']['Name'],'Seerr']);echo json_encode(['oldPostgresHostRestored'=>true,'databaseRevertedToSqlite'=>false]).PHP_EOL;exit(0);
 }
 if($phase==='verify'){
