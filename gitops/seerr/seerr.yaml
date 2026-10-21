@@ -39,7 +39,7 @@ metadata:
   name: seerr
   namespace: seerr
 spec:
-  replicas: 0
+  replicas: 1
   strategy: {type: Recreate}
   selector:
     matchLabels: {app.kubernetes.io/name: seerr}
