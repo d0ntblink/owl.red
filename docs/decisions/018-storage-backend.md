@@ -23,6 +23,22 @@ no driver, user, share permission or NAS service change is claimed.
 
 ## Context
 
+Owner amendment (2026-10-21): Longhorn is selected now for database-safe
+single-writer block volumes, subject to node/disk qualification and tested
+reattachment. Ordinary application configuration files remain live in the NAS
+`appdata` share over SMB. Database files use Longhorn only where the application
+supports a separate database directory or a qualified mount layout. Do not
+silently move all configuration away from `appdata`, or present Longhorn
+backups as an editable live configuration tree. Applications that cannot safely
+separate these paths require an explicit per-app decision before migration.
+
+Longhorn replicas must use suitable node-local storage on different physical
+Proxmox hosts, not SMB-mounted replica directories. Talos system extensions,
+mount propagation, resource capacity and safe single-writer failover must be
+qualified before moving production databases. Existing NAS config/data and
+media access remain unchanged during preparation. Node reboots and new-disk
+formatting require a scoped rollout review; they are not implicit app moves.
+
 HA / stateful workloads need shared storage: k8s PVCs (Home Assistant, *arr config, etc.),
 Proxmox CT/VM disks on shared storage so guests can **fail over between nodes** (e.g. PDM HA,
 ADR 011/§13), and general data. `nas.owl.red` (Unraid) is already the data hub (HBAs, ~42 TB).
