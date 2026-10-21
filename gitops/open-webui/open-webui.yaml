@@ -160,6 +160,8 @@ spec:
       middlewares:
         - name: administration-access
       services:
-        - {name: open-webui, port: 8080}
+        - {name: open-webui-nas, port: 11436, scheme: https, serversTransport: nas}
+  tls:
+    secretName: open-webui-tls
   tls:
     secretName: open-webui-tls
