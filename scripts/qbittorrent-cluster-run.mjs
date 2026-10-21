@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const phase = process.argv[2] || 'media-access';
-assert.ok(['media-access', 'prepare', 'stop', 'verify', 'peers', 'rollback'].includes(phase), 'Use media-access, prepare, stop, verify, peers or rollback.');
+assert.ok(['media-access', 'case-access', 'prepare', 'stop', 'verify', 'peers', 'rollback'].includes(phase), 'Use media-access, case-access, prepare, stop, verify, peers or rollback.');
 process.umask(0o077);
 const configuration = JSON.parse(fs.readFileSync(new URL('../ansible/vars/qbittorrent.json', import.meta.url), 'utf8'));
 const home = os.homedir();
@@ -22,7 +22,7 @@ const namespace = configuration.cluster.namespace;
 const deployment = configuration.cluster.deployment;
 const workload = JSON.parse(execute('kubectl', ['-n', namespace, 'get', 'deployment', deployment, '--ignore-not-found', '-o', 'json']) || 'null');
 const pods = JSON.parse(execute('kubectl', ['-n', namespace, 'get', 'pods', '-l', 'app.kubernetes.io/name=qbittorrent', '-o', 'json'])).items;
-if (['prepare', 'stop', 'rollback'].includes(phase)) {
+if (['case-access', 'prepare', 'stop', 'rollback'].includes(phase)) {
   assert.ok(!workload || (workload.spec.replicas === 0 && pods.length === 0), 'Pause the Fleet deployment and wait for all cluster application pods to disappear first.');
 }
 const request = { phase, configuration };
@@ -60,6 +60,16 @@ function authentication(){global $configuration;$fields=[];foreach(file($configu
 function baseline(){global $configuration;$torrents=[];foreach(api('/torrents/info') as $torrent)$torrents[$torrent['hash']]=array_intersect_key($torrent,array_flip(['save_path','category','tags','name','size']));ksort($torrents);return ['torrents'=>$torrents,'categories'=>api('/torrents/categories'),'preferences'=>api('/app/preferences'),'authentication'=>authentication()];}
 function grantConfig($root){global $directory;check(is_dir($root)&&!is_link($root),'Expected local appdata directory required');$name=basename($root);if(!is_file($directory.'/'.$name.'-acl-before.txt'))privateFile($directory.'/'.$name.'-acl-before.txt',run(['getfacl','-R','-p',$root]));$paths=[$root];foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::SELF_FIRST) as $entry)if(!$entry->isLink())$paths[]=$entry->getPathname();foreach($paths as $file){run(['setfacl','-m','u:k8s:rwX,u:nobody:rwX',$file]);if(is_dir($file))run(['setfacl','-m','d:u:k8s:rwx,d:u:nobody:rwx',$file]);}}
 if(!is_dir($directory))check(mkdir($directory,0700,true),'Private directory creation failed');
+if($phase==='case-access'){
+ $globalBefore=hash_file('sha256','/boot/config/share.cfg');$global=parse_ini_file('/boot/config/share.cfg',false,INI_SCANNER_RAW);check(in_array(strtolower($global['shareNFSEnabled']??''),['no','false','0'],true),'Global NFS must remain disabled');
+ foreach(['appdata','media'] as $name){$file='/boot/config/shares/'.$name.'.cfg';$original=parse_ini_file($file,false,INI_SCANNER_RAW);check(in_array($original['shareCaseSensitive']??'',['forced','yes'],true),'Unexpected existing case policy');$snapshot=$directory.'/'.$name.'-before-case.cfg';if(!is_file($snapshot))privateFile($snapshot,file_get_contents($file));
+  if($original['shareCaseSensitive']!=='yes')update(['changeShareSecurity'=>'Apply','shareName'=>$name,'shareExport'=>$original['shareExport'],'shareSecurity'=>$original['shareSecurity'],'shareCaseSensitive'=>'yes','shareVolsizelimit'=>$original['shareVolsizelimit']??'']);
+  $actual=parse_ini_file($file,false,INI_SCANNER_RAW);check($actual['shareCaseSensitive']==='yes','Case handling change did not persist');foreach($original as $key=>$value)if($key!=='shareCaseSensitive')check(($actual[$key]??null)===$value,'Unapproved share setting changed: '.$key);
+ }
+ check(hash_file('sha256','/boot/config/share.cfg')===$globalBefore,'Global share policy changed');
+ $root=$configuration['gateway_directory'];check(is_dir($root)&&!is_link($root)&&is_file($root.'/.owl-red-qbittorrent'),'Owned Gluetun directory required');$paths=[$root];foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::SELF_FIRST) as $entry)if(!$entry->isLink())$paths[]=$entry->getPathname();foreach($paths as $file)check(chown($file,'k8s'),'Scoped Gluetun ownership update failed');
+ echo json_encode(['caseMode'=>'ordinary-case-sensitive','shares'=>['appdata','media'],'existingFilenamesAndGrantsPreserved'=>true,'privateGluetunOwner'=>'k8s','mediaAndQbittorrentOwnershipChanged'=>false,'globalNfsStillDisabled'=>true]).PHP_EOL;exit(0);
+}
 if(in_array($phase,['prepare','stop'],true)){
  $current=container('qbittorrent');$gateway=container('gluetun');check($current['Config']['Image']===$configuration['image']&&$gateway['Config']['Image']===$configuration['gateway_image'],'Pinned NAS images differ');check($current['State']['Running']&&$gateway['State']['Running'],'NAS source pair must be running');
  if(!is_file($directory.'/containers-before.json'))privateFile($directory.'/containers-before.json',json_encode(['qbittorrent'=>$current,'gluetun'=>$gateway],JSON_THROW_ON_ERROR));
@@ -70,7 +80,7 @@ if(in_array($phase,['prepare','stop'],true)){
   run(['tar','-C',$configuration['config_directory'],'-czf',$directory.'/qBittorrent-before.tgz','qBittorrent']);chmod($directory.'/qBittorrent-before.tgz',0600);
  }
  $shared=$configuration['cluster']['shared_directory'];check(!file_exists($shared)||is_file($shared.'/.owl-red-shared'),'Unowned shared target directory');
- if(!is_dir($shared))check(mkdir($shared,0770,true),'Shared appdata creation failed');privateFile($shared.'/.owl-red-shared','qbittorrent-cluster');run(['cp','-a','/var/lib/docker/volumes/binhex-shared/_data/.',$shared.'/']);
+ if(!is_dir($shared))check(mkdir($shared,0770,true),'Shared appdata creation failed');privateFile($shared.'/.owl-red-shared','qbittorrent-cluster');run(['cp','-a','/var/lib/docker/volumes/binhex-shared/_data/.',$shared.'/']);check(chown($shared,'k8s'),'Owned shared directory access failed');
  foreach([$configuration['config_directory'],$configuration['gateway_directory'],$shared] as $root)grantConfig($root);
  echo json_encode(['phase'=>$phase,'nasPairStopped'=>$phase==='stop','scopedConfigAclPrepared'=>true,'sharedPathPreserved'=>true,'mediaOwnershipChanged'=>false]).PHP_EOL;exit(0);
 }

@@ -202,8 +202,8 @@ spec:
       containers:
         - name: qbittorrent
           image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
-          command: [/usr/bin/qbittorrent-nox]
-          args: [--profile=/config, --webui-port=8080]
+          command: [/bin/bash, -ec]
+          args: ["umask 000; exec /usr/bin/qbittorrent-nox --profile=/config --webui-port=8080"]
           env:
             - {name: HOME, value: /config}
             - {name: TZ, value: America/Edmonton}
