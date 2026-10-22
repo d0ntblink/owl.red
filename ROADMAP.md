@@ -59,9 +59,10 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
   persistent Ollama. Review native model presets and the shared-GPU behavior
   alongside Frigate/Plex before accepting broader use.
 - [ ] Inventory remaining NAS applications and migrate selected services:
-  Plex, Arr applications, slskd, Tautulli, Reclaimerr,
+  Arr applications, Bazarr, slskd with its Soularr consumer, Tautulli, Reclaimerr,
   speedtest-tracker and Librespeed. Preserve application identity,
-  state, media paths and any GPU requirements during each migration.
+  state and media paths during each migration. Keep Plex, Frigate, Open WebUI
+  and DiskSpeed/disk tooling on the NAS.
 - [ ] Choose a consistent certificate issuance/distribution method for
   off-cluster services and automate renewal through their configuration lanes.
 
