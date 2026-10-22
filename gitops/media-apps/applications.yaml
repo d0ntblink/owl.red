@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: {name: tautulli, namespace: media-apps}
 spec:
-  replicas: 0
+  replicas: 1
   strategy: {type: Recreate}
   selector:
     matchLabels: {app.kubernetes.io/name: tautulli}
@@ -52,7 +52,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: {name: reclaimerr, namespace: media-apps}
 spec:
-  replicas: 0
+  replicas: 1
   strategy: {type: Recreate}
   selector:
     matchLabels: {app.kubernetes.io/name: reclaimerr}
