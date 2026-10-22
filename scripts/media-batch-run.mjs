@@ -121,7 +121,7 @@ privateFile($directory.'/baseline.json',json_encode($baseline,JSON_THROW_ON_ERRO
       console.log(JSON.stringify({ application: name, ready: true, existingRowsPreserved: true, databaseStorage: 'longhorn-appdata', ordinaryConfig: 'NAS appdata' }));
     }
     console.log(ssh(common + String.raw`
-foreach($registry['applications'] as $app)check(!container($app)['State']['Running'],'NAS writer restarted');$baseline=json_decode(file_get_contents($directory.'/baseline.json'),true);check(hash_file('sha256',$registry['applications']['reclaimerr']['source_directory'].'/secrets.env')===$baseline['reclaimerr']['secretsHash'],'Reclaimerr session/encryption secrets changed');echo json_encode(['nasWritersStopped'=>true,'privateSecretsPreserved'=>true]).PHP_EOL;
+foreach($registry['applications'] as $app)check(run(['docker','ps','--quiet','--filter','name=^/'.$app['container'].'$'])==='','NAS writer restarted');$baseline=json_decode(file_get_contents($directory.'/baseline.json'),true);check(hash_file('sha256',$registry['applications']['reclaimerr']['source_directory'].'/secrets.env')===$baseline['reclaimerr']['secretsHash'],'Reclaimerr session/encryption secrets changed');echo json_encode(['nasWritersStopped'=>true,'privateSecretsPreserved'=>true]).PHP_EOL;
 `));
     return;
   }

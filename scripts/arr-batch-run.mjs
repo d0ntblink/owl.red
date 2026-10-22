@@ -147,7 +147,7 @@ $baseline['bazarr']['apiKey']=base64_decode('BAZARR_KEY');privateFile($directory
       assert.ok(JSON.parse(response), 'Native status endpoint did not return JSON.');
       console.log(JSON.stringify({ application: name, ready: true, existingApiKeyVerified: true, databaseStorage: 'longhorn-appdata' }));
     }
-    console.log(ssh(common + "foreach($registry['applications'] as $app)check(!source($app)['State']['Running'],'NAS writer restarted');echo json_encode(['allNasWritersStopped'=>true]).PHP_EOL;\n"));
+    console.log(ssh(common + "foreach($registry['applications'] as $app)check(run(['docker','ps','--quiet','--filter','name=^/'.$app['container'].'$'])==='','NAS writer restarted');echo json_encode(['allNasWritersStopped'=>true]).PHP_EOL;\n"));
     return;
   }
   if (phase === 'peers') {
