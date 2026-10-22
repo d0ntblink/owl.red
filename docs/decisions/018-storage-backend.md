@@ -19,7 +19,20 @@ Kubernetes NFS proposal. Retain per-PVC data and keep credentials in the private
 Bitwarden/Kubernetes secret lane. Backup/scanner identities are planned until
 their consumers exist. Reuse current root/PC identities. Follow the
 [no-fallback data-protection constraint](../guides/unraid-making-changes.md#no-fallback-operating-constraint);
-no driver, user, share permission or NAS service change is claimed.
+no driver, user, share permission or NAS service change was claimed by that
+initial decision.
+
+Scoped owner approval (2026-10-21): add the existing `k8s` identity to media's
+SMB write list, preserving `d0ntblink` and the existing secure/guest-read policy.
+Change only `appdata` and `media` from forced-lowercase SMB mode to ordinary
+case-sensitive mode, so existing mixed-case paths remain accessible without
+renaming files. Global NFS stays disabled and saved NFS export fields are
+unchanged. Media data, placement, ownership and ACLs are untouched. The private
+`appdata/gluetun` tree and the new `appdata/qbittorrent-shared` directory use
+the existing `k8s` owner so authenticated SMB can access them without making
+the VPN key public. This approval is not permission for unrelated share or
+media changes. The qBittorrent/Gluetun pod now uses retained static SMB claims
+for these paths and `/media`; both NAS source containers are stopped.
 
 ## Context
 

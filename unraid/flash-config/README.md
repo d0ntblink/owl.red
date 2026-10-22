@@ -61,7 +61,11 @@ Captured content was scanned (keyword + base64 sweeps) before saving. Handling:
 ### Per-share (`shares/*.cfg`)
 Originally 7 shares; 6 remain after the 2026-10-18 retirement. Each declares `shareUseCache`, `shareCachePool`, `shareExport`,
 `shareSecurity`, `shareWriteList`, NFS export fields. Example `appdata`:
-cache `only` on pool `ssd`, security `secure`, writelist `d0ntblink`.
+cache `only` on pool `ssd`, security `private`, writelist `d0ntblink,k8s`.
+The approved 2026-10-21 qBittorrent cluster migration also adds `k8s` to media's
+write list and changes only `appdata`/`media` from forced-lowercase names to
+ordinary case-sensitive names. Media remains SMB `secure`; guest access and
+saved NFS fields are unchanged, and NFS remains globally disabled.
 
 ### Docker (`docker.cfg`)
 Enabled; **folder** image at `/mnt/user/system/docker/` (20 GB); appdata
