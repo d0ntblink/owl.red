@@ -138,6 +138,9 @@ spec:
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 150
+      hostAliases:
+        - ip: 10.96.218.247
+          hostnames: [lidarr.arr.svc.cluster.local]
       tolerations:
         - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
       dnsPolicy: None

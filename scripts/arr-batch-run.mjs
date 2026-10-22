@@ -32,11 +32,12 @@ function source($app){$container=json_decode(run(['docker','inspect',$app['conta
 function summary($database){$result=$database->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");$tables=[];while($row=$result->fetchArray(SQLITE3_ASSOC)){$name=str_replace('"','""',$row['name']);$tables[$row['name']]=$database->querySingle('SELECT count(*) FROM "'.$name.'"');}return $tables;}
 function request($url,$key,$method='GET',$body=null){$handle=curl_init($url);curl_setopt_array($handle,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>45,CURLOPT_HTTPHEADER=>['Content-Type: application/json','X-Api-Key: '.$key]]);if($body!==null)curl_setopt($handle,CURLOPT_POSTFIELDS,json_encode($body));$output=curl_exec($handle);$status=curl_getinfo($handle,CURLINFO_HTTP_CODE);curl_close($handle);check($output!==false&&$status>=200&&$status<300,'Native API failed: '.parse_url($url,PHP_URL_PATH).' (HTTP '.$status.')');return $output!==''?json_decode($output,true):null;}
 `.replace('REGISTRY', Buffer.from(JSON.stringify(registry)).toString('base64'));
-function paused() {
+function paused(allowSeeder = false) {
   const deployments = JSON.parse(kubectl(['get', 'deployments', '-o', 'json'])).items;
   assert.equal(deployments.length, 7);
   assert.ok(deployments.every(deployment => deployment.spec.replicas === 0), 'All seven workloads must be paused.');
-  assert.equal(JSON.parse(kubectl(['get', 'pods', '-o', 'json'])).items.length, 0, 'No cluster writer or seeder may remain.');
+  const pods = JSON.parse(kubectl(['get', 'pods', '-o', 'json'])).items;
+  assert.ok(pods.every(pod => allowSeeder && pod.metadata.name === 'arr-batch-data-seed' && pod.metadata.labels['owl.red/migration'] === 'arr-batch'), 'No cluster application writer may remain.');
 }
 function bazarrSettings(yaml) {
   return JSON.parse(execute(path.join(repository, '.venv/bin/python'), ['-c', 'import json,sys,yaml; settings=yaml.safe_load(sys.stdin); print(json.dumps({"apiKey":settings["auth"]["apikey"]}))'], yaml));
@@ -85,15 +86,35 @@ $baseline['bazarr']['apiKey']=base64_decode('BAZARR_KEY');privateFile($directory
     return;
   }
   if (phase === 'seed') {
-    paused();
+    paused(true);
     const baseline = JSON.parse(ssh(common + "echo file_get_contents($directory.'/baseline.json');\n"));
     const name = 'arr-batch-data-seed';
     const pod = { apiVersion: 'v1', kind: 'Pod', metadata: { name, namespace: registry.namespace, labels: { 'owl.red/migration': 'arr-batch' } }, spec: { restartPolicy: 'Never', activeDeadlineSeconds: 900, automountServiceAccountToken: false, tolerations: [{ key: 'node-role.kubernetes.io/control-plane', operator: 'Exists', effect: 'NoSchedule' }], securityContext: { seccompProfile: { type: 'RuntimeDefault' } }, containers: [{ name: 'seed', image: 'tautulli/tautulli@sha256:a4323bc09b27e265e269d79421ed3eb795083ef988bb84788eba89e5738c8005', command: ['/bin/sh', '-ec', 'exec tail -f /dev/null'], securityContext: { runAsUser: 0, allowPrivilegeEscalation: false, capabilities: { drop: ['ALL'], add: ['CHOWN', 'DAC_OVERRIDE', 'FOWNER'] } }, volumeMounts: Object.keys(registry.applications).map(name => ({ name, mountPath: '/seed/' + name })) }], volumes: Object.keys(registry.applications).map(name => ({ name, persistentVolumeClaim: { claimName: name + '-data' } })) } };
-    kubectl(['create', '-f', '-'], JSON.stringify(pod));
+    const existing = kubectl(['get', 'pod', name, '--ignore-not-found', '-o', 'json']);
+    if (existing) assert.equal(JSON.parse(existing).metadata.labels['owl.red/migration'], 'arr-batch');
+    else kubectl(['create', '-f', '-'], JSON.stringify(pod));
     kubectl(['wait', '--for=condition=Ready', 'pod/' + name, '--timeout=240s']);
     for (const [appName, app] of Object.entries(registry.applications)) {
-      const archive = ssh(common + "echo base64_encode(file_get_contents($directory.'/" + appName + "/data.tgz'));\n");
-      kubectl(['exec', '-i', name, '-c', 'seed', '--', '/bin/sh', '-ec', 'test ! -e /seed/' + appName + '/.owl-red-seeded; tar --no-same-owner -xzf - -C /seed/' + appName + '; chown -R 99:100 /seed/' + appName], Buffer.from(archive, 'base64'));
+      const marker = execute('kubectl', ['-n', registry.namespace, 'exec', name, '-c', 'seed', '--', '/bin/sh', '-c', 'if test -e /seed/' + appName + '/.owl-red-seeded; then echo seeded; else echo pending; fi']);
+      if (marker !== 'seeded') {
+        assert.match(appName, /^[a-z0-9-]+$/);
+        const directory = fs.mkdtempSync(path.join(home, '.local/state/owl-red/arr-transfer-'));
+        const archive = path.join(directory, 'data.tgz');
+        const output = fs.openSync(archive, 'wx', 0o600);
+        let copied;
+        try {
+          copied = spawnSync('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'cat ' + registry.private_directory + '/' + appName + '/data.tgz'], { stdio: ['ignore', output, 'pipe'], encoding: 'utf8' });
+        } finally { fs.closeSync(output); }
+        assert.equal(copied.status, 0, 'Archive download failed: ' + appName);
+        const input = fs.openSync(archive, 'r');
+        let restored;
+        try {
+          restored = spawnSync('kubectl', ['-n', registry.namespace, 'exec', '-i', name, '-c', 'seed', '--', '/bin/sh', '-ec', 'tar --no-same-owner -xzf - -C /seed/' + appName + '; chown -R 99:100 /seed/' + appName], { stdio: [input, 'pipe', 'pipe'], encoding: 'utf8' });
+        } finally { fs.closeSync(input); }
+        assert.equal(restored.status, 0, 'Database restore failed: ' + appName);
+        fs.unlinkSync(archive);
+        fs.rmdirSync(directory);
+      }
       for (const [file, expected] of Object.entries(baseline[appName].hashes)) {
         assert.ok(app.databases.includes(file));
         const actual = kubectl(['exec', name, '-c', 'seed', '--', 'sha256sum', '/seed/' + appName + '/' + file]).split(/\s+/)[0];
