@@ -369,7 +369,8 @@ preimages remain under `/root/.local/state/owl-red/flaresolverr-migration` on
 the NAS. `rollback` starts the old container and restores the proxy host
 `http://flaresolverr:8191` through the native API. No application data is deleted.
 
-Librespeed still has an obsolete external PostgreSQL endpoint to resolve.
+The selected CPU application moves are complete. PostgreSQL engine conversion
+for the Arr/Bazarr batch remains a separate deferred task.
 qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
 copy their config directories onto SMB and assume SQLite, locking, paths or
 VPN isolation remain correct. GPU apps remain on the NAS.
@@ -481,6 +482,42 @@ Native Unraid templates are fallback definitions, not permission to start
 retired writers. Baselines, container definitions, client preimages and the
 offline archive remain in `/root/.local/state/owl-red/qbittorrent-cluster`;
 they are not independent backups.
+
+## Fresh LibreSpeed
+
+The owner chose a fresh deployment instead of recovering the obsolete
+`postgresql14` telemetry setup. `https://librespeed.owl.red` now serves the
+maintained LinuxServer `v6.3.1-ls297` image pinned by digest in the
+[registry](../../ansible/vars/librespeed.json) and
+[Fleet workload](../../gitops/librespeed/librespeed.yaml). It uses one replica,
+verified Let's Encrypt HTTPS and the existing administration allowlist.
+Ordinary configuration remains live in the fresh NAS `appdata/librespeed-v2`
+directory through a retained SMB claim; no legacy config or telemetry is imported.
+
+The isolated `librespeed` PostgreSQL database and non-superuser role are owned
+by the shared database registry. A selectorless Service and Endpoints expose
+the existing NAS PostgreSQL service as `postgres:5432` inside this namespace,
+forwarding to NAS port `15432`. The application's native PHP DSN therefore
+needs no custom code or embedded port syntax. The bundled native schema was
+used, omitting only the PostgreSQL-9-era `default_with_oids` setting and a
+comment on the pre-existing extension, which are not needed by the app.
+
+The results-page password is stored in Bitwarden as
+`librespeed__stats-password`; runtime database and results credentials are
+mapped privately before startup and are not in Git. Native PHP verified the
+effective PostgreSQL backend, queried the telemetry table and inserted a row
+inside a transaction that was rolled back. The fresh table stayed empty.
+The frontend and `/backend/empty.php` returned HTTP 200 over verified HTTPS;
+no bandwidth benchmark or fake permanent telemetry record was needed.
+
+Use `node scripts/librespeed-run.mjs verify` for the scoped native database
+check. `prepare` and `retire` are guarded initial deployment operations, not
+data resets. The old NAS container and its Unraid template/autostart entry
+were retired after acceptance; old appdata remains separate and was not copied
+into the new service. Private legacy-definition/template preimages are under
+`/root/.local/state/owl-red/librespeed-fresh`, not independent backups.
+Plex, Frigate, Open WebUI/Ollama, shared PostgreSQL, DiskSpeed and DDNS stay on
+the NAS; the remaining selected applications now run on Kubernetes.
 
 ## Fresh Speedtest Tracker
 
