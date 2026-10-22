@@ -242,7 +242,9 @@ spec:
           args:
             - >-
               umask 0022;
-              exec /slskd/slskd --app-dir /app --vpn --vpn-port-forwarding
+              exec /slskd/slskd --app-dir /app --config /app/slskd.yml
+              --downloads /media/Downloads/slskd --incomplete /media/Downloads/slskd-ongoing
+              --vpn --vpn-port-forwarding
               --vpn-gluetun-url http://127.0.0.1:8000
           env:
             - {name: TZ, value: America/Edmonton}
