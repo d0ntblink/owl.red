@@ -4,10 +4,14 @@ Technitium runs as a NixOS LXC on `edge.pve` and is authoritative for `owl.red`.
 The approved handoff is accepted: native/private/local-IoT/cloud-IoT scopes are
 enabled with explicit VLAN-local DNS/NTP, `/24` and 24-hour leases. VyOS DHCP
 is disabled and saved; its old DNS endpoint proxies through Technitium. Guest
-scope/SSID stays disabled and routing quarantined by owner choice.
+VLAN 30 is also active with a four-hour lease and gateway `10.0.30.1` on the
+separate Debian/openNDS VM 104. Its 2.4 GHz SSID is enabled. See the
+[Wi-Fi architecture](../../docs/guides/wifi-architecture.md) for enforcement,
+the source-restricted read-only lease adapter and accepted isolation policy.
 
 CT200 stage 4 has native management plus tagged 20/40/50/30, IPv4 and stable ULA
-DNS addresses. RA/SLAAC and dual-stack policy passed on all four client VLANs.
+DNS addresses. Earlier VLAN plumbing qualification included RA/SLAAC and
+dual-stack policy; the production guest enforcement path intentionally denies IPv6.
 Client and observer captures for 10/20/40/50 have matching synthetic MAC/XID,
 DISCOVER/OFFER, zero drops and only Technitium server IDs. Real disposable
 acquisition and forced renewal passed, then synthetic leases were released.
@@ -88,9 +92,9 @@ Private evidence: `~/.local/state/owl-red/technitium-vlan-iot-OFZ7pw`.
 | Management IP (native, untagged) | `10.0.10.30` |
 | Private VLAN-20 DNS | `10.0.20.30`, advertised through DHCP and ULA through RA |
 | IoT VLAN-40/50 DNS | `10.0.40.30` / `10.0.50.30`, advertised through DHCP and ULA through RA |
-| Guest VLAN-30 DNS | `10.0.30.30`; plumbing tested, DHCP/SSID disabled |
+| Guest VLAN-30 DNS | `10.0.30.30`; active DHCP and guest SSID, openNDS enforcement |
 | Web UI | `https://dns.owl.red` (Traefik ingress → `10.0.10.201`) |
-| DHCP authority | Technitium on 10/20/40/50; guest 30 disabled; VyOS Kea off |
+| DHCP authority | Technitium on 10/20/30/40/50; VyOS Kea off |
 | DHCP ranges | `10.0.x.100–199` per VLAN |
 | Sync engine | `technitium-sync.service` + `.timer` (boot+3min, then every 15min) |
 | Sync source of truth | this directory (`gitops/technitium/`) |
@@ -107,7 +111,7 @@ it was replaced by the approved guard-only rollout, not a DHCP authority handoff
 |------|-------------|---------|
 | `settings.json` | `/api/settings/set` | Server settings (forwarders, recursion, DNSSEC, TTL) |
 | `zones/owl.red.zone` | `/api/zones/import` | Authoritative `owl.red` zone (BIND format) |
-| `dhcp/scopes.json` | Scope settings plus `/api/dhcp/scopes/disable`, `/enable`, `/list` | Explicit intent: 10/20/40/50 enabled, guest 30 disabled |
+| `dhcp/scopes.json` | Scope settings plus `/api/dhcp/scopes/disable`, `/enable`, `/list` | Explicit intent: all five scopes enabled; guest lease four hours, others 24 hours |
 | `dhcp-reservations.json` | `/api/dhcp/scopes/addReservedLease` | MAC registry → static leases (only `status: confirmed`, non-`TBD`) |
 | `dhcp/migration-leases.json` | Temporary reservations and expiry conversion | Preserve old addresses for 48 hours, then return active holds to dynamic |
 | `network.json` | Terraform initialization and native VyOS RA/policy | One shared ULA/delegation plan for the five VLAN allocations |

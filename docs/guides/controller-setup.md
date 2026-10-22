@@ -289,7 +289,7 @@ syncs Bitwarden before reading keys, defaults to wired `10.0.10.40`, and require
 explicit approval for a timed native trial. No key should be edited in LuCI.
 
 Selected implementation: controller-side Ansible/native UCI. The
-[versioned entry point](../../scripts/openwrt-run.mjs) requires Node.js 20.12+
+[versioned entry point](../../scripts/openwrt-run.mjs) uses the supported Node.js 24 runtime
 (`util.parseEnv`), the existing Ansible/PyYAML/Jinja venv, `requests`/`urllib3`,
 the working private Bitwarden CLI profile, and OpenSSH/sshpass for the trusted
 bootstrap reads. No Python, new daemon or package is installed on the AP.
@@ -317,7 +317,7 @@ Terraform/OpenTofu ownership is being evaluated, not selected or deployed:
 - [Foxboron's OpenWrt provider](https://github.com/Foxboron/terraform-provider-openwrt)
   is registry-published (the inspected latest release is `0.3.0`), but requires
   `luasocket`, `luci-mod-rpc`, `luci-lib-ipkg` and `luci-compat` on the device.
-  Compatibility with this AP's OpenWrt `25.12.2` is not qualified.
+  Compatibility with this AP's OpenWrt `25.12.6` is not qualified.
 - [reznakt's native-ubus provider](https://github.com/reznakt/terraform-provider-openwrt)
   uses the existing LuCI/ubus API without an extra agent and advertises native
   UCI rollback, import and write-only secret attributes. It is new, has no
@@ -351,7 +351,8 @@ The [Terraform LXC owner](../../terraform/proxmox/technitium/technitium-lxc.tf)
 uses `technitium_vlan_stage`: 0 is native management only, 1 adds VLAN 20 and is
 the initial accepted stage; 2 adds local IoT VLAN 40, 3 adds cloud IoT VLAN 50
 and 4 adds guest VLAN 30. Stage 4 is now the explicitly approved, accepted
-default, including IPv6 addresses; guest DHCP/SSID remains disabled. This
+default, including IPv6 addresses; guest DHCP and the 2.4 GHz SSID are now active
+behind the separate openNDS gateway. See [current Wi-Fi architecture](wifi-architecture.md). This
 active-first order preserves the accepted private NIC.
 Keep `eth0` untagged at `10.0.10.30/24`, its MAC
 and sole default gateway unchanged. The pinned `bpg/proxmox` 0.66.1 provider
@@ -517,7 +518,6 @@ script to a different serial or assume its recorded address is current.
 | [nix/android-tablet/start-sshd](../../nix/android-tablet/start-sshd) | Normal Termux app environment, installed sshd, private host keys and validated configuration; procfs/readlink | Starts the app-sandbox SSH daemon after a configuration check; not a controller command. |
 | [nix/android-tablet/start-wifi-adb.sh](../../nix/android-tablet/start-wifi-adb.sh) | Android system shell/root, getprop/setprop and adbd/Magisk boot environment | Changes persistent/service ADB TCP properties and can restart adbd. |
 
-## Credentials, TLS And Connectivity
 ## Credentials, TLS And Connectivity
 
 - `bw` needs a logged-in CLI profile plus an actually usable `BW_SESSION` for
@@ -954,6 +954,12 @@ unchanged. Other client masks remain a separate check.
 
 ## Coordinated VLAN DHCP Handoff
 
+Historical migration procedure: the handoff is complete. Technitium now serves
+all five scopes and the separate openNDS gateway owns guest enforcement. Do not
+replay authority handoff or preparation steps as routine maintenance. Use the
+[change guide](changing-owl-red.md) and [Technitium operations](../../gitops/technitium/README.md)
+for current ownership.
+
 This transaction is explicitly approved for native management and active VLANs
 20/40/50. Guest 30 stays disabled and quarantined; its portal is separate.
 The accepted dual-stack plan is
@@ -1010,7 +1016,8 @@ state; cleanup removes only its own namespaces, links, processes and test lease.
 6. Deploy the reviewed Nix host configuration with `--tags technitium_nixos`
   and channel updates false. Its explicit activation policy opens UDP 67 but
   keeps SSH/admin native-only. Start the Git reconciler; require native,
-  private and IoT enabled, guest disabled, and exact per-scope DNS/NTP options.
+  private, IoT and guest enabled, and exact per-scope DNS/NTP options. The guest
+  gateway is VM 104, not VyOS's retired direct VLAN 30 interface.
 7. Require sole new-server offers and a disposable real lease/renewal, correct
   DNS, dual-stack policy and temporary-port/namespace cleanup. Resume the sync
   timer after acceptance. Ordinary production Wi-Fi reconciliation honors

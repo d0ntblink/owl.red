@@ -246,15 +246,15 @@ MAC rather than its permanent address.
 | id | `ap-main` |
 | kind | network-appliance |
 | model | D-Link DIR-885L |
-| platform | OpenWrt |
+| platform | OpenWrt 25.12.6; clean reset/upgrade accepted 2026-10-22 |
 | role | VLAN-aware Layer-2 wireless access point |
 | parent | None |
 | hostname | `ap.owl.red` |
-| radios | 2.4 GHz and 5 GHz |
+| radios | 2.4 GHz channel 1 HT20, 8 dBm: guest/local-IoT/cloud-IoT; 5 GHz channel 36 VHT80, 12 dBm: private |
 | management | Native untagged management; LAN4 local recovery connection |
 | networks | VLAN 20 private; VLAN 30 guest; VLAN 40 local IoT; VLAN 50 cloud IoT |
 | services | Routing, DNS, DHCP and captive-portal enforcement run off the AP |
-| configuration | [AP inventory variables](../ansible/inventory/group_vars/aps.yml), [Wi-Fi maintenance](guides/wifi-password-rotation.md) |
+| configuration | [AP inventory variables](../ansible/inventory/group_vars/aps.yml), [Wi-Fi architecture](guides/wifi-architecture.md), [Wi-Fi maintenance](guides/wifi-password-rotation.md) |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|

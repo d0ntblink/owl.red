@@ -1,4 +1,4 @@
-# Ansible Phase 1 Scaffold
+# Ansible Operations
 
 Controller tools, Python libraries, collections, credentials and SSH/TLS setup
 are project prerequisites, not implicit local state. Follow
@@ -6,7 +6,16 @@ are project prerequisites, not implicit local state. Follow
 before the lane-specific commands below; the bootstrap script is not a complete
 toolchain installer. The historical run order is not permission to upgrade hosts.
 
-This directory contains Phase 1 automation scaffold only. No topology changes are performed by these files.
+This directory contains production automation. Some playbooks change networking,
+credentials, services or host lifecycle; neither their presence nor a historical
+run order authorizes execution. Use the resource's documented owner and review
+the target, diff and recovery path before applying.
+
+For current AP and guest-network ownership, start with the
+[Wi-Fi architecture](../docs/guides/wifi-architecture.md). AP configuration uses
+`playbooks/openwrt-ap.yml` through `scripts/openwrt-run.mjs`; firmware refresh
+uses the separate guarded `scripts/openwrt-refresh.mjs` entry point. Guest
+gateway, router and transit playbooks are deployment tools, not health checks.
 
 ## Contents
 
@@ -24,7 +33,7 @@ This directory contains Phase 1 automation scaffold only. No topology changes ar
 - `roles/proxmox_prep/`: Proxmox package repository prep and SMART/sensor visibility collection.
 - `roles/proxmox_upgrade/`: Proxmox package update/dist-upgrade and optional reboot handling.
 
-## Recommended Run Order
+## Historical Platform Bootstrap Order
 
 From `ansible/`:
 

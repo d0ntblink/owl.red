@@ -204,8 +204,10 @@ IPs from an **`IPAddressPool`** ([`gitops/metallb/ippool.yaml`](../gitops/metall
 `technitium-vip-pool` cleanup is documented in [issue 006](issues/006-fleet-ssa-field-ownership-conflict.md).
 
 ### Captive portal (RFC 8910/8908)
-The guest-WiFi splash/auth flow on VLAN 30 at `captive.owl.red`, signaled to clients
-via DHCP Option 114. Enforced by OPNsense.
+The guest-WiFi consent flow on VLAN 30 at `guest.owl.red`. Native openNDS on
+Debian VM 104 enforces sessions; the Astro application handles the FAS page.
+DHCP Option 114 is not advertised without a truthful client-specific CAPPORT
+endpoint. See [Wi-Fi architecture](guides/wifi-architecture.md).
 
 ### Break-glass path
 A tested management/recovery path independent of the component being changed.
@@ -334,7 +336,8 @@ the Technitium LXC. **Inventory** = hosts/groups ([`ansible/inventory/hosts.yml`
 manual UI edit Fleet/Technitium then overwrites).
 
 ### OPNsense / SwOS / OpenWrt
-Appliance OSes: **OPNsense** = the router/firewall/captive-portal (`edge.owl.red`);
+Appliance OSes: **OPNsense** = the retired router/firewall implementation;
+**VyOS** = the current router/firewall (`edge.owl.red`);
 **SwOS** = the MikroTik CSS326 switch OS, configured from
 [`ansible/switch_configs/css326.yml`](../ansible/switch_configs/css326.yml);
 **OpenWrt** = the D-Link WAP (`ap.owl.red`).
