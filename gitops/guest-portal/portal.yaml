@@ -189,11 +189,21 @@ metadata: {name: portal-rate, namespace: guest-portal}
 spec: {rateLimit: {average: 10, burst: 30, period: 1s}}
 ---
 apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: guest-admin-deny, namespace: guest-portal}
+spec: {ipAllowList: {sourceRange: [127.0.0.1/32]}}
+---
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata: {name: guest-portal, namespace: guest-portal}
 spec:
   entryPoints: [websecure]
   routes:
+    - match: ClientIP(`10.0.30.0/24`) && !Host(`guest.owl.red`)
+      priority: 1000
+      kind: Rule
+      middlewares: [{name: guest-admin-deny}]
+      services: [{name: guest-portal, port: 8443, scheme: https, serversTransport: portal-mtls}]
     - match: Host(`guest.owl.red`) && QueryRegexp(`auth_get`, `.+`)
       priority: 200
       kind: Rule
