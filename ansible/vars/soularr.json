@@ -1,0 +1,24 @@
+{
+  "namespace": "qbittorrent",
+  "deployment": "qbittorrent",
+  "private_directory": "/root/.local/state/owl-red/soularr-migration",
+  "slskd": {
+    "container": "slskd",
+    "image": "slskd/slskd@sha256:588af49abc3088d639c8f1174d3bfad6e92c093a275a593140e3ac9311ebf6c4",
+    "image_id": "sha256:049ad0e0e881b39a9bd1ed270e882e964a86fac18076fc11438161f76ababf54",
+    "config_directory": "/mnt/user/appdata/slskd",
+    "database_claim": "slskd-data",
+    "uid": 1654,
+    "gid": 100,
+    "webui": "https://slskd.owl.red"
+  },
+  "soularr": {
+    "container": "soularr",
+    "image": "mrusse08/soularr@sha256:89b6809a169f6c78032c9a66abf5130e4877c46c0b95391818a38ab66cd71548",
+    "image_id": "sha256:4c2dba73ff1967767b1db060b59254906893b82fa289b94a9b936e7c2b7da709",
+    "config_directory": "/mnt/user/appdata/soularr",
+    "uid": 99,
+    "gid": 100,
+    "webui": "https://soularr.owl.red"
+  }
+}
