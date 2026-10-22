@@ -1,0 +1,4 @@
+defaultNamespace: media-apps
+dependsOn:
+  - name: owl-red-gitops-csi-smb
+  - name: owl-red-gitops-longhorn-config

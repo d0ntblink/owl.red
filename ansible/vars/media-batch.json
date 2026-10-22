@@ -1,0 +1,26 @@
+{
+  "namespace": "media-apps",
+  "private_directory": "/root/.local/state/owl-red/media-batch",
+  "applications": {
+    "tautulli": {
+      "container": "tautulli",
+      "image": "tautulli/tautulli@sha256:a4323bc09b27e265e269d79421ed3eb795083ef988bb84788eba89e5738c8005",
+      "image_id": "sha256:1dfe0413a7049e55dc397478fd34decd3ce8d2ef7f3405fc8ae0ef01304c9b40",
+      "source_directory": "/mnt/user/appdata/tautulli",
+      "config_subdirectory": "tautulli",
+      "port": 8181,
+      "webui": "https://tautulli.owl.red",
+      "databases": ["tautulli.db"]
+    },
+    "reclaimerr": {
+      "container": "Reclaimerr",
+      "image": "ghcr.io/jessielw/reclaimerr@sha256:95748d1905f3ccc0024ab0286ef4a0ab2d24946c025abd80830d6cd902afeb9c",
+      "image_id": "sha256:b1e21ccd6f7805402dbbbbffb17b58989d4cddd901f73fdadc669bbd00ceee8e",
+      "source_directory": "/mnt/cache/appdata/reclaimerr",
+      "config_subdirectory": "reclaimerr",
+      "port": 8000,
+      "webui": "https://reclaimerr.owl.red",
+      "databases": ["database/reclaimerr.db", "cache/imdb_ratings.sqlite3"]
+    }
+  }
+}
