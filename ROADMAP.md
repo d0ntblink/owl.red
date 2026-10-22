@@ -68,6 +68,8 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Network Follow-Ups
 
+Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/guides/wifi-architecture.md).
+
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):
   target-SSID tablet identity, remaining client placement, RF coverage,
   static-appliance addressing and protected recovery/access ports.

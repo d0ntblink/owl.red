@@ -10,19 +10,25 @@
     openwrt_endpoint: https://10.10.20.1
     openwrt_private: "{{ lookup('file', openwrt_private_input_file) | from_json }}"
     openwrt_wifi_keys: "{{ openwrt_private.wifi_keys }}"
+    openwrt_ssh_proxy: "ssh -i {{ lookup('env', 'HOME') }}/.ssh/id_ed25519_owl_ansible -o BatchMode=yes -o StrictHostKeyChecking=yes -W %h:%p root@10.0.10.3"
   tasks:
     - name: Refuse unsupported hardware targets and unsafe AP scope
       ansible.builtin.assert:
         that:
           - inventory_hostname == 'ap_openwrt'
           - openwrt_expected_board == 'dlink,dir-885l'
-          - openwrt_expected_version == '25.12.2'
+          - openwrt_expected_version in ['25.12.2', '25.12.6']
           - openwrt_uplink == 'wan'
           - openwrt_recovery_port == 'lan4'
           - openwrt_private_ports == ['lan1', 'lan2', 'lan3']
           - openwrt_management_host == '10.0.10.40'
           - openwrt_native_management_vid | int == 1
-          - openwrt_wifi_networks.guest.enabled is sameas false
+          - openwrt_wifi_networks.guest.enabled is sameas true
+          - openwrt_wifi_networks.guest.gateway_owner == 'opennds'
+          - openwrt_wifi_networks.private.radios == ['radio1']
+          - openwrt_wifi_networks.guest.radios == ['radio0']
+          - openwrt_wifi_networks.iot_local.radios == ['radio0']
+          - openwrt_wifi_networks.iot_cloud.radios == ['radio0']
           - openwrt_phase in ['inspect', 'qualify', 'plan', 'trial', 'verify', 'rebind', 'confirm', 'rollback', 'finish']
           - openwrt_phase != 'rebind' or openwrt_apply_allowed | bool
 
@@ -42,6 +48,7 @@
         recovery_directory: "{{ openwrt_recovery_directory }}"
         phase: "{{ 'plan' if openwrt_phase in ['verify', 'rebind'] else openwrt_phase }}"
         apply_allowed: "{{ openwrt_apply_allowed }}"
+        expected_version: "{{ openwrt_expected_version }}"
         rendered:
           network: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-network.j2') }}"
           wireless: "{{ lookup('template', playbook_dir ~ '/../templates/openwrt-wireless.j2') }}"
@@ -62,6 +69,8 @@
           - sshpass
           - -e
           - ssh
+          - -o
+          - "ProxyCommand={{ openwrt_ssh_proxy }}"
           - -o
           - StrictHostKeyChecking=yes
           - -o
@@ -103,6 +112,8 @@
           - -e
           - ssh
           - -o
+          - "ProxyCommand={{ openwrt_ssh_proxy }}"
+          - -o
           - StrictHostKeyChecking=yes
           - -o
           - HostKeyAlias=10.10.20.1
@@ -127,6 +138,8 @@
           - sshpass
           - -e
           - ssh
+          - -o
+          - "ProxyCommand={{ openwrt_ssh_proxy }}"
           - -o
           - StrictHostKeyChecking=yes
           - -o
@@ -167,7 +180,7 @@
           - >-
             openwrt_wireless_runtime.stdout | from_json | dict2items | map(attribute='value.interfaces') |
             flatten | map(attribute='config.ssid') | list | sort ==
-            ['owl.red', 'owl.red', 'owl.red-iot-cloud', 'owl.red-iot-cloud', 'owl.red-iot-local']
+            ['owl.red', 'owl.red-iot-cloud', 'owl.red-iot-local', 'silence of the lans'] | sort
         fail_msg: The exact AP target, wired interface or active radio/SSID state did not converge.
       when: openwrt_phase == 'verify'
 
@@ -177,6 +190,8 @@
           - sshpass
           - -e
           - ssh
+          - -o
+          - "ProxyCommand={{ openwrt_ssh_proxy }}"
           - -o
           - StrictHostKeyChecking=yes
           - -o
@@ -233,6 +248,6 @@
         msg:
           phase: "{{ openwrt_phase }}"
           changed: "{{ openwrt_result.changed or (openwrt_retirement.changed | default(false)) }}"
-          verified: "{{ openwrt_result.verified | default(false) }}"
+          verified: "{{ (openwrt_result.verified | default(false)) or (openwrt_phase == 'verify' and not openwrt_result.changed) }}"
           trial_pending: "{{ openwrt_result.trial_pending | default(false) }}"
           changed_packages: "{{ openwrt_result.changed_packages | default([]) }}"

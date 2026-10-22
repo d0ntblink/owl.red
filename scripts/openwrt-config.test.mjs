@@ -41,16 +41,15 @@ assert profile['openwrt_wifi_networks']['guest']['enabled'] is True
 profile['openwrt_wifi_keys'] = {name: 'test-only-' + name + '-passphrase' for name in ['private', 'guest', 'iot_local', 'iot_cloud']}
 wireless = module.parse_config(environment.from_string(Path('ansible/templates/openwrt-wireless.j2').read_text()).render(**profile))
 assert wireless['iot_cloud_radio0']['disabled'] == '0'
-assert wireless['iot_cloud_radio1']['disabled'] == '1'
-assert wireless['iot_cloud_radio1']['network'] == 'iot_cloud'
-assert wireless['iot_cloud_radio1']['device'] == 'radio1'
-assert wireless['iot_cloud_radio1']['isolate'] == '1'
+assert 'iot_cloud_radio1' not in wireless
 assert 'iot_local_radio1' not in wireless
 assert wireless['guest_radio0']['disabled'] == '0'
-assert wireless['guest_radio1']['disabled'] == '1'
-assert wireless['private_radio0']['disabled'] == '1'
+assert 'guest_radio1' not in wireless
+assert 'private_radio0' not in wireless
 assert wireless['private_radio1']['disabled'] == '0'
 assert len([item for item in wireless.values() if item.get('.type') == 'wifi-iface' and item['device'] == 'radio0' and item['disabled'] == '0']) == 3
+assert len([item for item in wireless.values() if item.get('.type') == 'wifi-iface']) == 4
+assert all(item['disabled'] == '0' for item in wireless.values())
 `], { cwd: repository, encoding: 'utf8' });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });
