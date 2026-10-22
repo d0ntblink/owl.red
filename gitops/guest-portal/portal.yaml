@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guest-portal
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.31
+---
+apiVersion: k8s.bitwarden.com/v1
+kind: BitwardenSecret
+metadata: {name: bw-guest-portal-runtime, namespace: guest-portal}
+spec:
+  organizationId: 202b0b27-b135-44cd-a969-b43a003ad670
+  secretName: guest-portal-runtime
+  onlyMappedSecrets: true
+  map:
+    - bwSecretId: eb486ce8-1335-4af7-9871-b4eb0071d57f
+      secretKeyName: fas.key
+  authToken: {secretName: bw-auth-token, secretKey: token}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: {name: backend-bootstrap, namespace: guest-portal}
+spec: {selfSigned: {}}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: backend-ca, namespace: guest-portal}
+spec:
+  isCA: true
+  commonName: owl-red-guest-portal-backend
+  secretName: backend-ca
+  duration: 8760h
+  renewBefore: 720h
+  issuerRef: {name: backend-bootstrap, kind: Issuer}
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: {name: backend-ca, namespace: guest-portal}
+spec: {ca: {secretName: backend-ca}}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: backend-server, namespace: guest-portal}
+spec:
+  secretName: backend-server
+  dnsNames: [guest-portal.guest-portal.svc]
+  usages: [server auth]
+  issuerRef: {name: backend-ca, kind: Issuer}
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: backend-client, namespace: guest-portal}
+spec:
+  secretName: backend-client
+  commonName: traefik-guest-portal
+  usages: [client auth]
+  issuerRef: {name: backend-ca, kind: Issuer}
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: guest-portal, namespace: guest-portal}
+spec:
+  secretName: guest-portal-tls
+  dnsNames: [guest.owl.red]
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: backend-proxy, namespace: guest-portal}
+data:
+  nginx.conf: |
+    pid /tmp/nginx.pid;
+    events {}
+    http {
+      access_log off;
+      error_log /dev/stderr warn;
+      client_body_temp_path /tmp/client;
+      proxy_temp_path /tmp/proxy;
+      fastcgi_temp_path /tmp/fastcgi;
+      uwsgi_temp_path /tmp/uwsgi;
+      scgi_temp_path /tmp/scgi;
+      server {
+        listen 8443 ssl;
+        set $backend_tls /etc/backend-tls;
+        ssl_certificate $backend_tls/tls.crt;
+        ssl_certificate_key $backend_tls/tls.key;
+        ssl_client_certificate /etc/backend-tls/ca.crt;
+        ssl_verify_client on;
+        client_max_body_size 16k;
+        location / {
+          proxy_pass http://127.0.0.1:4321;
+          proxy_set_header Host guest.owl.red;
+          proxy_set_header X-Forwarded-Host guest.owl.red;
+          proxy_set_header X-Forwarded-Proto https;
+        }
+      }
+      server {
+        listen 127.0.0.1:8080;
+        location = /health { proxy_pass http://127.0.0.1:4321/health; }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: guest-portal, namespace: guest-portal}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app.kubernetes.io/name: guest-portal}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: guest-portal}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: portal
+          image: d0ntblink/owl.red-guest-captive-portal@sha256:56d8dc3f3015e4377434cf4ca372c75dd4447030623f810137192513f378f432
+          env:
+            - {name: HOST, value: 127.0.0.1}
+            - {name: PORT, value: "4321"}
+            - {name: PORTAL_ORIGIN, value: "https://guest.owl.red"}
+            - {name: GATEWAY_NAME, value: "owl.red guest"}
+            - {name: FAS_KEY_FILE, value: /run/portal/fas.key}
+            - {name: TRUST_AUTHMON_PROXY, value: "true"}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: "1", memory: 192Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: runtime, mountPath: /run/portal, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+        - name: proxy
+          image: nginx:stable-alpine@sha256:84ed8c0dd296c188bfc24ed506f46589e9285fb0b11cf3a04d91d524d3067e11
+          command: [nginx, -g, "daemon off;"]
+          ports: [{name: https, containerPort: 8443}]
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 250m, memory: 64Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          readinessProbe: {exec: {command: [wget, -q, -O, /dev/null, "http://127.0.0.1:8080/health"]}, periodSeconds: 5}
+          volumeMounts:
+            - {name: proxy-config, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true}
+            - {name: backend-tls, mountPath: /etc/backend-tls, readOnly: true}
+            - {name: proxy-tmp, mountPath: /tmp}
+      volumes:
+        - {name: runtime, secret: {secretName: guest-portal-runtime, defaultMode: 288}}
+        - {name: backend-tls, secret: {secretName: backend-server, defaultMode: 288}}
+        - {name: proxy-config, configMap: {name: backend-proxy}}
+        - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 16Mi}}
+        - {name: proxy-tmp, emptyDir: {medium: Memory, sizeLimit: 16Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: guest-portal, namespace: guest-portal}
+spec:
+  selector: {app.kubernetes.io/name: guest-portal}
+  ports: [{name: https, port: 8443, targetPort: https}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata: {name: portal-mtls, namespace: guest-portal}
+spec:
+  serverName: guest-portal.guest-portal.svc
+  rootCAsSecrets: [backend-server]
+  certificatesSecrets: [backend-client]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: public-header, namespace: guest-portal}
+spec: {headers: {customRequestHeaders: {X-Owl-Authmon: "0"}}}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: gateway-header, namespace: guest-portal}
+spec: {headers: {customRequestHeaders: {X-Owl-Authmon: "1"}}}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: gateway-only, namespace: guest-portal}
+spec: {ipAllowList: {sourceRange: [10.0.10.3/32, 172.31.30.2/32]}}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: portal-rate, namespace: guest-portal}
+spec: {rateLimit: {average: 10, burst: 30, period: 1s}}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: guest-portal, namespace: guest-portal}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`guest.owl.red`) && QueryRegexp(`auth_get`, `.+`)
+      priority: 200
+      kind: Rule
+      middlewares: [{name: gateway-only}, {name: gateway-header}]
+      services: [{name: guest-portal, port: 8443, scheme: https, serversTransport: portal-mtls}]
+    - match: Host(`guest.owl.red`)
+      priority: 100
+      kind: Rule
+      middlewares: [{name: public-header}, {name: portal-rate}]
+      services: [{name: guest-portal, port: 8443, scheme: https, serversTransport: portal-mtls}]
+  tls: {secretName: guest-portal-tls}

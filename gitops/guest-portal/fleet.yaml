@@ -1,0 +1,4 @@
+defaultNamespace: guest-portal
+dependsOn:
+  - name: owl-red-gitops-bitwarden-operator
+  - name: owl-red-gitops-cert-manager
