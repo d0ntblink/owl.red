@@ -10,7 +10,7 @@ process.umask(0o077);
 const home = os.homedir();
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const settings = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
-if (['ap-inspect', 'ap-refresh', 'ap-reload', 'ap-reboot', 'ap-drop-cloud5', 'ap-allocate', 'ap-enable', 'ap-verify', 'ap-confirm', 'ap-rollback'].includes(process.argv[2])) {
+if (['ap-inspect', 'ap-refresh', 'ap-reload', 'ap-recover-private', 'ap-reboot', 'ap-drop-cloud5', 'ap-allocate', 'ap-enable', 'ap-verify', 'ap-confirm', 'ap-rollback'].includes(process.argv[2])) {
   const phase = process.argv[2];
   if (phase !== 'ap-inspect') assert.equal(process.env.GUEST_PORTAL_APPLY_ALLOWED, 'true', 'Explicit guest-only AP approval is required');
   const environment = {
@@ -79,6 +79,16 @@ def runtime_bindings(repair=False):
       actual = shell(probe).strip().split('/')[-1]
     result.append({'section': section, 'ifname': name, 'bridge': actual, 'expected': bridge})
   return result
+if request['phase']=='ap-recover-private':
+ assert not client.call('uci','changes',{'config':'wireless'}).get('changes'),'Refuse pending wireless edits'
+ active=[name for name,value in wireless.items() if value.get('.type')=='wifi-iface' and value.get('device')=='radio1' and value.get('disabled','0')!='1']
+ assert active==['private_radio1'],'Recover only the single-private-BSS 5 GHz radio'
+ marker=directory/'private-radio1-recovery-issued.json'
+ assert not marker.exists(),'The bounded private radio recovery was already requested'
+ marker.write_text(json.dumps({'radio':'radio1','onlyPrivate5GHzEnabled':True,'nativeDownUpRequested':True})); marker.chmod(0o600)
+ selected=shlex.quote(json.dumps({'device':'radio1'}))
+ shell('ubus call network.wireless down '+selected+' && ubus call network.wireless up '+selected)
+ print(json.dumps({'private5GHzRecoveryRequested':True,'configurationChanged':False,'radio0Untouched':True})); sys.exit(0)
 if request['phase']=='ap-reboot':
  marker=directory/'ap-reboot-issued.json'
  assert not marker.exists(),'The approved single AP reboot was already requested'
@@ -186,10 +196,12 @@ cloud5_summary={'active':cloud5 is not None,'clientCount':len(clients),'shieldAs
 cloud2=next((item for item in bindings if item['section']=='iot_cloud_radio0' and item['bridge']!='missing'),None)
 clients2=json.loads(shell('ubus call hostapd.'+cloud2['ifname']+' get_clients')).get('clients',{}) if cloud2 else {}
 cloud2_summary={'active':cloud2 is not None,'ecobeeAssociated':any(address.lower()=='44:61:32:08:d6:2c' for address in clients2)}
+private5_status=json.loads(shell('ubus call hostapd.phy1-ap0 get_status'))
+private5_summary={name:private5_status.get(name) for name in ['status','ssid','freq','channel']}
 kernel=shell('for device in /sys/class/net/phy*-ap*; do test -d "$device" || continue; name=$(basename "$device"); bridge=$(readlink -f "$device/master" 2>/dev/null || true); master=$(basename "$bridge"); printf "%s %s\\n" "$name" "$master"; done')
 logs=shell('logread | tail -250')
 errors=[re.sub(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}','[mac]',line) for line in logs.splitlines() if re.search(r'phy[01]|radio[01]',line) and re.search(r'fail|error|not supported|no space|busy',line,re.I) and not re.search(r'password|psk|secret|key',line,re.I)]
-print(json.dumps({'guestSections':guest,'guestNetwork':{name:network.get('guest',{}).get(name) for name in ['device','proto']},'guestDevices':[{'name':name,'type':value.get('type'),'ports':value.get('ports')} for name,value in network.items() if value.get('name') in ['br-guest','br-ap.30']],'runtimeBindings':bindings,'cloud5GHz':cloud5_summary,'cloud2GHz':cloud2_summary,'kernelBridges':kernel.splitlines(),'radioRuntimeErrors':errors[-8:],'currentBssBridgeBindingsMatch':all(item['bridge']==item['expected'] for item in bindings)}))
+print(json.dumps({'guestSections':guest,'guestNetwork':{name:network.get('guest',{}).get(name) for name in ['device','proto']},'guestDevices':[{'name':name,'type':value.get('type'),'ports':value.get('ports')} for name,value in network.items() if value.get('name') in ['br-guest','br-ap.30']],'runtimeBindings':bindings,'private5GHz':private5_summary,'cloud5GHz':cloud5_summary,'cloud2GHz':cloud2_summary,'kernelBridges':kernel.splitlines(),'radioRuntimeErrors':errors[-8:],'currentBssBridgeBindingsMatch':all(item['bridge']==item['expected'] for item in bindings)}))
 `;
   const result = spawnSync(path.join(repository, '.venv/bin/python'), ['-c', code], {
     input: JSON.stringify({ phase, module: path.join(repository, 'ansible/library/openwrt_ap.py'), password: login.login.password, fingerprint: input.certificate_sha256, directory: path.join(home, '.local/state/owl-red/guest-cutover-Bgjxae') }),
