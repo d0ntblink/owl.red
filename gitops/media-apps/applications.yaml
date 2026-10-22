@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: tautulli, namespace: media-apps}
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: tautulli}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: tautulli}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      securityContext:
+        runAsUser: 99
+        runAsGroup: 100
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: tautulli
+          image: tautulli/tautulli@sha256:a4323bc09b27e265e269d79421ed3eb795083ef988bb84788eba89e5738c8005
+          command: [python, Tautulli.py]
+          args: [--datadir, /data, --config, /config/config.ini, --nolaunch]
+          env:
+            - {name: HOME, value: /config}
+            - {name: TZ, value: America/Edmonton}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          ports: [{name: http, containerPort: 8181}]
+          startupProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: config, mountPath: /config}
+            - {name: data, mountPath: /data}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: tautulli-config}}
+        - {name: data, persistentVolumeClaim: {claimName: tautulli-data}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: reclaimerr, namespace: media-apps}
+spec:
+  replicas: 0
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: reclaimerr}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: reclaimerr}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      securityContext:
+        runAsUser: 99
+        runAsGroup: 100
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: reclaimerr
+          image: ghcr.io/jessielw/reclaimerr@sha256:95748d1905f3ccc0024ab0286ef4a0ab2d24946c025abd80830d6cd902afeb9c
+          command: [granian]
+          args: [--interface, asgi, --workers, "1", --host, 0.0.0.0, --port, "8000", backend.api.main:app]
+          env:
+            - {name: HOME, value: /app/data}
+            - {name: TZ, value: America/Edmonton}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          ports: [{name: http, containerPort: 8000}]
+          startupProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: config, mountPath: /app/data}
+            - {name: data, mountPath: /app/data/database, subPath: database}
+            - {name: data, mountPath: /app/data/cache, subPath: cache}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: reclaimerr-config}}
+        - {name: data, persistentVolumeClaim: {claimName: reclaimerr-data}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: tautulli, namespace: media-apps}
+spec:
+  selector: {app.kubernetes.io/name: tautulli}
+  ports: [{name: http, port: 8181, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: reclaimerr, namespace: media-apps}
+spec:
+  selector: {app.kubernetes.io/name: reclaimerr}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: administration-access, namespace: media-apps}
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: media-apps, namespace: media-apps}
+spec:
+  secretName: media-apps-tls
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  dnsNames: [tautulli.owl.red, reclaimerr.owl.red]
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: tautulli, namespace: media-apps}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`tautulli.owl.red`)
+      kind: Rule
+      middlewares: [{name: administration-access}]
+      services: [{name: tautulli, port: 8181}]
+  tls: {secretName: media-apps-tls}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: reclaimerr, namespace: media-apps}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`reclaimerr.owl.red`)
+      kind: Rule
+      middlewares: [{name: administration-access}]
+      services: [{name: reclaimerr, port: 8000}]
+  tls: {secretName: media-apps-tls}

@@ -24,5 +24,6 @@ spec:
     - gitops/flaresolverr
     - gitops/seerr
     - gitops/qbittorrent
+    - gitops/media-apps
     - gitops/pdm
     - gitops/platform-resilience
