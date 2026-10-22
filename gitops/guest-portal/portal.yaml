@@ -122,7 +122,7 @@ spec:
       securityContext: {runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: portal
-          image: d0ntblink/owl.red-guest-captive-portal@sha256:7f12c8a578f2f050f099ce5fa05ac0aa63c0d604cfe00d3dd8736faabb4756e2
+          image: d0ntblink/owl.red-guest-captive-portal@sha256:7b1e617f54f7a9efd29df3db311ca04c6f3f8f3ae3acec0109a65c0351ceeb0c
           env:
             - {name: HOST, value: 127.0.0.1}
             - {name: PORT, value: "4321"}
