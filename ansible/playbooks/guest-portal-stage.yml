@@ -18,6 +18,17 @@
       changed_when: false
       failed_when: portal_hostname.stdout != 'guest-portal-stage'
 
+    - name: Detect the production transit attachment before any staging stop
+      ansible.builtin.stat:
+        path: /sys/class/net/portal-transit
+      register: portal_production_attachment
+
+    - name: Refuse staging operations on the serving gateway without maintenance approval
+      ansible.builtin.assert:
+        that:
+          - not portal_production_attachment.stat.exists or portal_staging_maintenance_allowed | default(false) | bool
+        fail_msg: The live guest gateway requires explicit staging maintenance approval.
+
     - name: Install the reviewed Debian openNDS package without starting services
       ansible.builtin.apt:
         name:
@@ -131,15 +142,24 @@
         content: |
           config opennds
             option enabled '1'
-            option gatewayname 'owl.red external DHCP qualification'
+            option gatewayname '{{ "owl.red guest" if portal_https_fas_allowed | default(false) | bool else "owl.red external DHCP qualification" }}'
             option gatewayinterface 'br-portal-test'
             option gatewayport '2050'
             option maxclients '8'
-            option login_option_enabled '1'
+            option login_option_enabled '{{ 0 if portal_https_fas_allowed | default(false) | bool else 1 }}'
             option dhcp_leases_file '/var/lib/opennds/technitium.leases'
             option checkinterval '5'
             option allow_preemptive_authentication '0'
+          {% if portal_https_fas_allowed | default(false) | bool %}
+            option fasport '443'
+            option fasremoteip '10.0.10.201'
+            option fasremotefqdn 'guest.owl.red'
+            option faspath '/'
+            option fas_secure_enabled '4'
+            option faskey '{{ lookup("file", lookup("env", "HOME") + "/.local/state/owl-red/guest-portal/fas.key") }}'
+          {% endif %}
       when: portal_technitium_fixture_allowed | default(false) | bool
+      no_log: true
 
     - name: Disable local DHCP for the genuine external DHCP fixture
       ansible.builtin.copy:
@@ -273,6 +293,10 @@
         ip route add default via 198.19.0.2 dev owl-transit
         ping -c 1 -W 2 198.19.0.2 >"$private/upstream-reachable.log"
         nft 'add chain inet owl_portal_guard forward { type filter hook forward priority 200; policy drop; }'
+        {% if portal_https_fas_allowed | default(false) | bool %}
+        nft 'add rule inet owl_portal_guard forward iifname "br-portal-test" oifname "owl-transit" ip saddr 198.18.30.0/24 ip daddr 10.0.10.201 tcp dport 443 counter accept'
+        nft 'add rule inet owl_portal_guard forward iifname "owl-transit" oifname "br-portal-test" ip saddr 10.0.10.201 ip daddr 198.18.30.0/24 tcp sport 443 ct state established counter accept'
+        {% endif %}
         nft 'add rule inet owl_portal_guard forward iifname "br-portal-test" oifname "owl-transit" ip saddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept'
         nft 'add rule inet owl_portal_guard forward iifname "owl-transit" oifname "br-portal-test" ip daddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept'
         nft 'add rule inet owl_portal_guard forward iifname "owl-uplink" oifname "bootstrap0" ip saddr 198.19.1.2 counter accept'
@@ -290,9 +314,98 @@
           inotifywait -qq -t 60 -e create --include 'ndsctl\.sock$' /tmp || test -S /tmp/ndsctl.sock
         fi
         if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$private/preauth.log"; then exit 1; fi
-        code=$(ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null -w '%{http_code}' http://example.com/)
+        code=$(ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -D "$private/discovery.headers" -o /dev/null -w '%{http_code}' http://example.com/)
         test "$code" = 302 || test "$code" = 307
+        {% if portal_https_fas_allowed | default(false) | bool %}
+        ip netns exec owl-portal-client python3 - "$private" <<'PY'
+        import http.cookiejar,html.parser,json,pathlib,selectors,subprocess,sys,time,urllib.parse,urllib.request
+        private=pathlib.Path(sys.argv[1])
+        headers=(private/'discovery.headers').read_text().splitlines()
+        location=next(line.split(':',1)[1].strip() for line in headers if line.lower().startswith('location:'))
+        target=urllib.parse.urlsplit(location)
+        assert target.scheme=='https' and target.hostname=='guest.owl.red' and target.port in (None,443) and target.path=='/'
+        entered=int(subprocess.check_output(['systemctl','show','owl-portal-contract','-p','ActiveEnterTimestampMonotonic','--value'],text=True))
+        readiness=subprocess.Popen(['journalctl','-u','owl-portal-contract','--follow','--output=json','--since=-2min','--no-pager'],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        ready_selector=selectors.DefaultSelector()
+        try:
+          ready_selector.register(readiness.stdout,selectors.EVENT_READ)
+          ready_deadline=time.monotonic()+30
+          ready=False; buffered=b''
+          while time.monotonic()<ready_deadline and not ready:
+            if not ready_selector.select(max(0,ready_deadline-time.monotonic())): break
+            import os
+            buffered+=os.read(readiness.stdout.fileno(),65536)
+            while b'\n' in buffered:
+              line,buffered=buffered.split(b'\n',1)
+              event=json.loads(line)
+              if int(event.get('__MONOTONIC_TIMESTAMP','0'))>=entered and 'nat_traversal_poll_interval' in event.get('MESSAGE',''):
+                ready=True; break
+          assert ready,'Native Authmon did not finish startup clearing before consent'
+        finally:
+          ready_selector.close(); readiness.terminate(); readiness.communicate(timeout=5)
+        opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        class OfferParser(html.parser.HTMLParser):
+          offer=None
+          def handle_starttag(self,tag,attributes):
+            fields=dict(attributes)
+            if tag=='input' and fields.get('name')=='offer': self.offer=fields.get('value')
+        try:
+          with opener.open(location,timeout=15) as response: page=response.read().decode()
+        except urllib.error.HTTPError as failure:
+          (private/'fas-page-failure.html').write_bytes(failure.read())
+          raise RuntimeError('Native FAS handoff rejected; private diagnostics retained') from None
+        parser=OfferParser(); parser.feed(page)
+        assert parser.offer,'Native portal offer is missing'
+        log=pathlib.Path('/tmp/ndslog/binauthlog.log')
+        observer=subprocess.Popen(['inotifywait','-m','-e','modify,create,moved_to','--format','%f',str(log.parent)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        selector=selectors.DefaultSelector()
+        try:
+          assert observer.stderr.readline().startswith('Setting up watches')
+          assert observer.stderr.readline().startswith('Watches established')
+          selector.register(observer.stdout,selectors.EVENT_READ)
+          started=int(time.time())
+          request=urllib.request.Request('https://guest.owl.red/',data=urllib.parse.urlencode({'offer':parser.offer,'consent':'yes'}).encode(),headers={'Origin':'https://guest.owl.red'})
+          with opener.open(request,timeout=15) as response:
+            consent_page=response.read().decode()
+            assert response.status==200 and ('Joining the Flock' in consent_page or 'Access Granted' in consent_page),'Consent did not create a pending portal request'
+          deadline=time.monotonic()+20
+          authenticated=False
+          while time.monotonic()<deadline:
+            try: lines=log.read_text().splitlines()
+            except FileNotFoundError: lines=[]
+            for line in lines:
+              fields=dict(part.split('=',1) for part in line.split(', ') if '=' in part)
+              if fields.get('clientmac')=='02:6f:77:30:02:04' and fields.get('method')=='ndsctl_auth' and int(fields.get('session_start','0'))>=started:
+                authenticated=True; break
+            if authenticated: break
+            if not selector.select(max(0,deadline-time.monotonic())): break
+            import os
+            os.read(observer.stdout.fileno(),65536)
+          if not authenticated:
+            import shlex
+            arguments=dict(line.split('=',1) for line in pathlib.Path('/tmp/ndscids/authmonargs').read_text().splitlines() if '=' in line)
+            values={name:shlex.split(value)[0] for name,value in arguments.items()}
+            control=values['url']+'?'+urllib.parse.urlencode({'auth_get':'view','gatewayhash':values['gatewayhash'],'payload':'bm9uZQ=='})
+            probe=subprocess.run(['nsenter','-t','1','-n','curl','--noproxy','*','--connect-timeout','3','--max-time','6','-sS','-o','/dev/null','-w','%{http_code}',control],capture_output=True,text=True,timeout=8)
+            native=subprocess.run(['nsenter','-t','1','-n','/usr/lib/opennds/libopennds.sh','wget_request',values['url'],'view',values['gatewayhash'],values['user_agent'],'none'],capture_output=True,text=True,timeout=20)
+            methods=sorted({dict(part.split('=',1) for part in line.split(', ') if '=' in part).get('method','') for line in log.read_text().splitlines()[-20:]}) if log.exists() else []
+            client=subprocess.run(['nsenter','-t','1','-n','ndsctl','json','198.18.30.2'],capture_output=True,text=True,timeout=10)
+            try: state=json.loads(client.stdout)
+            except ValueError: state={}
+            def states(value):
+              if isinstance(value,dict): return [str(item) for name,item in value.items() if name=='state']+sum([states(item) for item in value.values()],[])
+              if isinstance(value,list): return sum([states(item) for item in value],[])
+              return []
+            with opener.open('https://guest.owl.red/?page=status',timeout=10) as response: status_page=response.read().decode()
+            print(json.dumps({'nativeControlHttpStatus':probe.stdout,'nativeHelperReturnCode':native.returncode,'nativeHelperQueueLength':len(native.stdout),'observedMethods':methods,'nativeClientStates':states(state),'portalReportsPending':'Joining the Flock' in status_page,'portalReportsAcknowledged':'Access Granted' in status_page}))
+          assert authenticated,'Native Authmon did not authenticate the consented client'
+          print('NATIVE_HTTPS_FAS_AUTHMON_CONSENT_PASS')
+        finally:
+          selector.close(); observer.terminate(); observer.communicate(timeout=5)
+        PY
+        {% else %}
         ndsctl auth 198.18.30.2 >"$private/grant.log" 2>&1
+        {% endif %}
         ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null
         ndsctl deauth 198.18.30.2 >"$private/revoke.log" 2>&1
         if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$private/revoked.log"; then exit 1; fi

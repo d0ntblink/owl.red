@@ -1,0 +1,49 @@
+---
+- name: Prepare only the approved host-internal guest transit bridge
+  hosts: edge_pve
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require the exact approved Proxmox endpoint
+      ansible.builtin.assert:
+        that:
+          - ansible_host == '10.0.10.3'
+          - portal_transit_allowed | default(false) | bool
+
+    - name: Check the dedicated bridge declaration
+      ansible.builtin.stat:
+        path: /etc/network/interfaces.d/owl-guest-transit
+      register: portal_transit_file
+
+    - name: Refuse an existing unowned bridge
+      ansible.builtin.command: ip link show vmbr31
+      register: portal_transit_link
+      changed_when: false
+      failed_when: portal_transit_link.rc == 0 and not portal_transit_file.stat.exists
+
+    - name: Declare the private portless transit bridge persistently
+      ansible.builtin.copy:
+        dest: /etc/network/interfaces.d/owl-guest-transit
+        mode: "0644"
+        content: |
+          auto vmbr31
+          iface vmbr31 inet manual
+              bridge-ports none
+              bridge-stp off
+              bridge-fd 0
+
+    - name: Create only the private bridge without reloading host networking
+      ansible.builtin.command: ip link add name vmbr31 type bridge
+      when: portal_transit_link.rc != 0
+
+    - name: Bring up only the private bridge
+      ansible.builtin.command: ip link set vmbr31 up
+      changed_when: portal_transit_link.rc != 0
+
+    - name: Verify that no physical or VLAN ports are attached
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "from pathlib import Path; assert all(port.name in {'tap103i0', 'tap104i1'} for port in Path('/sys/class/net/vmbr31/brif').iterdir())"
+      changed_when: false

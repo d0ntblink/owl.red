@@ -1,0 +1,28 @@
+---
+- name: Verify the real guest gateway before enabling wireless clients
+  hosts: guest_portal_stage
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require the approved production acceptance boundary
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 104
+          - ansible_host == '127.0.0.1'
+          - portal_acceptance_allowed | default(false) | bool
+
+    - name: Install the bounded native acceptance fixture
+      ansible.builtin.copy:
+        src: ../files/guest-portal-acceptance.py
+        dest: /usr/local/libexec/guest-portal-acceptance.py
+        mode: "0600"
+        validate: python3 -m py_compile %s
+
+    - name: Exercise genuine production DHCP and native HTTPS consent
+      ansible.builtin.command: python3 /usr/local/libexec/guest-portal-acceptance.py
+      register: portal_acceptance
+      changed_when: true
+
+    - name: Report the production acceptance result
+      ansible.builtin.debug:
+        msg: "{{ portal_acceptance.stdout_lines }}"

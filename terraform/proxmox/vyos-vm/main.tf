@@ -19,6 +19,11 @@ variable "production_active" {
   default = true
 }
 
+variable "guest_transit_attached" {
+  type    = bool
+  default = true
+}
+
 locals {
   image = jsondecode(file("${path.module}/../../../vyos/image.json"))
 }
@@ -113,6 +118,7 @@ resource "proxmox_virtual_environment_vm" "vyos_production" {
   started     = var.production_running
   on_boot     = var.production_active
   protection  = true
+  reboot      = false
   machine     = "q35"
   bios        = "seabios"
 
@@ -158,6 +164,16 @@ resource "proxmox_virtual_environment_vm" "vyos_production" {
       device = hostpci.key
       id     = hostpci.value
       pcie   = true
+    }
+  }
+
+  dynamic "network_device" {
+    for_each = var.production_active && var.guest_transit_attached ? [true] : []
+    content {
+      bridge      = "vmbr31"
+      model       = "virtio"
+      mac_address = "02:6F:77:31:00:01"
+      firewall    = false
     }
   }
 

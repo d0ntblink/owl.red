@@ -16,7 +16,7 @@ openwrt_private_input_file: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/op
 openwrt_password_manager_item_id: 10da341d-20ad-4f4a-b15c-add2008eb0e4
 openwrt_disabled_services: [dnsmasq, odhcpd, firewall, opennds]
 openwrt_bss_bridges:
-  phy0-ap0: br-private
+  phy0-ap0: br-guest
   phy1-ap0: br-private
   phy0-ap1: br-iot-local
   phy0-ap2: br-iot-cloud
@@ -43,6 +43,7 @@ openwrt_wifi_networks:
     vlan: 20
     ssid: owl.red
     radios: [radio0, radio1]
+    disabled_radios: [radio0]
     enabled: true
     isolate: false
     key_source: private
@@ -51,11 +52,13 @@ openwrt_wifi_networks:
     vlan: 30
     ssid: silence of the lans
     radios: [radio0, radio1]
-    enabled: false
+    disabled_radios: [radio1]
+    enabled: true
     isolate: true
     key_source: guest
     internet: false
-    activation_gate: External captive-portal enforcement and IPv6 isolation
+    gateway_owner: opennds
+    activation_gate: Verified HTTPS Authmon, native enforcement, Technitium DHCP and IPv6 denial
   iot_local:
     vlan: 40
     ssid: owl.red-iot-local

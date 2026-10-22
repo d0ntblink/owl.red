@@ -1,4 +1,4 @@
-# Guest Portal Gateway Staging
+# Guest Portal Gateway
 
 The owner selected a small Debian VM with native openNDS rather than custom
 session/firewall enforcement. The old OpenWrt portal is retired and its local
@@ -10,13 +10,20 @@ retained only as a copy reference. No portal runs on the AP.
 ## Current State
 
 - VM `104`, `guest-portal-stage.owl.red`, on `edge`.
-- One vCPU, 768 MiB RAM, 8 GiB local disk; protected, automatic boot disabled.
+- One vCPU, 768 MiB RAM, 8 GiB local disk; protected, native automatic boot enabled.
 - Debian 13 genericcloud build `20261021-2638`, SHA-512 pinned in this root.
 - Debian openNDS `10.3.1+dfsg-1`, with native nftables and dnsmasq dependencies.
-- No production bridge, VLAN, PCI device or guest DHCP authority is attached.
-- Bootstrap uses QEMU user networking and edge-loopback SSH port `22104` only.
+- Guest NIC `02:6f:77:30:03:04` attaches to `vmbr0v30` and `br-guest`, address `10.0.30.1/24`.
+- Transit NIC `02:6f:77:31:01:04` attaches to private, portless `vmbr31`, address `172.31.30.2/30`.
+- VyOS `eth3` is `172.31.30.1/30`; guest traffic is routed, with NAT only upstream on VyOS.
+- VyOS's old `eth1.30` gateway is disabled; its static guest route uses the private transit.
+- Technitium owns DHCP/DNS on every VLAN; gateway dnsmasq is DNS-only, never DHCP.
+- QEMU bootstrap networking and edge-loopback SSH port `22104` remain for recovery, not guest forwarding.
 - Strict SSH host-key pin: `~/.local/state/owl-red/guest-portal-known_hosts`.
-- openNDS and dnsmasq are stopped/disabled; IPv4 forwarding is off after tests.
+- openNDS, DNS-only dnsmasq, lease refresh timer and guest NTP are enabled; forwarding follows native openNDS lifetime.
+- `silence of the lans` is enabled on 2.4 GHz only, isolated on VLAN 30.
+- Private Wi-Fi remains on 5 GHz. The owner approved disabling its 2.4 GHz BSS to keep radio0 at three BSSes: guest, local IoT and cloud IoT.
+- Existing cloud IoT remains on both bands; local IoT remains on 2.4 GHz.
 
 This root owns only the image, seed ISO and new VM. It does not manage VyOS,
 the AP, Technitium, switch ports or any existing VM. Do not apply another root
@@ -46,7 +53,12 @@ entry; do not disable strict checking.
 Review a saved create-only plan before first apply. The accepted initial plan
 added only three resources. State and saved plans remain private and ignored.
 
-## Native Qualification
+## Historical Staging Qualification
+
+Do not run staging or full preparation on this serving gateway without an explicit
+maintenance window. Both playbooks now refuse the live attachment/daemon by default.
+The following command describes the original isolated qualification, not routine
+production verification. It stops forwarding services when maintenance is approved.
 
 ```bash
 ANSIBLE_CONFIG=ansible/ansible.cfg .venv/bin/ansible-playbook \
@@ -83,39 +95,59 @@ builds and tests the container, verifies a nonroot/read-only runtime, and publis
 `d0ntblink/owl.red-guest-captive-portal` to Docker Hub using the GitHub-purpose
 Docker Hub token held in Bitwarden Secrets Manager and an encrypted Actions secret.
 
-Qualified build/publication revision: `ff5108db3b1913242f2b980e38a2ddb17b50221a`.
+Deployed build/publication revision: `efebef9a591ea6bcd4692fb323cb406c4f292bcc`.
 Public image digest:
-`sha256:6b242856125ca3758ca92c3df4b295da0d4974f7dce9ed796260727efd4c02b3`.
-This verifies app/container publication, not production guest acceptance.
+`sha256:7f12c8a578f2f050f099ce5fa05ac0aa63c0d604cfe00d3dd8736faabb4756e2`.
+The mauve accent is Catppuccin Mocha `#cba6f7`; fonts and layout are unchanged.
 Do not automatically deploy `latest` or activate a guest scope on image publication.
 
-The app's seven tests include production HTTP consent, foreign-origin rejection,
-and untrusted Authmon denial. Desktop/mobile rendering and local artwork were
+The app's nine tests include native Node-name/hash/framing/acknowledgment contracts,
+production HTTP consent, foreign-origin rejection and untrusted Authmon denial. Desktop/mobile rendering and local artwork were
 checked. A sandboxed integrated browser submits `Origin: null`; consent correctly
 rejects that origin rather than bypassing CSRF checks for a preview.
 
-## Production Gates
+## Accepted Production Path
 
-The guest network remains disabled. Before a separately reviewed cutover:
+Portal: <https://guest.owl.red>. Certificate renewal uses the existing cert-manager
+issuer. Native Authmon has a source-restricted route; other guests cannot forge
+its proxy header. Traefik-to-backend mutual TLS prevents direct pod access from
+bypassing this boundary. Other administrative hosts on the shared ingress IP are
+denied to VLAN 30 clients.
 
-- Choose and verify the guest-facing VLAN and isolated transit path to VyOS.
-  Remove any alternate direct guest-to-VyOS bypass path.
-- Keep Technitium as DHCP authority on every VLAN. The approved read-only lease
-  adapter passed genuine isolated Technitium allocation/export and native openNDS
-  discovery/grant/revoke. Its kernel freshness timeout denies established traffic
-  when synchronization stalls; IPv6 packet denial also passed in the routed lab.
-  Production API credentials, HTTPS access and scheduling still require deployment.
-- Prove that startup, daemon failure/restart and shutdown cannot open access.
-  A listener or a systemd active state is not sufficient readiness.
-- Test session expiry and termination of already-established connections;
-  revocation of new connections alone does not prove either behavior.
-- Explicitly block guest IPv6 unless equivalent enforcement is qualified.
-- Configure valid portal HTTPS and supported captive-portal discovery/CAPPORT,
-  without intercepting arbitrary HTTPS or exposing administration endpoints.
-- Port the requested text/concept into native portal templates and test a real
-  guest device before enabling the SSID generally.
-- Preserve a bounded inverse for guest-only router, DHCP/DNS and AP changes.
-  Failures must leave guests blocked while management/private/IoT stay unchanged.
+The production acceptance fixture obtained a genuine Technitium lease, proved
+pre-authentication internet denial, followed real HTTPS consent through native
+Authmon, verified internet access, revoked an established TLS connection, and
+verified private/admin and IPv6 denial. It released its lease and removed its
+namespace. The result is `PRODUCTION_GUEST_DHCP_HTTPS_CONSENT_REVOKE_PRIVATE_IPV6_PASS`.
 
-There is no production portal URL or active guest access yet. The bootstrap
-interface is staging-only, not the final production transit/management design.
+The dedicated DHCP-view-only token lives in Bitwarden, with a private gateway
+copy. A native timer refreshes facts every 10 seconds; kernel set entries expire
+after at most 30 seconds. Pre-offload checks cover both routed directions.
+Native expiry, daemon failure/restart and stale-cache denial also passed isolated
+qualification. Authmon readiness includes its completed startup stale-request
+clear, not merely a TCP listener or control socket.
+
+Actual guest/private/IoT BSS bridge bindings were verified before confirmation.
+A handset captive-browser test and RF/coverage walk remain onsite checks; no
+workstation Wi-Fi association was changed to claim those tests. DHCP option 114
+is not advertised without a truthful, client-specific CAPPORT endpoint.
+
+## Recovery And Lifecycle Caveats
+
+Private preimages and phase diagnostics are under controller
+`~/.local/state/owl-red/guest-cutover-Bgjxae`. They contain credentials/session
+material and must not be dumped or committed. VyOS handoff used native confirmed
+commits; the gateway fail-closed trial timer was canceled only after acceptance.
+
+The pinned bpg provider unexpectedly restarted VyOS during a NIC-only update even
+with `reboot=false`. The restart was disclosed and the owner approved continuation
+using the attached NICs. No further router lifecycle applies were used. Do not
+assume that flag prohibits a provider-driven restart. A targeted router plan now
+reports no changes. VM 104's native API confirms `onboot=1`; the provider still
+reports a boot-flag-only discrepancy. Do not apply it blindly.
+
+One explicitly approved AP reboot recovered the firmware after failed live
+multi-BSS trials. Four BSSes on radio0 failed to start; the approved three-BSS
+allocation is the accepted source. Do not re-enable private radio0 or guest radio1
+without a new radio-capacity qualification. No firmware was flashed or factory
+reset performed.

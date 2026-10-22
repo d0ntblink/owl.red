@@ -20,8 +20,10 @@ Do not restore the retired project's OpenWrt deployment script, routing, NAT,
 DHCP configuration or AP-hosted portal. OpenWrt remains bridge-only. Technitium
 retains DHCP authority on every VLAN; the gateway only reads lease facts.
 
-HTTPS deployment and native Authmon browser/device qualification remain pending.
-Publishing an app image does not activate guest DHCP, routing or Wi-Fi.
+HTTPS deployment and the production DHCP/consent/native Authmon enforcement path
+are accepted. The guest SSID is active on 2.4 GHz only; private Wi-Fi is 5 GHz only
+under the owner's approved three-BSS radio0 allocation. A real handset/RF walk
+remains an onsite follow-up. Publishing an app image alone never activates networking.
 
 The migration preserved a private recovery archive outside this Git repository,
 including the retired checkout's uncommitted changes. No secret, old environment
