@@ -94,6 +94,89 @@ controller input, captures vault output and supplies camera credentials only
 through child environment/stdin with Ansible `no_log`. It does not rotate vault
 or Wi-Fi credentials.
 
+## Foyer Network Watchdog Repair
+
+The foyer camera's repeating PTZ homing was a full reboot loop, not just a
+Frigate stream reconnect. Two read-only SSH snapshots had different boot IDs.
+Its native `S52netwatch` was enabled with target `10.0.10.1`, interval 30
+seconds and failure threshold three. That old management gateway did not answer
+from the camera's isolated IoT network, while its actual gateway `10.0.40.1`
+did. The native watchdog forcibly reboots after those failed checks.
+
+The [health helper](../../scripts/thingino-health.mjs) supports `inspect` and
+the narrow `repair-netwatch` operation. It pins the existing SSH identity,
+checks the foyer MAC and firmware family, verifies the local gateway answers,
+and changes only `netwatch.target` through Thingino's native `jct` tool. It
+restarts only the software network-watchdog loop; the hardware watchdog stays
+enabled. Wi-Fi credentials, firewall rules, firmware and PTZ settings are not
+changed. A full config preimage is private on the camera at
+`/etc/owl-red-netwatch-before.json`; it contains private material and must not
+be printed or committed. Controller output logs are also private under
+`~/.local/state/owl-red/foyer-health-*` and `foyer-diagnostics-*`.
+
+The same boot ID persisted to 412 seconds of uptime after repair while stream
+qualification and Frigate setup ran. Both foyer profiles passed native H264 probing and NVIDIA decoding:
+main `2560x1440`, substream `768x432`. Frigate previously omitted foyer because
+its target was disabled following failed reachability qualification. The
+qualified camera was enabled with five-FPS detection, native go2rtc restreams
+and existing three-day event retention. The partial enable helper preserves
+the office camera and unrelated Frigate settings, with a private preimage on
+the NAS. It does not re-home the camera or replace the whole recorder config.
+Authenticated runtime metrics then reported both cameras at five camera/process
+FPS with zero skipped FPS.
+
+This observed watchdog cause does not rule out every possible power or hardware
+fault. If physical rebooting returns, compare boot IDs/uptime first and inspect
+the current watchdog target before changing power supplies or disabling safety
+mechanisms.
+
+## Matching Watchdogs And Manual PTZ
+
+Office originally had `netwatch.enabled=false` and no explicit target. Both
+cameras had the correct DHCP gateway; only foyer had an enabled watchdog pinned
+to the old gateway. The Wi-Fi migration verified routing but did not reconcile
+that separate native watchdog configuration.
+
+Both now use `enabled=true`, target `10.0.40.1`, interval 30 seconds and failure
+threshold three. `node scripts/thingino-health.mjs match-netwatch office` and
+the equivalent `foyer` command enforce this narrow profile after checking camera
+identity, the current route and gateway reachability. Existing timing values must
+already match; unexpected settings require review. The helper saves the private
+camera preimage `/etc/owl-red-netwatch-match-before.json` before changes.
+`node scripts/thingino-health.mjs inspect office` inspects office without writes;
+omitting the camera name defaults to foyer. Neither camera was rebooted.
+
+Both cameras passed authenticated ONVIF profile and configuration-options reads
+from Frigate's own runtime. Manual ONVIF is enabled on port 80 using each camera's
+existing private credentials, without modifying streams, retention or detector
+settings. `node scripts/frigate-run.mjs qualify-ptz` performs read-only capability
+checks; `enable-ptz` saves a private preimage and updates only the ONVIF blocks.
+`status` verifies authenticated live pan/tilt capabilities for both cameras.
+Autotracking and startup calibration remain disabled. No motor commands were
+sent during qualification or enablement.
+
+At [Frigate](https://nvr.owl.red), open a camera from **Live**, open its **PTZ**
+control panel, then use the direction arrows or preset selector. Refresh the
+page if it was open before ONVIF was enabled. Both cameras advertise pan/tilt
+and relative movement, with ten presets each, but do not advertise optical zoom.
+
+## Frigate Settings Editor Compatibility
+
+Frigate 0.18.2 accepts JSON-formatted content at startup through its `.yml`
+file loader, but its settings editor passes raw text to a different parser path.
+JSON-formatted text hits `json.load` with a string and raises
+`AttributeError: 'str' object has no attribute 'read'`. This caused the generic
+"Error parsing config" response when enabling face recognition.
+
+All recorder config writers now emit block YAML and validate the serialized text
+through `FrigateConfig.parse`, not only the decoded object. The narrow
+`node scripts/frigate-run.mjs repair-yaml` command preserves all decoded values,
+saves a private `config.before-yaml-*.json` preimage, and changes only encoding.
+No recorder restart is required and no optional processing feature is enabled.
+The installed UI update routine plus raw-text parser passed a small-model face
+recognition enablement check on a private temporary copy; live config was not
+changed by that check.
+
 ## Terraform Assessment
 
 No native Thingino provider was identified in the targeted Terraform registry

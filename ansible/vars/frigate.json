@@ -18,15 +18,18 @@
   "detector": "openvino_cpu",
   "cameras": {
     "foyer": {
-      "enabled": false,
+      "enabled": true,
+      "stream_qualified": true,
       "host": "10.0.40.12",
       "onvif_port": 80,
+      "onvif_enabled": true,
       "credential_secret_id": "0e38c95a-79cb-4700-b015-b4e801443d54"
     },
     "office": {
       "enabled": true,
       "host": "10.0.40.13",
       "onvif_port": 80,
+      "onvif_enabled": true,
       "credential_secret_id": "7e8e9e5b-6f83-46fb-840b-b4e801443d91"
     }
   }
