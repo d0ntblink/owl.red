@@ -25,6 +25,16 @@ variable "seed_image_path" {
   }
 }
 
+variable "production_network_attached" {
+  type    = bool
+  default = true
+}
+
+variable "production_guest_enabled" {
+  type    = bool
+  default = true
+}
+
 resource "proxmox_virtual_environment_download_file" "debian" {
   node_name          = "edge"
   datastore_id       = "local"
@@ -53,8 +63,9 @@ resource "proxmox_virtual_environment_vm" "portal" {
   description = "Isolated Debian/openNDS qualification. No production bridge, VLAN, PCI device or guest DHCP authority. SSH only through edge loopback port 22104."
   tags        = ["debian", "guest", "portal", "staging", "terraform"]
   started     = true
-  on_boot     = false
+  on_boot     = true
   protection  = true
+  reboot      = false
   machine     = "q35"
   bios        = "seabios"
   boot_order  = ["scsi0"]
@@ -75,6 +86,27 @@ resource "proxmox_virtual_environment_vm" "portal" {
   memory {
     dedicated = 768
     floating  = 0
+  }
+
+  dynamic "network_device" {
+    for_each = var.production_network_attached ? [true] : []
+    content {
+      bridge       = "vmbr0v30"
+      model        = "virtio"
+      mac_address  = "02:6F:77:30:03:04"
+      disconnected = !var.production_guest_enabled
+      firewall     = false
+    }
+  }
+
+  dynamic "network_device" {
+    for_each = var.production_network_attached ? [true] : []
+    content {
+      bridge      = "vmbr31"
+      model       = "virtio"
+      mac_address = "02:6F:77:31:01:04"
+      firewall    = false
+    }
   }
 
   disk {

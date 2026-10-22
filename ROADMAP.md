@@ -73,15 +73,18 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
   static-appliance addressing and protected recovery/access ports.
 - [ ] Add narrowly scoped device-specific and multicast policies where required;
   verify required media, printing and discovery flows without broad management access.
-- [ ] Finish the separate Debian/openNDS guest gateway: isolated VM 104 passed
-  native denial, redirect, grant/revoke, fail-closed lifecycle, session expiry,
-  existing-connection revocation, genuine Technitium DHCP lease integration,
-  stale-lease-cache denial and IPv6 packet denial. The no-PHP
-  [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal)
-  now builds/tests and publishes to Docker Hub through Actions. Complete native
-  HTTPS FAS/Authmon integration, CAPPORT, real-device testing and a reviewed
-  production cutover before enabling guest DHCP and Wi-Fi. Technitium remains
-  the DHCP authority on every VLAN.
+- [x] Deploy the separate Debian/openNDS guest gateway and
+  [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal) at
+  `https://guest.owl.red`. Production acceptance passed genuine Technitium DHCP,
+  unauthenticated denial, HTTPS consent/native Authmon, established TLS revocation,
+  private/admin isolation and IPv6 denial. Guest Wi-Fi is enabled on 2.4 GHz;
+  private Wi-Fi is 5 GHz only under the approved three-BSS radio0 allocation.
+  Technitium remains the only DHCP authority on every VLAN.
+- [ ] Complete a real handset captive-browser/RF walk and separately qualify a
+  truthful client-specific CAPPORT endpoint before advertising DHCP option 114.
+- [ ] Replace the constrained WAP with maintained hardware/driver support for the
+  required simultaneous VLAN-backed BSSes. Qualify both bands before restoring
+  private 2.4 GHz or enabling guest 5 GHz; retain the accepted three-BSS layout meanwhile.
 - [ ] Extend the existing Tailscale setup with reviewed management routing,
   access rules and split DNS; verify access from outside the home network.
 - [ ] Standardize client NTP configuration on the router through each system's

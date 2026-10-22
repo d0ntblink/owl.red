@@ -3,7 +3,9 @@
 The network-owned VLAN milestone is accepted. These onsite tasks remain pending
 by owner choice; they are not claimed by the wired, DHCP or dual-stack tests.
 Management stays native/untagged, operator switch port 22 stays unchanged, and
-guest Wi-Fi stays disabled until the separate captive-portal milestone.
+guest Wi-Fi is now active on 2.4 GHz behind the separate openNDS gateway.
+Private Wi-Fi is 5 GHz only under the approved three-BSS radio0 allocation;
+local/cloud IoT band availability is otherwise unchanged.
 
 ## Accepted Baseline
 
@@ -11,11 +13,11 @@ guest Wi-Fi stays disabled until the separate captive-portal milestone.
 |---------|---------|----------|------|
 | Native management | `10.0.10.1` | Technitium `10.0.10.30` | Existing WAN/native IPv6 retained |
 | Private, VLAN 20 | `10.0.20.1` | Technitium `10.0.20.30` | Delegated global `/64`, ULA `fde4:cabf:d798:20::/64` |
-| Guest, VLAN 30 | `10.0.30.1` | DNS `10.0.30.30`; DHCP off | Dual-stack plumbing tested, forwarding quarantined |
+| Guest, VLAN 30 | `10.0.30.1` on portal VM | Technitium `10.0.30.30`; DHCP on | IPv6 deliberately denied at the portal gateway |
 | Local IoT, VLAN 40 | `10.0.40.1` | Technitium `10.0.40.30` | Delegated global `/64`, ULA `fde4:cabf:d798:40::/64`; no internet |
 | Cloud IoT, VLAN 50 | `10.0.50.1` | Technitium `10.0.50.30` | Delegated global `/64`, ULA `fde4:cabf:d798:50::/64` |
 
-Active IPv4 pools are `.100-.199`, mask `/24`, lease 24 hours. Confirmed
+Active IPv4 pools are `.100-.199`, mask `/24`, lease 24 hours except guest's four-hour lease. Confirmed
 reservations remain outside those pools. Expiring migration holds preserve old
 addresses for 48 hours; they do not make dynamic-only devices permanently fixed.
 The router's `.1` DNS endpoint remains a compatibility proxy through Technitium.
@@ -93,7 +95,7 @@ new connection is verified. If a camera requires cloud access or lacks a
 usable local protocol, record that limitation rather than opening internet
 access or assuming RTSP/ONVIF support. There is no blanket cross-VLAN discovery
 or HA firewall exception: verify moves first, then add only the integration's
-required unicast/discovery paths. Do not use the private or disabled guest
+required unicast/discovery paths. Do not use the private or internet-only guest
 SSID as an IoT workaround.
 
 ## Apartment RF Walk
@@ -112,6 +114,6 @@ The 900-sq-ft area and power caps do not guarantee an RF boundary at the walls.
 - [ ] Assign wired access-port PVIDs only in a reviewed, physically verified batch; never infer them from a port label.
 - [ ] Keep the accepted AP LAN4 native recovery port and switch operator port 22 unchanged until a separately approved recovery-backed migration.
 - [ ] Plan tagged management VLAN 10 independently; native management is the accepted current design, not a failed migration.
-- [ ] Activate guest DHCP/SSID only with the separate off-AP captive portal and its unauthenticated/authenticated IPv4/IPv6 acceptance.
+- [x] Activate guest DHCP/SSID with the separate off-AP gateway after genuine DHCP, HTTPS consent/native Authmon, established revocation and private/IPv6 denial acceptance; guest is 2.4 GHz only.
 
 No physical task above is automatically completed by the infrastructure evidence.

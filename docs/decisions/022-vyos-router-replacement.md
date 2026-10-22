@@ -169,15 +169,15 @@ still share the host, power and other failure points.
   VM rather than a custom VyOS authorization controller. VyOS remains the
   upstream router; OpenWrt remains bridge-only. The retired OpenWrt project
   supplies text and concept only, not deployment or configuration.
-  [VM 104 staging](../../terraform/proxmox/guest-portal/README.md) has no
-  production-facing NIC and uses 1 vCPU, 768 MiB RAM and an 8 GiB disk. Its
-  native openNDS check passed unauthenticated HTTPS denial, HTTP portal
-  redirection, native authorization and revocation of new connections with a
-  genuine lab DHCP lease. That is not production activation acceptance.
-  Qualify fail-closed startup/service failure, session expiry, existing-connection
-  revocation, IPv6 isolation, DHCP/DNS ownership, HTTPS/CAPPORT and the actual
-  guest/transit path before cutover. Keep guest DHCP and SSIDs disabled until
-  that reviewed enforcement path passes acceptance.
+  [VM 104 gateway](../../terraform/proxmox/guest-portal/README.md) uses 1 vCPU,
+  768 MiB RAM and an 8 GiB disk, with virtual guest and private-transit NICs.
+  It now owns `10.0.30.1`; VyOS's direct guest interface is disabled and its
+  guest route uses the private transit. Production DHCP/HTTPS consent/native
+  Authmon, established TLS revocation, private/admin isolation and IPv6 denial
+  passed before wireless confirmation. Technitium retains all DHCP authority.
+  The owner approved 2.4 GHz guest plus IoT BSSes and private Wi-Fi on 5 GHz
+  after four-BSS radio0 startup failed. Handset/RF and truthful CAPPORT remain
+  follow-ups, not inferred from the network acceptance fixture.
 - Provide an OPNsense-like read-only blocked-connection workflow after the
   CLI-first router rollout: filter time, source/destination, port/protocol, interface/VLAN,
   verdict and rule identity; relate rules to the deployed configuration revision.

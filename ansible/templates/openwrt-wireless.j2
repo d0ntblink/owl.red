@@ -20,7 +20,7 @@ config wifi-iface '{{ name }}_{{ radio }}'
         option encryption 'psk2+ccmp'
         option key {{ openwrt_wifi_keys[network.key_source] | quote }}
         option isolate '{{ network.isolate | int }}'
-        option disabled '{{ (not network.enabled) | int }}'
+        option disabled '{{ (not network.enabled or radio in (network.disabled_radios | default([]))) | int }}'
 
 {% endfor %}
 {% endfor %}

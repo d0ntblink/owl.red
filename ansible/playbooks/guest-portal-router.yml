@@ -1,0 +1,140 @@
+---
+- name: Configure only the approved guest transit under native confirmed commits
+  hosts: edge_router
+  gather_facts: false
+  vars:
+    portal_router_phase: prepare
+    portal_recovery_directory: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/guest-cutover-Bgjxae"
+  tasks:
+    - name: Require the exact router and approved phase
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 103
+          - ansible_host == '10.0.10.1'
+          - portal_router_allowed | default(false) | bool
+          - portal_router_phase in ['prepare', 'handoff', 'confirm']
+
+    - name: Verify the already attached transit NIC without changing VM lifecycle
+      ansible.builtin.raw: test "$(cat /sys/class/net/eth3/address)" = 02:6f:77:31:00:01
+      changed_when: false
+
+    - name: Capture the current boot configuration privately
+      ansible.builtin.raw: sudo -n cat /config/config.boot
+      register: portal_router_before
+      changed_when: false
+      no_log: true
+      when: portal_router_phase != 'confirm'
+
+    - name: Retain the exact phase recovery preimage
+      ansible.builtin.copy:
+        content: "{{ portal_router_before.stdout }}"
+        dest: "{{ portal_recovery_directory }}/router-before-{{ portal_router_phase }}-{{ now(utc=true, fmt='%Y%m%dT%H%M%SZ') }}.config.boot"
+        mode: "0600"
+      delegate_to: localhost
+      vars: {ansible_python_interpreter: "{{ ansible_playbook_python }}"}
+      no_log: true
+      when: portal_router_phase != 'confirm'
+
+    - name: Refuse collisions in the guest-only rule slice
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        {% for number in [6100, 6110, 6120, 6130, 6140] %}
+        if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule {{ number }}; then
+          [[ $(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule {{ number }} description) == OWL-GUEST-TRANSIT ]] || builtin exit 1
+        fi
+        {% endfor %}
+        if /bin/cli-shell-api existsActive nat source rule 6130; then
+          [[ $(/bin/cli-shell-api returnActiveValue nat source rule 6130 description) == OWL-GUEST-TRANSIT ]] || builtin exit 1
+        fi
+        if /bin/cli-shell-api existsActive nat source rule 6140; then
+          [[ $(/bin/cli-shell-api returnActiveValue nat source rule 6140 description) == OWL-GUEST-TRANSIT ]] || builtin exit 1
+        fi
+        '
+      changed_when: false
+
+    - name: Prepare only the private transit and scoped upstream policy
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        output=$(
+        set interfaces ethernet eth3 description OWL-GUEST-TRANSIT
+        set interfaces ethernet eth3 address 172.31.30.1/30
+        set firewall ipv4 forward filter rule 6100 description OWL-GUEST-TRANSIT
+        set firewall ipv4 forward filter rule 6100 action accept
+        set firewall ipv4 forward filter rule 6100 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6100 source address 172.31.30.2
+        set firewall ipv4 forward filter rule 6100 destination address 10.0.10.201
+        set firewall ipv4 forward filter rule 6100 destination port 443
+        set firewall ipv4 forward filter rule 6100 protocol tcp
+        set firewall ipv4 forward filter rule 6110 description OWL-GUEST-TRANSIT
+        set firewall ipv4 forward filter rule 6110 action accept
+        set firewall ipv4 forward filter rule 6110 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6110 source address 10.0.30.0/24
+        set firewall ipv4 forward filter rule 6110 destination address 10.0.10.201
+        set firewall ipv4 forward filter rule 6110 destination port 443
+        set firewall ipv4 forward filter rule 6110 protocol tcp
+        set firewall ipv4 forward filter rule 6120 description OWL-GUEST-TRANSIT
+        set firewall ipv4 forward filter rule 6120 action drop
+        set firewall ipv4 forward filter rule 6120 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6120 source address 10.0.30.0/24
+        set firewall ipv4 forward filter rule 6120 destination group network-group OWL_VLAN20_NONPUBLIC
+        set firewall ipv4 forward filter rule 6120 log
+        set firewall ipv4 forward filter rule 6130 description OWL-GUEST-TRANSIT
+        set firewall ipv4 forward filter rule 6130 action accept
+        set firewall ipv4 forward filter rule 6130 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6130 source address 10.0.30.0/24
+        set firewall ipv4 forward filter rule 6130 outbound-interface name eth0
+        set nat source rule 6130 description OWL-GUEST-TRANSIT
+        set nat source rule 6130 source address 10.0.30.0/24
+        set nat source rule 6130 outbound-interface name eth0
+        set nat source rule 6130 translation address masquerade
+        set firewall ipv4 forward filter rule 6140 description OWL-GUEST-TRANSIT
+        set firewall ipv4 forward filter rule 6140 action accept
+        set firewall ipv4 forward filter rule 6140 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6140 source address 172.31.30.2
+        set firewall ipv4 forward filter rule 6140 outbound-interface name eth0
+        set nat source rule 6140 description OWL-GUEST-TRANSIT
+        set nat source rule 6140 source address 172.31.30.2
+        set nat source rule 6140 outbound-interface name eth0
+        set nat source rule 6140 translation address masquerade
+        )
+        if [[ "$output" == *"Set failed"* || "$output" == *"Delete failed"* ]]; then discard; builtin exit 1; fi
+        commit-confirm 10 no-prompt || builtin exit 1
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        exit
+        '
+      when: portal_router_phase == 'prepare'
+
+    - name: Handoff only the quarantined guest gateway path
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        [[ $(/bin/cli-shell-api returnActiveValue interfaces ethernet eth1 vif 30 description) == OWL-WIFI-30 ]] || builtin exit 1
+        output=$(
+        delete interfaces ethernet eth1 vif 30 address 10.0.30.1/24
+        set interfaces ethernet eth1 vif 30 disable
+        delete service router-advert interface eth1.30
+        set protocols static route 10.0.30.0/24 next-hop 172.31.30.2
+        set firewall group interface-group OWL-VLAN-CLIENTS interface eth3
+        )
+        if [[ "$output" == *"Set failed"* || "$output" == *"Delete failed"* ]]; then discard; builtin exit 1; fi
+        commit-confirm 10 no-prompt || builtin exit 1
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        exit
+        '
+      when: portal_router_phase == 'handoff'
+
+    - name: Confirm only a successfully verified native trial
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        confirm || builtin exit 1
+        save || builtin exit 1
+        exit
+        '
+      when: portal_router_phase == 'confirm'

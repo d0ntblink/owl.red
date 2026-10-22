@@ -196,7 +196,7 @@ assert 'OWL-WIFI-PRIVATE-INGRESS' in guard
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });
 
-test('final dual-stack VLAN policy keeps guest quarantined and Technitium authoritative', () => {
+test('final dual-stack VLAN policy quarantines the direct guest path and keeps Technitium authoritative', () => {
   const result = spawnSync(python, ['-c', String.raw`
 import json
 from pathlib import Path
@@ -228,7 +228,14 @@ for network in plan['vlans'][1:]:
 assert ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '6300', 'action', 'drop'] in commands
 assert not any(command[:3] == ['set', 'nat', 'source'] for command in commands)
 profile = yaml.safe_load(Path('ansible/inventory/group_vars/aps.yml').read_text())
-assert profile['openwrt_wifi_networks']['guest']['enabled'] is False
+assert profile['openwrt_wifi_networks']['guest']['enabled'] is True
+assert profile['openwrt_wifi_networks']['guest']['gateway_owner'] == 'opennds'
+handoff = next(task['ansible.builtin.raw'] for task in yaml.safe_load(Path('ansible/playbooks/guest-portal-router.yml').read_text())[0]['tasks'] if task['name'] == 'Handoff only the quarantined guest gateway path')
+assert 'delete interfaces ethernet eth1 vif 30 address 10.0.30.1/24' in handoff
+assert 'set interfaces ethernet eth1 vif 30 disable' in handoff
+assert 'delete service router-advert interface eth1.30' in handoff
+assert 'set protocols static route 10.0.30.0/24 next-hop 172.31.30.2' in handoff
+assert 'commit-confirm 10 no-prompt' in handoff
 authority = yaml.safe_load(Path('vyos/baseline.yml').read_text())['vyos_production_baseline']['dhcp_authority']
 assert authority == 'technitium'
 profile['openwrt_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
