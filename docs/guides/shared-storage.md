@@ -16,6 +16,47 @@ production media files, placement and access/export policy unchanged.
 > Short-term that's fine (simple, works today); medium-term, cluster-native HA storage (Longhorn) removes
 > the SPOF. See [ADR 018](../decisions/018-storage-backend.md).
 
+## Migrated NAS Service Retirement
+
+After the application moves were accepted, the owner requested cleanup of the
+NAS definitions. This retirement supersedes the earlier per-migration notes
+that describe stopped fallback containers and templates as retained objects.
+The appdata and old database files themselves are still retained, and some are
+live SMB configuration mounts for Kubernetes: do not delete or move them.
+
+The [cleanup controller](../../scripts/unraid-migrated-cleanup.mjs) checks every
+cluster replacement is Ready before touching the exact reviewed NAS images.
+It removed 17 stopped/unstarted migrated containers, archived 16 matching
+Unraid templates and removed 14 source images unused by any remaining NAS
+container. No matching boot-autostart entries were present. It did not run
+system/image/volume prune, force removal, or parent-image pruning. Image sizes
+in its output are logical sums, not a measurement of disk space reclaimed.
+
+Plex, Frigate, combined Open WebUI/Ollama, shared PostgreSQL, DiskSpeed, DDNS
+and not-yet-migrated Librespeed retained their container IDs, states and restart
+policies. Appdata, media, bind-mount roots and Docker volumes were not deleted.
+Other historical templates outside the reviewed migrated-service names were
+left alone. A second cleanup plan reported no remaining targets.
+
+Full container definitions, image metadata/digests, template XML and boot-list
+preimages are private under
+`/root/.local/state/owl-red/migrated-cleanup/20261022-020203-2ef10a`, mode
+restricted. These contain credentials; do not print or commit them. They are
+definition/recovery inputs, not independent application-data backups.
+Restoring a NAS service now requires reconstructing the archived definition
+with its pinned image, after stopping the corresponding cluster writer and
+exporting any current Longhorn state. Never start an old SQLite snapshot as
+an automatic rollback. The shared PostgreSQL database must not be reset.
+
+`node scripts/unraid-migrated-cleanup.mjs plan` is read-only. `apply` repeats
+the same image/state guards and privately archives targets before removing
+them. Current cluster verification accepts a retired NAS object being absent,
+but rejects a running duplicate. Initial migration/host-recovery commands are
+not routine reconciliation after retirement. qBittorrent's original migration
+snapshot is also a point-in-time comparison, not a live inventory invariant:
+the cleanup observed four current torrents versus five at cutover, with all
+remaining original identities/paths unchanged, and did not alter torrent state.
+
 ## Frigate Event Storage Plan
 
 For the two existing cameras, use three-day event recording retention on local
