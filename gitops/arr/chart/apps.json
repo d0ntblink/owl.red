@@ -1,0 +1,62 @@
+{
+  "namespace": "arr",
+  "private_directory": "/root/.local/state/owl-red/arr-batch",
+  "applications": {
+    "prowlarr": {
+      "container": "prowlarr", "kind": "prowlarr", "port": 9696, "api": "v1", "hostname": "prowlarr.owl.red",
+      "image": "binhex/arch-prowlarr@sha256:8cf58832ebbf056e258271bd443d26bc2c9dfc09b9787850030965e42b0039a1",
+      "image_id": "sha256:9be577b6d02aca699802ae026bcb12952a7a97bec4a077d01d7bdb252cb0b853",
+      "source": "/mnt/user/appdata/binhex-prowlarr/prowlarr", "subdirectory": "binhex-prowlarr/prowlarr", "mount": "/config/prowlarr",
+      "executable": "/usr/lib/prowlarr/bin/Prowlarr", "databases": ["prowlarr.db", "logs.db"],
+      "directories": ["asp", "Backups", "Definitions", "logs", "Sentry"], "timezone": "America/Edmonton"
+    },
+    "sonarr-fhd": {
+      "container": "sonarr_fhd", "kind": "sonarr", "port": 8989, "api": "v3", "hostname": "sonarr.owl.red",
+      "image": "binhex/arch-sonarr@sha256:f438ca36564f15e8ceac90961264798df624296f8eecfdd1bb94834ebb2c1a4d",
+      "image_id": "sha256:403d2e935751fecce2c87e06daae076a82355eab80b026d983397db3c6d25996",
+      "source": "/mnt/user/appdata/binhex-sonarr", "subdirectory": "binhex-sonarr", "mount": "/config",
+      "executable": "/usr/lib/sonarr/bin/Sonarr", "databases": ["sonarr.db", "logs.db"],
+      "directories": ["asp", "Backups", ".config", "data", "logs", "MediaCover", "Sentry"], "appdata_downloads": true, "timezone": "America/Edmonton"
+    },
+    "sonarr-uhd": {
+      "container": "sonarr_uhd", "kind": "sonarr", "port": 8989, "source_port": 18989, "api": "v3", "hostname": "sonarr-uhd.owl.red",
+      "image": "binhex/arch-sonarr@sha256:f438ca36564f15e8ceac90961264798df624296f8eecfdd1bb94834ebb2c1a4d",
+      "image_id": "sha256:403d2e935751fecce2c87e06daae076a82355eab80b026d983397db3c6d25996",
+      "source": "/mnt/user/appdata/sonarr-uhd", "subdirectory": "sonarr-uhd", "mount": "/config",
+      "executable": "/usr/lib/sonarr/bin/Sonarr", "databases": ["sonarr.db", "logs.db"],
+      "directories": ["asp", "Backups", "data", "logs", "MediaCover", "Sentry"], "appdata_downloads": true, "timezone": "America/Edmonton"
+    },
+    "radarr-fhd": {
+      "container": "radarr_fhd", "kind": "radarr", "port": 7878, "api": "v3", "hostname": "radarr.owl.red",
+      "image": "binhex/arch-radarr@sha256:58e8aef83311e324d5e52b9e07477f4ada8e0300296206e85c4008195405d3ed",
+      "image_id": "sha256:ed4d3cb3abdb9f1ecfde851b03bbb5696ff23bfaaee48c985b51edbeac2e3d9a",
+      "source": "/mnt/user/appdata/binhex-radarr", "subdirectory": "binhex-radarr", "mount": "/config",
+      "executable": "/usr/lib/radarr/bin/Radarr", "databases": ["radarr.db", "logs.db"],
+      "directories": ["asp", "Backups", "data", "logs", "MediaCover", "Sentry"], "appdata_downloads": true, "timezone": "America/Edmonton"
+    },
+    "radarr-uhd": {
+      "container": "radarr_uhd", "kind": "radarr", "port": 7878, "source_port": 17878, "api": "v3", "hostname": "radarr-uhd.owl.red",
+      "image": "binhex/arch-radarr@sha256:58e8aef83311e324d5e52b9e07477f4ada8e0300296206e85c4008195405d3ed",
+      "image_id": "sha256:ed4d3cb3abdb9f1ecfde851b03bbb5696ff23bfaaee48c985b51edbeac2e3d9a",
+      "source": "/mnt/user/appdata/radarr_uhd", "subdirectory": "radarr_uhd", "mount": "/config",
+      "executable": "/usr/lib/radarr/bin/Radarr", "databases": ["radarr.db", "logs.db"],
+      "directories": ["asp", "Backups", "data", "logs", "MediaCover", "Sentry"], "appdata_downloads": true, "shared": true, "timezone": "America/Edmonton"
+    },
+    "lidarr": {
+      "container": "lidarr", "kind": "lidarr", "port": 8686, "api": "v1", "hostname": "lidarr.owl.red",
+      "image": "ghcr.io/binhex/arch-lidarr@sha256:d3946d1a615d10f409c813ae1f34a862ad9ff26621e3ee53f675bfbfaeca70c2",
+      "image_id": "sha256:e8e8acbc40804082b7f963cc6fcacebcaa4cd2c000b4c4e9092c1d05e9e461cc",
+      "source": "/mnt/user/appdata/binhex-lidarr", "subdirectory": "binhex-lidarr", "mount": "/config",
+      "executable": "/usr/lib/lidarr/bin/Lidarr", "databases": ["lidarr.db", "logs.db"],
+      "directories": ["asp", "Backups", "logs", "MediaCover", "Sentry"], "media_downloads": "Downloads/lidarr", "timezone": "America/Denver"
+    },
+    "bazarr": {
+      "container": "bazarr", "kind": "bazarr", "port": 6767, "api": "api", "hostname": "bazarr.owl.red",
+      "image": "lscr.io/linuxserver/bazarr@sha256:fb0437897eaa7f96cf6ac42f795f8dcc208d34ec969eac5d366454e767304eb9",
+      "image_id": "sha256:28567f6910339acabe614266834e9b2d4aa8e9b36c91ae8b5cd46b518bee3f57",
+      "source": "/mnt/user/appdata/bazarr", "subdirectory": "bazarr", "mount": "/config",
+      "executable": "/lsiopy/bin/python3", "databases": ["db/bazarr.db"],
+      "directories": ["backup", "cache", "config", "log", "restore"], "timezone": "America/Edmonton"
+    }
+  }
+}

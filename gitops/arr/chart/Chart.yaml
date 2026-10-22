@@ -1,0 +1,5 @@
+apiVersion: v2
+name: arr
+version: 0.1.0
+description: State-preserving media application host migration
+type: application

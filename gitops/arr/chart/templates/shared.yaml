@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: arr-media-nas}
+spec:
+  capacity: {storage: 100Ti}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0775, file_mode=0664]
+  claimRef: {namespace: arr, name: media}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/media#arr#retain
+    volumeAttributes: {source: //nas.owl.red/media}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: media, namespace: arr}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: arr-media-nas
+  resources: {requests: {storage: 100Ti}}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: arr-shared-nas}
+spec:
+  capacity: {storage: 1Gi}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0770, file_mode=0660]
+  claimRef: {namespace: arr, name: shared}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/appdata#qbittorrent-shared#arr-shared#retain
+    volumeAttributes: {source: //nas.owl.red/appdata, subDir: qbittorrent-shared}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: shared, namespace: arr}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: arr-shared-nas
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: administration-access, namespace: arr}
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: arr, namespace: arr}
+spec:
+  secretName: arr-tls
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  dnsNames:
+    - prowlarr.owl.red
+    - sonarr.owl.red
+    - sonarr-uhd.owl.red
+    - radarr.owl.red
+    - radarr-uhd.owl.red
+    - lidarr.owl.red
+    - bazarr.owl.red
+  privateKey: {rotationPolicy: Always}

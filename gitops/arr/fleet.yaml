@@ -1,0 +1,10 @@
+defaultNamespace: arr
+helm:
+  chart: ./chart
+  releaseName: arr
+dependsOn:
+  - name: owl-red-gitops-csi-smb
+  - name: owl-red-gitops-longhorn-config
+namespaceLabels:
+  pod-security.kubernetes.io/enforce: baseline
+  pod-security.kubernetes.io/enforce-version: v1.31

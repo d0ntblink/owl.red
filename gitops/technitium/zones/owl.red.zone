@@ -1,7 +1,7 @@
 $ORIGIN owl.red.
 $TTL 300
 @ IN SOA ns1.owl.red. hostmaster.owl.red. (
-  2026102108 ; serial (update on every record change)
+  2026102109 ; serial (update on every record change)
   3600       ; refresh
   600        ; retry
   1209600    ; expire
@@ -25,6 +25,13 @@ soularr         IN A 10.0.10.201
 tautulli        IN A 10.0.10.201
 reclaimerr      IN A 10.0.10.201
 speedtest       IN A 10.0.10.201
+prowlarr        IN A 10.0.10.201
+sonarr          IN A 10.0.10.201
+sonarr-uhd      IN A 10.0.10.201
+radarr          IN A 10.0.10.201
+radarr-uhd      IN A 10.0.10.201
+lidarr          IN A 10.0.10.201
+bazarr          IN A 10.0.10.201
 traefik         IN A 10.0.10.201
 edge            IN A 10.0.10.1
 switch          IN A 10.0.10.2
