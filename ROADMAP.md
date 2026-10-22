@@ -58,10 +58,12 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
   onboarding, and verify a WebUI request releases GPU memory without restarting
   persistent Ollama. Review native model presets and the shared-GPU behavior
   alongside Frigate/Plex before accepting broader use.
-- [ ] Inventory remaining NAS applications and migrate selected services:
-  Arr applications, Bazarr and Librespeed. Preserve application identity,
+- [ ] Resolve Librespeed's obsolete PostgreSQL endpoint and migrate it.
+  Preserve application identity,
   state and media paths during each migration. Keep Plex, Frigate, Open WebUI
   and DiskSpeed/disk tooling on the NAS.
+- [ ] Qualify the deferred Arr/Bazarr SQLite-to-PostgreSQL conversion separately;
+  their existing schemas now run on Longhorn by the approved batch exception.
 - [ ] Choose a consistent certificate issuance/distribution method for
   off-cluster services and automate renewal through their configuration lanes.
 

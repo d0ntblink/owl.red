@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'plan';
-assert.ok(['plan', 'stop', 'seed', 'verify', 'peers'].includes(phase), 'Use plan, stop, seed, verify or peers.');
+assert.ok(['plan', 'stop', 'seed', 'verify', 'peers', 'retire'].includes(phase), 'Use plan, stop, seed, verify, peers or retire.');
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const registry = JSON.parse(fs.readFileSync(path.join(repository, 'gitops/arr/chart/apps.json'), 'utf8'));
 const home = os.homedir();
@@ -57,6 +57,15 @@ function bazarrPeers(yaml) {
   ].join('\n')], yaml);
 }
 async function main() {
+  if (phase === 'retire') {
+    const deployments = JSON.parse(kubectl(['get', 'deployments', '-o', 'json'])).items;
+    assert.equal(deployments.length, 7);
+    assert.ok(deployments.every(app => app.status.availableReplicas === 1), 'Accept all seven cluster workloads before retiring boot entries.');
+    console.log(ssh(common + String.raw`
+foreach($registry['applications'] as $app)check(!source($app)['State']['Running'],'NAS writer must be stopped');$file='/boot/config/plugins/dockerMan/autostart';$removed=0;if(is_file($file)){$before=file_get_contents($file);if(!is_file($directory.'/autostart-before.txt'))privateFile($directory.'/autostart-before.txt',$before);$names=array_column($registry['applications'],'container');$lines=explode("\n",$before);$keep=[];foreach($lines as $line){$name=preg_split('/\s+/',trim($line))[0]??'';if(in_array($name,$names,true))$removed++;else $keep[]=$line;}if($removed)check(file_put_contents($file,implode("\n",$keep))!==false,'Boot autostart retirement failed');}echo json_encode(['retiredNasBootEntriesRemoved'=>$removed,'originalContainersAndFilesRetained'=>true]).PHP_EOL;
+`));
+    return;
+  }
   if (phase === 'plan') {
     console.log(ssh(common + String.raw`
 $summary=[];foreach($registry['applications'] as $name=>$app){$current=source($app);foreach($app['databases'] as $file)check(is_file($app['source'].'/'.$file),'Expected database missing: '.$name.'/'.$file);foreach($app['directories'] as $path)check(is_dir($app['source'].'/'.$path),'Expected config directory missing');$summary[]=['application'=>$name,'sourceRunning'=>$current['State']['Running'],'databases'=>count($app['databases']),'schemaConversion'=>false];}echo json_encode($summary).PHP_EOL;

@@ -328,8 +328,7 @@ preimages remain under `/root/.local/state/owl-red/flaresolverr-migration` on
 the NAS. `rollback` starts the old container and restores the proxy host
 `http://flaresolverr:8191` through the native API. No application data is deleted.
 
-Librespeed has an external PostgreSQL dependency; Arr apps have persistent
-state requiring application-specific database/storage checks.
+Librespeed still has an obsolete external PostgreSQL endpoint to resolve.
 qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
 copy their config directories onto SMB and assume SQLite, locking, paths or
 VPN isolation remain correct. GPU apps remain on the NAS.
@@ -480,6 +479,54 @@ decision to delete them. Private legacy-definition/template preimages are under
 
 ## Longhorn Database Volumes
 
+### Seven-App Arr And Bazarr Batch
+
+Prowlarr, Sonarr HD/UHD, Radarr HD/UHD, Lidarr and Bazarr now run in namespace
+`arr`. A single [local chart](../../gitops/arr/chart/Chart.yaml) renders all
+seven workloads from the [shared registry](../../gitops/arr/chart/apps.json);
+one replica and `Recreate` preserve single-writer operation per application.
+The owner explicitly approved keeping SQLite schemas unchanged on Longhorn
+for this host move and deferring PostgreSQL conversion. The shared PostgreSQL
+service and its provisioning code were not changed by the batch.
+
+Six Arr apps have their database roots on separate retained `longhorn-appdata`
+claims, with `config.xml`, ASP.NET keys and existing config/log/backup/cover
+directories overlaid from NAS appdata. Bazarr keeps `/config` on NAS with its
+database directory overlaid from Longhorn. Existing images, API keys, download
+paths, `/media` mounts and per-image timezones/umasks were retained. No live
+SQLite file is opened on SMB, and no media ownership or share policy changed.
+
+All seven NAS writers stopped before thirteen native SQLite backups were made.
+Every backup passed `quick_check`, and every transferred database matched its
+staged SHA-256 sum. One temporary seed pod mounted all seven volumes and was
+removed after verification. The transfer is resumable: completed markers are
+checked rather than recopied. Large archives are streamed through controller
+private files rather than expanded into base64 in memory.
+
+Each app passed its native API status check with its existing API key. Seerr's
+four Sonarr/Radarr peers and Prowlarr's five application peers passed their
+native connection tests using internal service names. Bazarr's configured
+Sonarr/Radarr addresses were updated before startup. Soularr now uses
+`lidarr.arr.svc.cluster.local:8686`; its VPN pod has an explicit hosts entry
+for that service because its DNS deliberately uses Gluetun, not cluster DNS.
+Update that entry if the Lidarr Service is recreated with a different IP.
+
+The certificate covers `prowlarr.owl.red`, `sonarr.owl.red`,
+`sonarr-uhd.owl.red`, `radarr.owl.red`, `radarr-uhd.owl.red`, `lidarr.owl.red`
+and `bazarr.owl.red`. Verified HTTPS returned the existing login redirects for
+the Arr apps and the Bazarr UI, with the administration allowlist retained.
+No test download, library import or subtitle operation was triggered.
+
+Use `node scripts/arr-batch-run.mjs verify` for one native status check per app.
+The initial `stop` and `seed` phases refuse active cluster writers; do not
+repeat initial migration against the accepted deployment. `peers` owns the
+native endpoint updates, and `retire` removes only the old apps' NAS boot
+autostart entries after all seven replacements are available. Their NAS
+containers are stopped with restart disabled and retained files are stale
+after cluster writes. Never restart them without first quiescing the cluster
+and exporting the current Longhorn databases. Private preimages and snapshots
+remain under `/root/.local/state/owl-red/arr-batch`, not independent backups.
+
 ### Tautulli And Reclaimerr
 
 Both apps now run as non-root UID `99`, GID `100` in the `media-apps` namespace,
@@ -602,8 +649,8 @@ it is not a production database reset command.
 The [Seerr host controller](../../scripts/seerr-run.mjs) prepares peers through
 native settings APIs, stops the old PostgreSQL NAS writer, and verifies the new
 TLS endpoint, existing API key, user/request counts and application/session
-identity. Radarr and Sonarr use the existing NAS DNS name and distinct
-published ports while they await their own migrations. Tautulli now uses
+identity. Sonarr and Radarr now use their HD/UHD Services in namespace `arr`.
+Tautulli uses
 `tautulli.media-apps.svc.cluster.local:8181` through Seerr's native settings API.
 Native API bodies omit
 read-only IDs and preserve integration keys/profiles/options.
