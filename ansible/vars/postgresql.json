@@ -9,6 +9,13 @@
     "admin_password_secret": "home-assistant__postgres__admin-password"
   },
   "applications": {
+    "speedtest": {
+      "database": "speedtest",
+      "role": "speedtest",
+      "password_secret": "k8s__speedtest__postgres__password",
+      "url_secret": "k8s__speedtest__postgres__db-url",
+      "kubernetes_namespace": "speedtest"
+    },
     "seerr": {
       "database": "seerr",
       "role": "seerr",

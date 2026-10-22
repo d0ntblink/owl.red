@@ -1,0 +1,15 @@
+{
+  "namespace": "speedtest",
+  "image": "linuxserver/speedtest-tracker@sha256:7f296f2f4f3fbc5ad7281a83743d3342a7ff143b9f382f0c8e87bdf5a4b29438",
+  "version": "v1.15.0-ls176",
+  "webui": "https://speedtest.owl.red",
+  "config_directory": "/mnt/user/appdata/speedtest-tracker-v2",
+  "config_subdirectory": "speedtest-tracker-v2",
+  "legacy_container": "speedtest-tracker",
+  "legacy_image_id": "sha256:1b1d9425404b298487519a7c3c40efa453c55193abd9d882f4cea2cd92da4553",
+  "private_directory": "/root/.local/state/owl-red/speedtest-fresh",
+  "admin_email": "admin@owl.red",
+  "app_key_secret": "speedtest__app-key",
+  "admin_password_secret": "speedtest__admin-password",
+  "schedule": "0 */6 * * *"
+}
