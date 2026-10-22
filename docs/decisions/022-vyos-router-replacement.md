@@ -165,6 +165,19 @@ still share the host, power and other failure points.
   access. Do not burden the weak WAP with the portal service or reuse an
   OPNsense-specific CAPPORT API. Account for IPv6 and legitimate HTTPS portal
   discovery instead of intercepting arbitrary HTTPS.
+  The owner subsequently approved a lightweight separate Debian/openNDS gateway
+  VM rather than a custom VyOS authorization controller. VyOS remains the
+  upstream router; OpenWrt remains bridge-only. The retired OpenWrt project
+  supplies text and concept only, not deployment or configuration.
+  [VM 104 staging](../../terraform/proxmox/guest-portal/README.md) has no
+  production-facing NIC and uses 1 vCPU, 768 MiB RAM and an 8 GiB disk. Its
+  native openNDS check passed unauthenticated HTTPS denial, HTTP portal
+  redirection, native authorization and revocation of new connections with a
+  genuine lab DHCP lease. That is not production activation acceptance.
+  Qualify fail-closed startup/service failure, session expiry, existing-connection
+  revocation, IPv6 isolation, DHCP/DNS ownership, HTTPS/CAPPORT and the actual
+  guest/transit path before cutover. Keep guest DHCP and SSIDs disabled until
+  that reviewed enforcement path passes acceptance.
 - Provide an OPNsense-like read-only blocked-connection workflow after the
   CLI-first router rollout: filter time, source/destination, port/protocol, interface/VLAN,
   verdict and rule identity; relate rules to the deployed configuration revision.

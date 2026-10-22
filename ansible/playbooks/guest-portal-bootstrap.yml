@@ -1,0 +1,87 @@
+---
+- name: Generate a private isolated Debian portal bootstrap ISO
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    portal_bootstrap_directory: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/guest-portal-bootstrap"
+    portal_ssh_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/id_ed25519_owl_ansible.pub') }}"
+  tasks:
+    - name: Create the private seed directory
+      ansible.builtin.file:
+        path: "{{ portal_bootstrap_directory }}"
+        state: directory
+        mode: "0700"
+
+    - name: Render native cloud-init inputs
+      ansible.builtin.copy:
+        dest: "{{ portal_bootstrap_directory }}/{{ item.name }}"
+        content: "{{ item.prefix | default('') }}{{ item.data | to_nice_yaml }}"
+        mode: "0600"
+      register: portal_seed_inputs
+      loop:
+        - name: user-data
+          prefix: "#cloud-config\n"
+          data:
+            hostname: guest-portal-stage
+            fqdn: guest-portal-stage.owl.red
+            manage_etc_hosts: true
+            ssh_pwauth: false
+            disable_root: true
+            users:
+              - name: owl-ansible
+                groups: [sudo]
+                shell: /bin/bash
+                lock_passwd: true
+                sudo: "ALL=(ALL) NOPASSWD:ALL"
+                ssh_authorized_keys: ["{{ portal_ssh_public_key }}"]
+        - name: meta-data
+          data:
+            instance-id: owl-guest-portal-104
+            local-hostname: guest-portal-stage
+        - name: network-config
+          data:
+            version: 2
+            ethernets:
+              bootstrap:
+                match:
+                  macaddress: "02:6f:77:00:01:04"
+                set-name: bootstrap0
+                dhcp4: true
+                dhcp6: false
+                accept-ra: false
+              guest:
+                match:
+                  macaddress: "02:6f:77:30:01:04"
+                set-name: guest0
+                dhcp4: false
+                dhcp6: false
+                accept-ra: false
+
+    - name: Check for an existing seed image
+      ansible.builtin.stat:
+        path: "{{ portal_bootstrap_directory }}/seed.iso"
+      register: portal_seed_image
+
+    - name: Build the standard NoCloud seed image
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -c
+          - |
+            import sys, pycdlib
+            image = pycdlib.PyCdlib()
+            image.new(interchange_level=3, joliet=3, rock_ridge="1.09", vol_ident="cidata")
+            for name, identifier in [("user-data", "USERDATA.;1"), ("meta-data", "METADATA.;1"), ("network-config", "NETWORK.;1")]:
+                image.add_file(name, iso_path="/" + identifier, rr_name=name, joliet_path="/" + name)
+            image.write(sys.argv[1])
+            image.close()
+          - "{{ portal_bootstrap_directory }}/seed.iso"
+        chdir: "{{ portal_bootstrap_directory }}"
+      changed_when: true
+      when: portal_seed_inputs.changed or not portal_seed_image.stat.exists
+
+    - name: Restrict the seed image permissions
+      ansible.builtin.file:
+        path: "{{ portal_bootstrap_directory }}/seed.iso"
+        mode: "0600"
