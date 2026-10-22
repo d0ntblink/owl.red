@@ -7,7 +7,7 @@ import { parseEnv } from 'node:util';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'prepare';
-assert.ok(['prepare', 'verify', 'retire'].includes(phase), 'Use prepare, verify or retire.');
+assert.ok(['prepare', 'verify', 'initial-test', 'retire'].includes(phase), 'Use prepare, verify, initial-test or retire.');
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const config = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/speedtest.json'), 'utf8'));
 const home = os.homedir();
@@ -47,6 +47,16 @@ echo json_encode(['newAppdataPrepared'=>true,'legacyContainerStopped'=>true,'leg
   assert.equal(pods.length, 1);
   const pod = pods[0];
   assert.ok(pod.status.conditions.some(condition => condition.type === 'Ready' && condition.status === 'True'), 'Replacement must be Ready.');
+  if (phase === 'initial-test') {
+    const php = String.raw`<?php
+require '/app/www/vendor/autoload.php';$app=require '/app/www/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+if(App\Models\Result::count()!==0)throw new RuntimeException('Initial test already exists; do not run duplicate tests');
+config(['queue.default'=>'sync']);$user=App\Models\User::where('email',getenv('ADMIN_EMAIL'))->firstOrFail();$result=App\Actions\Ookla\RunSpeedtest::run(scheduled:false,dispatchedBy:$user->id);$result->refresh();$status=$result->status instanceof BackedEnum?$result->status->value:$result->status;echo json_encode(['initialSpeedtestId'=>$result->id,'status'=>$status,'storedInPostgresql'=>config('database.default')==='pgsql']).PHP_EOL;
+if(strtolower((string)$status)!=='completed')exit(1);
+`;
+    console.log(kubectl(['exec', '-i', pod.metadata.name, '-c', 'speedtest', '--', 'php'], php));
+    return;
+  }
   if (phase === 'verify') {
     const php = String.raw`<?php
 require '/app/www/vendor/autoload.php';$app=require '/app/www/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
