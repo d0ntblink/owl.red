@@ -1,0 +1,198 @@
+---
+- name: Install native openNDS only on the isolated portal VM
+  hosts: guest_portal_stage
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Refuse every production endpoint
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 104
+          - ansible_host == '127.0.0.1'
+          - ansible_port | int == 22104
+
+    - name: Verify the running staging identity
+      ansible.builtin.command:
+        argv: [hostname]
+      register: portal_hostname
+      changed_when: false
+      failed_when: portal_hostname.stdout != 'guest-portal-stage'
+
+    - name: Install the reviewed Debian openNDS package without starting services
+      ansible.builtin.apt:
+        name:
+          - opennds=10.3.1+dfsg-1
+          - nftables
+          - dnsmasq
+          - inotify-tools
+          - udhcpc
+          - bind9-dnsutils
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        policy_rc_d: 101
+
+    - name: Keep gateway services stopped until the isolated network is configured
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: [opennds, dnsmasq]
+
+    - name: Verify the native installed version
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${Version}', opennds]
+      register: portal_opennds_version
+      changed_when: false
+      failed_when: portal_opennds_version.stdout != '10.3.1+dfsg-1'
+
+    - name: Qualify native authorization on a disposable isolated client
+      when: portal_qualification_allowed | default(false) | bool
+      block:
+        - name: Bind the lab DNS service only to the disposable bridge
+          ansible.builtin.copy:
+            dest: /etc/dnsmasq.d/owl-portal-lab.conf
+            mode: "0600"
+            content: |
+              interface=br-portal-test
+              listen-address=198.18.30.1
+              bind-dynamic
+              no-resolv
+              server=10.0.2.3
+              dhcp-range=198.18.30.2,198.18.30.8,255.255.255.0,5m
+              dhcp-host=02:6f:77:30:02:04,198.18.30.2
+              dhcp-leasefile=/var/lib/misc/dnsmasq.leases
+              dhcp-option=3,198.18.30.1
+              dhcp-option=6,198.18.30.1
+
+        - name: Create the native generic-Linux configuration directory
+          ansible.builtin.file:
+            path: /etc/config
+            state: directory
+            mode: "0755"
+
+        - name: Configure only the disconnected qualification interface
+          ansible.builtin.copy:
+            dest: /etc/config/opennds
+            mode: "0600"
+            backup: true
+            content: |
+                config opennds
+                  option enabled '1'
+                  option gatewayname 'owl.red guest qualification'
+                  option gatewayinterface 'br-portal-test'
+                  option gatewayport '2050'
+                  option maxclients '8'
+                  option login_option_enabled '1'
+                  option dhcp_leases_file '/var/lib/misc/dnsmasq.leases'
+
+        - name: Exercise the installed gateway engine without production interfaces
+          ansible.builtin.shell: |
+            set -eu
+            test "$(cat /sys/class/net/guest0/address)" = 02:6f:77:30:01:04
+            test "$(cat /sys/class/net/bootstrap0/address)" = 02:6f:77:00:01:04
+            if ip link show br-portal-test >/dev/null 2>&1; then exit 1; fi
+            if ip netns list | grep -q '^owl-portal-client '; then exit 1; fi
+            if nft list table inet owl_portal_guard >/dev/null 2>&1; then exit 1; fi
+            original_forward=$(cat /proc/sys/net/ipv4/ip_forward)
+            original_policy=$(iptables -S FORWARD | awk '$1=="-P" {print $3; exit}')
+            case "$original_policy" in ACCEPT|DROP) ;; *) exit 1 ;; esac
+            diagnostics=$(mktemp -d /var/tmp/owl-portal-qualification-XXXXXX)
+            chmod 0700 "$diagnostics"
+            cleanup() {
+              systemctl stop opennds >/dev/null 2>&1 || true
+              systemctl stop dnsmasq >/dev/null 2>&1 || true
+              iptables -t nat -D POSTROUTING -s 198.18.30.0/24 -o bootstrap0 -j MASQUERADE >/dev/null 2>&1 || true
+              ip netns del owl-portal-client >/dev/null 2>&1 || true
+              ip link set guest0 nomaster >/dev/null 2>&1 || true
+              ip link del br-portal-test >/dev/null 2>&1 || true
+              nft delete table inet owl_portal_guard >/dev/null 2>&1 || true
+              iptables -P FORWARD "$original_policy"
+              sysctl -qw "net.ipv4.ip_forward=$original_forward"
+            }
+            finish() {
+              result=$?
+              if [[ "$result" != 0 ]]; then
+                nft -j list ruleset >"$diagnostics/firewall-failure.json" 2>/dev/null || true
+                printf 'private_diagnostics=%s\n' "$diagnostics"
+              fi
+              cleanup
+              exit "$result"
+            }
+            trap finish EXIT
+            ip link add br-portal-test type bridge
+            ip address add 198.18.30.1/24 dev br-portal-test
+            ip link set br-portal-test up
+            ip link set guest0 master br-portal-test
+            ip netns add owl-portal-client
+            ip link add owl-portal-peer type veth peer name owl-portal-nic
+            ip link set owl-portal-peer master br-portal-test
+            ip link set owl-portal-peer up
+            ip link set owl-portal-nic netns owl-portal-client
+            ip netns exec owl-portal-client ip link set lo up
+            ip netns exec owl-portal-client sysctl -qw net.ipv6.conf.all.disable_ipv6=1
+            ip netns exec owl-portal-client ip link set owl-portal-nic address 02:6f:77:30:02:04
+            ip netns exec owl-portal-client ip address add 198.18.30.2/24 dev owl-portal-nic
+            ip netns exec owl-portal-client ip link set owl-portal-nic up
+            ip netns exec owl-portal-client ip route add default via 198.18.30.1
+            nft -f - <<'NFT'
+            table inet owl_portal_guard {
+              chain forward {
+                type filter hook forward priority 200; policy drop;
+                iifname "br-portal-test" oifname "bootstrap0" ip saddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept
+                iifname "bootstrap0" oifname "br-portal-test" ip daddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept
+              }
+            }
+            NFT
+            sysctl -qw net.ipv4.ip_forward=1
+            iptables -P FORWARD ACCEPT
+            iptables -t nat -A POSTROUTING -s 198.18.30.0/24 -o bootstrap0 -j MASQUERADE
+            server=$(getent ahostsv4 example.com | awk 'NR==1 {print $1; exit}')
+            test -n "$server"
+            printf 'phase=before-daemon-start\n'
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/before-start.log"; then exit 1; fi
+            if systemctl is-active --quiet opennds; then exit 1; fi
+            if test -S /tmp/ndsctl.sock; then rm -- /tmp/ndsctl.sock; fi
+            systemctl start dnsmasq
+            printf 'phase=start-native-engine\n'
+            if ! systemctl start opennds >"$diagnostics/start.log" 2>&1; then
+              journalctl -u opennds -n 60 --no-pager >"$diagnostics/service.log"
+              printf 'Native startup failed; private diagnostics: %s\n' "$diagnostics"
+              exit 1
+            fi
+            if ! test -S /tmp/ndsctl.sock; then
+              inotifywait -qq -t 60 -e create --include 'ndsctl\.sock$' /tmp || test -S /tmp/ndsctl.sock
+            fi
+            nft list chain ip nds_filter ndsNET >"$diagnostics/forward-chain.log"
+            grep -q 'counter.*reject' "$diagnostics/forward-chain.log"
+            ip netns exec owl-portal-client udhcpc -i owl-portal-nic -n -q -t 3 -T 2 -s /bin/true >"$diagnostics/dhcp.log" 2>&1
+            awk '$2=="02:6f:77:30:02:04" && $3=="198.18.30.2" {found=1} END {exit !found}' /var/lib/misc/dnsmasq.leases
+            printf 'phase=unauthenticated\n'
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/preauth.log"; then
+              printf 'unauthenticated_https=unexpectedly_allowed\n'
+              exit 1
+            fi
+            printf 'unauthenticated_https=blocked\n'
+            code=$(ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null -w '%{http_code}' http://example.com/)
+            printf 'discovery_http_status=%s\n' "$code"
+            test "$code" = 302 || test "$code" = 307
+            printf 'phase=native-grant\n'
+            ndsctl auth 198.18.30.2 >"$diagnostics/grant.log" 2>&1
+            ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 5 --max-time 15 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/authorized.log"
+            printf 'phase=native-revoke\n'
+            ndsctl deauth 198.18.30.2 >"$diagnostics/revoke.log" 2>&1
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/revoked.log"; then exit 1; fi
+            printf 'NATIVE_PORTAL_GRANT_REVOKE_PASS\n'
+            printf 'phase=authorized-daemon-stop\n'
+            ndsctl auth 198.18.30.2 >"$diagnostics/before-stop-grant.log" 2>&1
+            systemctl stop opennds
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/after-stop.log"; then exit 1; fi
+            printf 'NATIVE_PORTAL_FAIL_CLOSED_START_STOP_PASS\n'
+          args:
+            executable: /bin/bash
+          register: portal_qualification
+          changed_when: true
+
+        - name: Report the bounded native qualification result
+          ansible.builtin.debug:
+            msg: "{{ portal_qualification.stdout_lines }}"
