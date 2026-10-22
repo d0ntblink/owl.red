@@ -444,6 +444,50 @@ they are not independent backups.
 
 ## Longhorn Database Volumes
 
+### slskd And Soularr
+
+The owner approved starting the previously unstarted slskd/Soularr pair on the
+cluster behind ProtonVPN. Both now share the existing qBittorrent/Gluetun pod,
+not a second tunnel using the same WireGuard credentials. Normal browser URLs
+are `https://slskd.owl.red` and `https://soularr.owl.red`, with verified
+certificates and the administration allowlist. DiskSpeed and NAS disk tooling
+remain on the NAS and were not migrated.
+
+The [registry](../../ansible/vars/soularr.json) pins the existing images. Ordinary
+configs remain live in `appdata/slskd` and `appdata/soularr` over retained SMB
+claims. slskd's `/app/data` overlays a `longhorn-appdata` claim; its SQLite files
+are not opened on SMB. The five existing databases were copied with SQLite's
+native backup API, passed `quick_check`, and matched their staged SHA-256 sums
+after transfer to Longhorn. Original NAS files remain, but become stale once
+the cluster writes; never use them as automatic rollback data.
+
+Existing Soulseek and WebUI credentials were preserved. Soularr's empty config
+was initialized from its pinned upstream sample with the existing Lidarr key
+and a dedicated slskd API key from Bitwarden. The API key is loopback-scoped;
+no credential values are in Git. Config initialization retains the original
+download and incomplete directories under `/media/Downloads`. Soularr sees the
+completed directory at `/downloads`, and Lidarr sees its original `/media`
+path. slskd runs as its original UID `1654`; Soularr runs as UID `99`, GID `100`.
+Only required appdata directory access was adjusted, not media ownership.
+
+Gluetun requests two Proton forwarded ports. slskd's native VPN integration
+uses the primary port, monitors connection state and delays/disconnects Soulseek
+when the gateway is unavailable. qBittorrent's native forwarding hook uses the
+second port. Both applications' advertised ports matched the live provider
+ports, Soulseek reported `Connected, LoggedIn`, and read-only API requests from
+the Soularr container to both Lidarr and slskd succeeded. This acceptance did
+not trigger an additional test download.
+
+Run `node scripts/soularr-run.mjs verify` for the scoped native connection/port
+check. `prepare` and `seed` are initial migration operations, not routine
+reconciliation; do not repeat them against the running writer. Private
+preimages and database snapshots are under
+`/root/.local/state/owl-red/soularr-migration` on the NAS, not independent
+backups. NAS source containers remain unstarted with restart disabled. A host
+rollback of the shared pod must stop every cluster writer and preserve/export
+the current Longhorn databases before considering NAS activation; the older
+qBittorrent-only host rollback is not a complete rollback of this new pair.
+
 Prefer the existing shared PostgreSQL service where the application supports it
 and a verified migration preserves existing state. Use an isolated database/role
 per app. Seerr `3.5.0` supports PostgreSQL and documents a specific pgloader build

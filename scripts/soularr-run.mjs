@@ -7,7 +7,7 @@ import { parseEnv } from 'node:util';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'plan';
-assert.ok(['plan', 'prepare', 'seed', 'verify'].includes(phase), 'Use plan, prepare, seed or verify.');
+assert.ok(['plan', 'prepare', 'seed', 'verify', 'repair-config'].includes(phase), 'Use plan, prepare, seed, verify or repair-config.');
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const home = os.homedir();
 const config = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/soularr.json'), 'utf8'));
@@ -42,6 +42,24 @@ echo json_encode(['yaml'=>file_get_contents('/mnt/user/appdata/slskd/slskd.yml')
 `));
 }
 async function main() {
+  if (phase === 'repair-config') {
+    const pods = JSON.parse(kubectl(['get', 'pods', '-l', 'app.kubernetes.io/name=qbittorrent', '-o', 'json'])).items;
+    assert.ok(pods.every(pod => !pod.status.containerStatuses?.find(container => container.name === 'slskd')?.ready), 'Repair only the rejected, inactive slskd configuration.');
+    const original = ssh(common + "echo file_get_contents('/mnt/user/appdata/slskd/slskd.yml');\n");
+    const parser = String.raw`import sys,yaml
+settings=yaml.safe_load(sys.stdin)
+transfers=settings.setdefault('transfers',{})
+for name,values in (settings.pop('global',{}) or {}).items():
+    target=transfers.setdefault(name,{})
+    for key,value in values.items(): target.setdefault(key,value)
+if 'groups' in settings:
+    target=transfers.setdefault('groups',{})
+    for key,value in settings.pop('groups').items(): target.setdefault(key,value)
+print(yaml.safe_dump(settings,sort_keys=False))`;
+    const repaired = execute(path.join(repository, '.venv/bin/python'), ['-c', parser], original);
+    console.log(ssh(common + "$file='/mnt/user/appdata/slskd/slskd.yml';privateFile($directory.'/slskd-before-schema-repair.yml',file_get_contents($file));privateFile($file,base64_decode('" + Buffer.from(repaired).toString('base64') + "'));chown($file,'k8s');chgrp($file,'users');chmod($file,0660);echo json_encode(['nativeTransfersSchemaRepaired'=>true,'limitValuesPreserved'=>true]).PHP_EOL;\n"));
+    return;
+  }
   if (phase === 'plan' || phase === 'prepare') {
     const source = capture();
     const parsed = JSON.parse(execute(path.join(repository, '.venv/bin/python'), ['-c', 'import json,sys,yaml; print(json.dumps(yaml.safe_load(json.load(sys.stdin)["yaml"]) or {}))'], JSON.stringify(source)));
@@ -66,7 +84,7 @@ def default(path,value):
         if not isinstance(node.get(key),dict): node[key]={}
         node=node[key]
     if node.get(path[-1]) is None: node[path[-1]]=value
-mapping={'SLSKD_SLSK_USERNAME':['soulseek','username'],'SLSKD_SLSK_PASSWORD':['soulseek','password'],'SLSKD_USERNAME':['web','authentication','username'],'SLSKD_PASSWORD':['web','authentication','password'],'SLSKD_SLSK_DESCRIPTION':['soulseek','description'],'SLSKD_UPLOAD_SLOTS':['global','upload','slots'],'SLSKD_UPLOAD_SPEED_LIMIT':['global','upload','speed_limit']}
+mapping={'SLSKD_SLSK_USERNAME':['soulseek','username'],'SLSKD_SLSK_PASSWORD':['soulseek','password'],'SLSKD_USERNAME':['web','authentication','username'],'SLSKD_PASSWORD':['web','authentication','password'],'SLSKD_SLSK_DESCRIPTION':['soulseek','description'],'SLSKD_UPLOAD_SLOTS':['transfers','upload','slots'],'SLSKD_UPLOAD_SPEED_LIMIT':['transfers','upload','speed_limit']}
 for key,target in mapping.items():
     if key in request['environment']:
         value=request['environment'][key]
@@ -144,6 +162,16 @@ echo json_encode(['privateConfigsPrepared'=>true,'existingSlskdCredentialsPreser
     const qbittorrent = JSON.parse(kubectl(['exec', pod.metadata.name, '-c', 'qbittorrent', '--', 'curl', '--fail', '--silent', 'http://127.0.0.1:8080/api/v2/app/preferences']));
     assert.equal(qbittorrent.listen_port, ports[1]);
     assert.match(String(server.state), /LoggedIn/i, 'Soulseek login must succeed.');
+    const connections = [
+      'import configparser,json,urllib.request',
+      "settings=configparser.ConfigParser(interpolation=None); settings.read('/data/config.ini')",
+      "for section,route in [('Lidarr','/api/v1/system/status'),('Slskd','/api/v0/server')]:",
+      "    request=urllib.request.Request(settings[section]['host_url'].rstrip('/')+route,headers={'X-Api-Key':settings[section]['api_key']})",
+      '    with urllib.request.urlopen(request,timeout=15) as response:',
+      "        if response.status!=200: raise RuntimeError('Native API connection failed')",
+      "print(json.dumps({'soularrLidarrConnection':True,'soularrSlskdConnection':True}))",
+    ].join('\n');
+    console.log(kubectl(['exec', '-i', pod.metadata.name, '-c', 'soularr', '--', 'python', '-'], connections));
     console.log(JSON.stringify({ soulseekLoggedIn: true, separateForwardedPortsSynchronized: true, slskdAndSoularrRunning: true, sharedVpnPod: pod.metadata.name, diskToolingChanged: false }));
     return;
   }
