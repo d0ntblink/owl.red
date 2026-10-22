@@ -51,7 +51,7 @@
     "leaseTimeHours": 4,
     "leaseTimeMinutes": 0,
     "domainName": "owl.red",
-    "enabled": false
+    "enabled": true
   },
   {
     "_comment": "VLAN 40 — IoT, no internet, local only",
