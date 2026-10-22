@@ -334,6 +334,114 @@ qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
 copy their config directories onto SMB and assume SQLite, locking, paths or
 VPN isolation remain correct. GPU apps remain on the NAS.
 
+## qBittorrent And Gluetun
+
+qBittorrent `5.3.0` and Gluetun run together in one Kubernetes pod in the
+`qbittorrent` namespace, using separate pinned upstream images. The
+[Fleet bundle](../../gitops/qbittorrent/qbittorrent.yaml),
+[application registry](../../ansible/vars/qbittorrent.json) and
+[cluster migration helper](../../scripts/qbittorrent-cluster-run.mjs) own the
+deployment. It uses `Recreate`, one replica, and a native Gluetun sidecar started
+before the non-root qBittorrent process. Initial placement is `worker1-talos`;
+ordinary node rescheduling is allowed.
+
+The browser endpoint is `https://qbittorrent.owl.red`, with a verified
+Let's Encrypt certificate and the administration allowlist. Download clients
+use `http://qbittorrent-direct.owl.red:8080` at `10.0.10.203`, restricted to the
+management LAN and administration PC. Sonarr HD/UHD, Radarr HD/UHD, Lidarr and
+Prowlarr passed their native connection tests. Lidarr previously had no saved
+credentials and relied on the Docker-network bypass; it now uses the existing
+qBittorrent account credential from Sonarr's private native settings. The
+Sonarr API masks that password, so it is not a credential source. No account
+password was reset. Gluetun has no browser WebUI; its control API is loopback-only.
+
+### Preserved Storage
+
+The existing `/mnt/user/appdata/binhex-qbittorrentvpn` is still mounted at
+`/config` through a retained static SMB claim, including the original profile,
+torrent files and resume state. Its directory name is intentionally unchanged.
+NAS media remains at `/media`, with no data movement or ownership changes.
+The small legacy `/shared` contents were copied to the owned
+`appdata/qbittorrent-shared` directory and remain at `/shared`; the old Docker
+volume is retained. There is no SQLite database in this profile. Five torrents,
+their identities, paths, categories and tags, category definitions, and the
+original WebUI username/password hash matched the private final baseline.
+
+Gluetun's configuration remains in `/mnt/user/appdata/gluetun`. Its private
+WireGuard file reuses the original key, address and peer endpoint. Legacy
+`PostUp`/`PostDown` scripts are not used. The custom WireGuard provider retains
+that endpoint, with native ProtonVPN NAT-PMP port forwarding. Credentials stay
+in the existing private Bitwarden/SMB CSI secret lane, never in Git manifests.
+
+The owner approved adding the existing `k8s` identity to media's write list and
+ordinary case-sensitive SMB mode for `appdata` and `media`. Forced-lowercase
+mode hid existing mixed-case paths such as `qBittorrent` and `Downloads`.
+Files were not renamed; media ownership/ACLs, existing write grants and the
+secure/guest-read policy were preserved. Global NFS remains disabled, including
+the latent public media export. The private Gluetun tree and newly created
+shared directory are owned by `k8s`; unrelated app ownership is unchanged.
+Named ACLs alone did not permit traversal of the private root-owned Gluetun
+tree, so its approved ownership correction is required. Source flash settings
+record these narrow changes; they do not authorize unrelated share changes.
+
+### VPN Operation
+
+qBittorrent binds to `wg0` and uses Gluetun's DNS. UPnP and random ports are
+disabled; documented native Gluetun hooks synchronize the advertised listening
+port and bind qBittorrent to loopback while the VPN is down. The existing
+localhost API authentication bypass is retained, not newly enabled. Explicit
+cluster, management-LAN and administration-PC route exceptions permit internal
+WebUI return traffic; public internet routes through WireGuard.
+
+The cluster directly executes qBittorrent as UID `99`, GID `100`, retaining the
+original `000` umask. It bypasses the image's port updater, which does not
+recognize qBittorrent 5.3's `[WebUI]` authentication layout and writes duplicate
+legacy fields. Native Gluetun hooks replace it; no custom updater daemon is
+installed. Privoxy and SOCKS are disabled, with no ports `8118` or `9118`.
+Neither container is privileged. Gluetun has the required network/file
+capabilities, including `FOWNER` to clean up runtime files. Its startup removes
+only stale WireGuard table `51820` rules inside the pod namespace. Kernel
+WireGuard was qualified without hostPath, `/dev/net/tun` or host networking.
+
+The first VPN-stop check exposed a missing `FOWNER` capability and consequent
+stale-rule restart failure. Both were repaired before the accepted check:
+the same direct HTTPS request succeeded with VPN up and timed out with VPN
+stopped. VPN restart ran in `finally`, and subsequent verification confirmed
+`wg0`, renewed port synchronization, preserved state and signed HTTPS access.
+Lease renewal is asynchronous: pod readiness can return before the forwarding
+hook rebinds qBittorrent from `lo` to `wg0`. Verify that agreement after recovery.
+This planned stop/recovery check does not certify every unclean failure mode.
+
+From the repository root:
+
+```sh
+node scripts/qbittorrent-cluster-run.mjs verify
+```
+
+### Cutover And Rollback
+
+The cluster helper's `media-access` and `case-access` implement the approved
+native Unraid settings. `prepare` captures private container preimages and
+scoped appdata ACLs. `stop` records the final baseline, stops both NAS containers
+and disables restart before Fleet replicas are raised. The temporary storage
+check wrote/deleted only its own unique files and its pod was removed. `peers`
+tests and updates native client endpoints without replacing category settings.
+Do not repeat initial preparation while the cluster writer is active.
+
+NAS `qbittorrent` and `gluetun`, plus `qbittorrentvpn-rollback`, remain stopped
+with restart disabled. Never start them alongside the cluster pod. For host
+rollback, publish Fleet replicas `0`, wait for every application pod to disappear,
+then run `node scripts/qbittorrent-cluster-run.mjs rollback`. It starts the clean
+NAS pair against current profile/resume state, not a stale archive. Once the NAS
+API is healthy, restore native client host fields from the private per-app
+preimages. That host rollback has not been executed against the accepted
+deployment. The [old NAS helper](../../scripts/qbittorrent-run.mjs) also guards
+against cluster writers; its bundled-image rollback is not routine host rollback.
+Native Unraid templates are fallback definitions, not permission to start
+retired writers. Baselines, container definitions, client preimages and the
+offline archive remain in `/root/.local/state/owl-red/qbittorrent-cluster`;
+they are not independent backups.
+
 ## Longhorn Database Volumes
 
 Prefer the existing shared PostgreSQL service where the application supports it
