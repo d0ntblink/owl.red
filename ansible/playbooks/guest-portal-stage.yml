@@ -27,6 +27,7 @@
           - inotify-tools
           - udhcpc
           - bind9-dnsutils
+          - conntrack
         state: present
         update_cache: true
         cache_valid_time: 3600
@@ -46,6 +47,317 @@
       changed_when: false
       failed_when: portal_opennds_version.stdout != '10.3.1+dfsg-1'
 
+    - name: Install the daemonless runtime only for the external DHCP fixture
+      ansible.builtin.apt:
+        name: podman
+        state: present
+        policy_rc_d: 101
+      when: portal_technitium_fixture_allowed | default(false) | bool
+
+    - name: Fetch the pinned official external DHCP fixture image
+      ansible.builtin.command:
+        argv:
+          - podman
+          - pull
+          - docker.io/technitium/dns-server@sha256:1d5330f216d7e3bbe2192a73d114de61ca7c45800238e570cb22a6e86b7a892f
+      when: portal_technitium_fixture_allowed | default(false) | bool
+      changed_when: false
+
+    - name: Create the native adapter directory
+      ansible.builtin.file:
+        path: /usr/local/libexec
+        state: directory
+        mode: "0755"
+
+    - name: Install the read-only lease adapter
+      ansible.builtin.copy:
+        src: ../files/opennds-technitium-leases.py
+        dest: /usr/local/libexec/opennds-technitium-leases.py
+        mode: "0644"
+
+    - name: Verify native lease-cache publication without a client network
+      when: portal_adapter_contract_allowed | default(false) | bool
+      ansible.builtin.shell: |
+        set -eu
+        if nft list table inet owl_portal_guard >/dev/null 2>&1; then exit 1; fi
+        private=$(mktemp -d /var/tmp/owl-lease-contract-XXXXXX)
+        trap 'nft delete table inet owl_portal_guard; rm -rf "$private"' EXIT
+        nft add table inet owl_portal_guard
+        nft 'add set inet owl_portal_guard technitium_leases { type ipv4_addr; flags timeout; }'
+        python3 - "$private" <<'PY'
+        import datetime,importlib.util,json,pathlib,subprocess,sys
+        spec=importlib.util.spec_from_file_location('adapter','/usr/local/libexec/opennds-technitium-leases.py')
+        adapter=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        now=int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        expiry=datetime.datetime.fromtimestamp(now+300,datetime.timezone.utc).isoformat()
+        payload={'status':'ok','response':{'leases':[{'scope':'portal-contract','type':'Dynamic','address':'198.18.30.2','hardwareAddress':'02-00-00-00-00-01','leaseExpires':expiry}]}}
+        selected=adapter.select_leases(payload,'portal-contract','198.18.30.0/24',now)
+        output=pathlib.Path(sys.argv[1])/'leases'
+        adapter.publish(selected,output,5,now)
+        assert output.stat().st_mode & 0o077 == 0
+        native=json.loads(subprocess.check_output(['nft','-j','list','set','inet','owl_portal_guard','technitium_leases']))
+        elements=next(entry['set']['elem'] for entry in native['nftables'] if 'set' in entry)
+        assert len(elements)==1 and 0<elements[0]['elem']['expires']<=5 and elements[0]['elem']['timeout']==5
+        failed=subprocess.run(['python3','/usr/local/libexec/opennds-technitium-leases.py','--stdin','--output',str(output)],input=json.dumps({'status':'invalid-token'}),text=True,capture_output=True)
+        assert failed.returncode==1 and output.read_text()==''
+        native=json.loads(subprocess.check_output(['nft','-j','list','set','inet','owl_portal_guard','technitium_leases']))
+        assert not next(entry['set'] for entry in native['nftables'] if 'set' in entry).get('elem')
+        print('NATIVE_LEASE_CACHE_TIMEOUT_AND_FAILURE_CLEAR_PASS')
+        PY
+      args:
+        executable: /bin/bash
+      register: portal_adapter_contract
+      changed_when: true
+
+    - name: Report the native adapter contract result
+      ansible.builtin.debug:
+        msg: "{{ portal_adapter_contract.stdout_lines }}"
+      when: portal_adapter_contract_allowed | default(false) | bool
+
+    - name: Prepare the native external-lease configuration directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0700"
+      loop: [/etc/config, /var/lib/opennds]
+      when: portal_technitium_fixture_allowed | default(false) | bool
+
+    - name: Select the genuine exported lease file for the external DHCP fixture
+      ansible.builtin.copy:
+        dest: /etc/config/opennds
+        mode: "0600"
+        backup: true
+        content: |
+          config opennds
+            option enabled '1'
+            option gatewayname 'owl.red external DHCP qualification'
+            option gatewayinterface 'br-portal-test'
+            option gatewayport '2050'
+            option maxclients '8'
+            option login_option_enabled '1'
+            option dhcp_leases_file '/var/lib/opennds/technitium.leases'
+            option checkinterval '5'
+            option allow_preemptive_authentication '0'
+      when: portal_technitium_fixture_allowed | default(false) | bool
+
+    - name: Disable local DHCP for the genuine external DHCP fixture
+      ansible.builtin.copy:
+        dest: /etc/dnsmasq.d/owl-portal-lab.conf
+        mode: "0600"
+        content: |
+          interface=br-portal-test
+          listen-address=198.18.30.1
+          bind-dynamic
+          no-resolv
+          server=10.0.2.3
+          no-dhcp-interface=br-portal-test
+      when: portal_technitium_fixture_allowed | default(false) | bool
+
+    - name: Verify genuine external DHCP allocation and native lease export
+      when: portal_technitium_fixture_allowed | default(false) | bool
+      ansible.builtin.shell: |
+        set -eu
+        if ip link show br-portal-test >/dev/null 2>&1; then exit 1; fi
+        if ip netns list | grep -qE '^owl-portal-(client|dhcp) '; then exit 1; fi
+        if nft list table inet owl_portal_guard >/dev/null 2>&1; then exit 1; fi
+        if podman container exists owl-portal-dhcp; then exit 1; fi
+        if pgrep -x opennds >/dev/null; then exit 1; fi
+        private=$(mktemp -d /var/tmp/owl-technitium-contract-XXXXXX)
+        original_forward=$(cat /proc/sys/net/ipv4/ip_forward)
+        original_forward6=$(cat /proc/sys/net/ipv6/conf/all/forwarding)
+        original_policy=$(iptables -S FORWARD | awk '$1=="-P" {print $3; exit}')
+        original_default=$(ip -4 route show default)
+        route_changed=0
+        cleanup() {
+          systemctl stop owl-portal-contract >/dev/null 2>&1 || true
+          systemctl stop dnsmasq >/dev/null 2>&1 || true
+          if [[ "$route_changed" = 1 ]]; then
+            ip -4 route del default >/dev/null 2>&1 || true
+            ip -4 route add $original_default
+          fi
+          ip rule del priority 10400 >/dev/null 2>&1 || true
+          ip route flush table 104 >/dev/null 2>&1 || true
+          iptables -t nat -D POSTROUTING -s 198.19.1.2/32 -o bootstrap0 -j MASQUERADE >/dev/null 2>&1 || true
+          podman rm -f owl-portal-dhcp >/dev/null 2>&1 || true
+          ip netns del owl-portal-client >/dev/null 2>&1 || true
+          ip netns del owl-portal-dhcp >/dev/null 2>&1 || true
+          ip netns del owl-portal-upstream >/dev/null 2>&1 || true
+          ip link del br-portal-test >/dev/null 2>&1 || true
+          nft delete table inet owl_portal_guard >/dev/null 2>&1 || true
+          iptables -P FORWARD "$original_policy"
+          sysctl -qw "net.ipv4.ip_forward=$original_forward"
+          sysctl -qw "net.ipv6.conf.all.forwarding=$original_forward6"
+        }
+        trap cleanup EXIT
+        ip link add br-portal-test type bridge
+        ip address add 198.18.30.1/24 dev br-portal-test
+        ip link set br-portal-test up
+        for namespace in client dhcp; do
+          ip netns add "owl-portal-$namespace"
+          ip link add "owl-$namespace-peer" type veth peer name "owl-$namespace-nic"
+          ip link set "owl-$namespace-peer" master br-portal-test
+          ip link set "owl-$namespace-peer" up
+          ip link set "owl-$namespace-nic" netns "owl-portal-$namespace"
+          ip netns exec "owl-portal-$namespace" ip link set lo up
+          ip netns exec "owl-portal-$namespace" ip link set "owl-$namespace-nic" up
+        done
+        ip netns exec owl-portal-dhcp ip address add 198.18.30.3/24 dev owl-dhcp-nic
+        ip netns exec owl-portal-client ip link set owl-client-nic address 02:6f:77:30:02:04
+        python3 - "$private" <<'PY'
+        import pathlib,secrets,sys
+        password=pathlib.Path(sys.argv[1])/'password'
+        password.write_text(secrets.token_urlsafe(32))
+        password.chmod(0o600)
+        (password.parent/'config').mkdir(mode=0o700)
+        PY
+        podman run -d --name owl-portal-dhcp --network ns:/run/netns/owl-portal-dhcp --memory 256m --pids-limit 128 --cap-add NET_ADMIN --cap-add NET_RAW -e DNS_SERVER_ADMIN_PASSWORD_FILE=/run/password -v "$private/password:/run/password:ro" -v "$private/config:/etc/dns" docker.io/technitium/dns-server@sha256:1d5330f216d7e3bbe2192a73d114de61ca7c45800238e570cb22a6e86b7a892f >"$private/container-id"
+        timeout 60 podman logs -f owl-portal-dhcp 2>&1 | awk '/Web Service.*started|Web Service.*listening/ {exit}' >"$private/readiness.log" || true
+        ip netns exec owl-portal-dhcp python3 - "$private" <<'PY'
+        import json,pathlib,sys,urllib.parse,urllib.request
+        private=pathlib.Path(sys.argv[1])
+        def api(path,parameters):
+          request=urllib.request.Request('http://127.0.0.1:5380/api/'+path,data=urllib.parse.urlencode(parameters).encode())
+          with urllib.request.urlopen(request,timeout=10) as response: payload=json.load(response)
+          if payload.get('status')!='ok':
+            (private/'api-failure.json').write_text(json.dumps(payload))
+            (private/'api-failure.json').chmod(0o600)
+            raise RuntimeError('Isolated fixture API failed; private diagnostics retained')
+          return payload
+        token=api('user/login',{'user':'admin','pass':(private/'password').read_text()})['token']
+        (private/'token').write_text(token)
+        (private/'token').chmod(0o600)
+        api('dhcp/scopes/set',{'token':token,'name':'portal-contract','startingAddress':'198.18.30.2','endingAddress':'198.18.30.8','subnetMask':'255.255.255.0','routerAddress':'198.18.30.1','useThisDnsServer':'false','dnsServers':'198.18.30.1','leaseTimeDays':'0','leaseTimeMinutes':'5','blockLocallyAdministeredMacAddresses':'false','ignoreClientIdentifierOption':'true','exclusions':'198.18.30.3|198.18.30.3'})
+        api('dhcp/scopes/enable',{'token':token,'name':'portal-contract'})
+        PY
+        ip netns exec owl-portal-client udhcpc -i owl-client-nic -n -q -t 3 -T 2 -s /bin/true >"$private/dhcp.log" 2>&1
+        nft add table inet owl_portal_guard
+        nft 'add set inet owl_portal_guard technitium_leases { type ipv4_addr; flags timeout; }'
+        ip netns exec owl-portal-dhcp python3 /usr/local/libexec/opennds-technitium-leases.py --api-url http://127.0.0.1:5380/api/dhcp/leases/list --token-file "$private/token" --scope portal-contract --subnet 198.18.30.0/24 --check-only
+        ip netns exec owl-portal-dhcp python3 - "$private" <<'PY' | python3 /usr/local/libexec/opennds-technitium-leases.py --stdin --scope portal-contract --subnet 198.18.30.0/24 --output "$private/leases"
+        import json,pathlib,sys,urllib.parse,urllib.request
+        request=urllib.request.Request('http://127.0.0.1:5380/api/dhcp/leases/list',data=urllib.parse.urlencode({'token':(pathlib.Path(sys.argv[1])/'token').read_text()}).encode())
+        with urllib.request.urlopen(request,timeout=5) as response: payload=json.load(response)
+        snapshot=pathlib.Path(sys.argv[1])/'snapshot.json'
+        snapshot.write_text(json.dumps(payload))
+        snapshot.chmod(0o600)
+        print(json.dumps(payload))
+        PY
+        awk '$2=="02:6f:77:30:02:04" && $3=="198.18.30.2" {found=1} END {exit !found}' "$private/leases"
+        printf 'GENUINE_TECHNITIUM_DHCP_AND_LEASE_EXPORT_PASS\n'
+        install -m 0600 "$private/leases" /var/lib/opennds/technitium.leases
+        ip netns exec owl-portal-client ip address add 198.18.30.2/24 dev owl-client-nic
+        ip netns exec owl-portal-client ip route add default via 198.18.30.1
+        ip netns add owl-portal-upstream
+        ip link add owl-transit type veth peer name owl-up-transit
+        ip link set owl-up-transit netns owl-portal-upstream
+        ip address add 198.19.0.1/30 dev owl-transit
+        ip link set owl-transit up
+        ip link add owl-uplink type veth peer name owl-up-uplink
+        ip link set owl-up-uplink netns owl-portal-upstream
+        ip address add 198.19.1.1/30 dev owl-uplink
+        ip link set owl-uplink up
+        ip netns exec owl-portal-upstream ip link set lo up
+        ip netns exec owl-portal-upstream ip address add 198.19.0.2/30 dev owl-up-transit
+        ip netns exec owl-portal-upstream ip address add 198.19.1.2/30 dev owl-up-uplink
+        ip netns exec owl-portal-upstream ip link set owl-up-transit up
+        ip netns exec owl-portal-upstream ip link set owl-up-uplink up
+        ip netns exec owl-portal-upstream ip route add 198.18.30.0/24 via 198.19.0.1
+        ip netns exec owl-portal-upstream ip route add default via 198.19.1.1
+        ip netns exec owl-portal-upstream sysctl -qw net.ipv4.ip_forward=1
+        ip netns exec owl-portal-upstream iptables -t nat -A POSTROUTING -s 198.18.0.0/15 -o owl-up-uplink -j MASQUERADE
+        ip route add table 104 default via 10.0.2.2 dev bootstrap0
+        ip rule add priority 10400 iif owl-uplink lookup 104
+        route_changed=1
+        ip -4 route del default
+        ip route add default via 198.19.0.2 dev owl-transit
+        ping -c 1 -W 2 198.19.0.2 >"$private/upstream-reachable.log"
+        nft 'add chain inet owl_portal_guard forward { type filter hook forward priority 200; policy drop; }'
+        nft 'add rule inet owl_portal_guard forward iifname "br-portal-test" oifname "owl-transit" ip saddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept'
+        nft 'add rule inet owl_portal_guard forward iifname "owl-transit" oifname "br-portal-test" ip daddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept'
+        nft 'add rule inet owl_portal_guard forward iifname "owl-uplink" oifname "bootstrap0" ip saddr 198.19.1.2 counter accept'
+        nft 'add rule inet owl_portal_guard forward iifname "bootstrap0" oifname "owl-uplink" ip daddr 198.19.1.2 counter accept'
+        sysctl -qw net.ipv4.ip_forward=1
+        iptables -P FORWARD ACCEPT
+        iptables -t nat -A POSTROUTING -s 198.19.1.2/32 -o bootstrap0 -j MASQUERADE
+        server=$(getent ahostsv4 example.com | awk 'NR==1 {print $1; exit}')
+        systemctl start dnsmasq
+        rm -f /tmp/ndsctl.sock /tmp/ndscids/heartbeat
+        truncate -s 0 /tmp/ndslog/authlog.log
+        find /tmp/ndscids/preemptive_auth -maxdepth 1 -type f -delete
+        systemd-run --unit owl-portal-contract --collect --property Type=forking "$(command -v opennds)" -b >"$private/native-start.log" 2>&1
+        if ! test -S /tmp/ndsctl.sock; then
+          inotifywait -qq -t 60 -e create --include 'ndsctl\.sock$' /tmp || test -S /tmp/ndsctl.sock
+        fi
+        if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$private/preauth.log"; then exit 1; fi
+        code=$(ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null -w '%{http_code}' http://example.com/)
+        test "$code" = 302 || test "$code" = 307
+        ndsctl auth 198.18.30.2 >"$private/grant.log" 2>&1
+        ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null
+        ndsctl deauth 198.18.30.2 >"$private/revoke.log" 2>&1
+        if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$private/revoked.log"; then exit 1; fi
+        printf 'TECHNITIUM_OPENNDS_DISCOVERY_GRANT_REVOKE_PASS\n'
+        ip -6 address add fdca:30::1/64 dev br-portal-test nodad
+        ip -6 address add fdca:31::1/64 dev owl-transit nodad
+        ip netns exec owl-portal-client ip -6 address add fdca:30::2/64 dev owl-client-nic nodad
+        ip netns exec owl-portal-client ip -6 route add default via fdca:30::1
+        ip netns exec owl-portal-client ip -6 neigh replace fdca:30::1 lladdr "$(cat /sys/class/net/br-portal-test/address)" nud permanent dev owl-client-nic
+        ip netns exec owl-portal-upstream ip -6 address add fdca:31::2/64 dev owl-up-transit nodad
+        ip netns exec owl-portal-upstream ip -6 route add fdca:30::/64 via fdca:31::1
+        sysctl -qw net.ipv6.conf.all.forwarding=1
+        ping -6 -c 1 -W 2 fdca:31::2 >"$private/ipv6-positive-control.log"
+        python3 /usr/local/libexec/opennds-technitium-leases.py --stdin --scope portal-contract --subnet 198.18.30.0/24 --output /var/lib/opennds/technitium.leases <"$private/snapshot.json"
+        nft -f - <<'NFT'
+        add chain inet owl_portal_guard guest_lease_ingress { type filter hook ingress device "br-portal-test" priority -200; policy accept; }
+        add rule inet owl_portal_guard guest_lease_ingress meta nfproto ipv6 counter drop
+        add rule inet owl_portal_guard guest_lease_ingress ip daddr 198.18.30.0/24 accept
+        add rule inet owl_portal_guard guest_lease_ingress ip saddr @technitium_leases accept
+        add rule inet owl_portal_guard guest_lease_ingress meta nfproto ipv4 counter drop
+        add chain inet owl_portal_guard return_lease_ingress { type filter hook ingress device "owl-transit" priority -200; policy accept; }
+        add rule inet owl_portal_guard return_lease_ingress meta nfproto ipv6 counter drop
+        add rule inet owl_portal_guard return_lease_ingress ip daddr @technitium_leases accept
+        add rule inet owl_portal_guard return_lease_ingress ip daddr 198.18.30.0/24 counter drop
+        NFT
+        ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null http://example.com/
+        ndsctl auth 198.18.30.2 >"$private/freshness-grant.log" 2>&1
+        ip netns exec owl-portal-client python3 - "$server" "$private" <<'PY'
+        import http.client,json,pathlib,socket,ssl,subprocess,sys,time
+        request=b'GET / HTTP/1.1\r\nHost: example.com\r\nConnection: keep-alive\r\n\r\n'
+        with socket.create_connection((sys.argv[1],443),timeout=5) as transport:
+          with ssl.create_default_context().wrap_socket(transport,server_hostname='example.com') as connection:
+            connection.settimeout(3)
+            connection.sendall(request)
+            response=http.client.HTTPResponse(connection)
+            response.begin()
+            assert response.status==200 and not response.will_close
+            response.read()
+            private=pathlib.Path(sys.argv[2])
+            update=subprocess.run(['nsenter','-t','1','-n','python3','/usr/local/libexec/opennds-technitium-leases.py','--stdin','--scope','portal-contract','--subnet','198.18.30.0/24','--freshness-seconds','5','--output','/var/lib/opennds/technitium.leases'],input=(private/'snapshot.json').read_text(),text=True,capture_output=True,timeout=10)
+            assert update.returncode==0
+            started=time.monotonic()
+            ipv6=subprocess.run(['ping','-6','-c','1','-W','6','fdca:31::2'],capture_output=True,timeout=8)
+            assert ipv6.returncode!=0 and time.monotonic()-started>=5,'IPv6 probe must stay blocked across the freshness deadline'
+            native=json.loads(subprocess.check_output(['nsenter','-t','1','-n','nft','-j','list','set','inet','owl_portal_guard','technitium_leases']))
+            assert not next(entry['set'] for entry in native['nftables'] if 'set' in entry).get('elem'),'Stalled sync left usable lease facts'
+            try:
+              connection.sendall(request)
+              leaked=bool(connection.recv(1))
+            except (TimeoutError,ConnectionError,ssl.SSLError):
+              leaked=False
+            assert not leaked,'Established traffic bypassed the expired lease cache'
+        print('TECHNITIUM_STALLED_SYNC_ESTABLISHED_DENY_PASS')
+        print('NATIVE_IPV6_PACKET_DENY_PASS')
+        PY
+      args:
+        executable: /bin/bash
+      register: portal_technitium_contract
+      changed_when: true
+
+    - name: Report the genuine external DHCP qualification result
+      ansible.builtin.debug:
+        msg: "{{ portal_technitium_contract.stdout_lines }}"
+      when: portal_technitium_fixture_allowed | default(false) | bool
+
     - name: Qualify native authorization on a disposable isolated client
       when: portal_qualification_allowed | default(false) | bool
       block:
@@ -59,11 +371,15 @@
               bind-dynamic
               no-resolv
               server=10.0.2.3
+              {% if portal_require_local_lease | default(true) | bool %}
               dhcp-range=198.18.30.2,198.18.30.8,255.255.255.0,5m
               dhcp-host=02:6f:77:30:02:04,198.18.30.2
               dhcp-leasefile=/var/lib/misc/dnsmasq.leases
               dhcp-option=3,198.18.30.1
               dhcp-option=6,198.18.30.1
+              {% else %}
+              no-dhcp-interface=br-portal-test
+              {% endif %}
 
         - name: Create the native generic-Linux configuration directory
           ansible.builtin.file:
@@ -83,8 +399,75 @@
                   option gatewayinterface 'br-portal-test'
                   option gatewayport '2050'
                   option maxclients '8'
-                  option login_option_enabled '1'
+                  option login_option_enabled '{{ 1 if portal_require_local_lease | default(true) | bool else 0 }}'
                   option dhcp_leases_file '/var/lib/misc/dnsmasq.leases'
+                  option checkinterval '5'
+                  option allow_preemptive_authentication '0'
+                {% if not portal_require_local_lease | default(true) | bool %}
+                  option fasport '2080'
+                  option fasremoteip '203.0.113.8'
+                  option fasremotefqdn 'disabled'
+                  option faspath '/fas-hid.php'
+                  option fas_secure_enabled '1'
+                {% endif %}
+
+        - name: Clear cached lab flows on native deauthentication
+          ansible.builtin.blockinfile:
+            path: /usr/lib/opennds/custombinauth.sh
+            backup: true
+            marker: "# {mark} OWL PORTAL LAB CONNTRACK CLEANUP"
+            block: |
+              case "$1" in
+                *_deauth)
+                  cleanup_ip=$(/usr/lib/opennds/libopennds.sh clientaddress "$2" | awk '{print $1}')
+                  case "$cleanup_ip" in
+                    198.18.30.[2-8])
+                      cleanup_mac=$(printf '%s' "$2" | tr -d ':')
+                      rm -f "/tmp/ndscids/preemptive_auth/$cleanup_mac"
+                      conntrack -D -f ipv4 -s "$cleanup_ip" >/dev/null 2>&1 || true
+                      conntrack -D -f ipv4 -d "$cleanup_ip" >/dev/null 2>&1 || true
+                      ;;
+                  esac
+                  ;;
+              esac
+
+        - name: Create the isolated gateway service override directory
+          ansible.builtin.file:
+            path: /etc/systemd/system/opennds.service.d
+            state: directory
+            mode: "0755"
+
+        - name: Configure atomic native cleanup before enabling lab forwarding
+          ansible.builtin.copy:
+            dest: /etc/opennds/owl-portal-guard-enable.nft
+            mode: "0600"
+            content: |
+              destroy table ip nds_filter
+              destroy table ip nds_mangle
+              destroy table ip nds_nat
+              flush chain inet owl_portal_guard forward
+              add rule inet owl_portal_guard forward iifname "br-portal-test" oifname "bootstrap0" ip saddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept
+              add rule inet owl_portal_guard forward iifname "bootstrap0" oifname "br-portal-test" ip daddr 198.18.30.0/24 meta mark & 0x30000 == 0x30000 counter accept
+
+        - name: Close the independent guard when the daemon exits
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/opennds.service.d/owl-portal-lab.conf
+            mode: "0644"
+            content: |
+              [Service]
+              ExecStartPre=/bin/sh -c '! pgrep -x opennds'
+              ExecStartPre=/usr/bin/mkdir -p /tmp/ndslog /tmp/ndscids/preemptive_auth
+              ExecStartPre=/usr/bin/truncate -s 0 /tmp/ndslog/authlog.log
+              ExecStartPre=/usr/bin/find /tmp/ndscids/preemptive_auth -maxdepth 1 -type f -delete
+              ExecStartPre=/usr/bin/rm -f /run/owl-portal-stopped /tmp/ndsctl.sock /tmp/ndscids/heartbeat
+              ExecStartPre=/usr/sbin/nft -f /etc/opennds/owl-portal-guard-enable.nft
+              ExecStopPost=/usr/sbin/nft flush chain inet owl_portal_guard forward
+              ExecStopPost=/usr/bin/rm -f /tmp/ndsctl.sock /tmp/ndscids/heartbeat
+              ExecStopPost=/usr/bin/touch /run/owl-portal-stopped
+
+        - name: Load the isolated service override
+          ansible.builtin.systemd_service:
+            daemon_reload: true
 
         - name: Exercise the installed gateway engine without production interfaces
           ansible.builtin.shell: |
@@ -165,8 +548,16 @@
             fi
             nft list chain ip nds_filter ndsNET >"$diagnostics/forward-chain.log"
             grep -q 'counter.*reject' "$diagnostics/forward-chain.log"
+            {% if portal_require_local_lease | default(true) | bool %}
             ip netns exec owl-portal-client udhcpc -i owl-portal-nic -n -q -t 3 -T 2 -s /bin/true >"$diagnostics/dhcp.log" 2>&1
             awk '$2=="02:6f:77:30:02:04" && $3=="198.18.30.2" {found=1} END {exit !found}' /var/lib/misc/dnsmasq.leases
+            {% else %}
+            if test -f /var/lib/misc/dnsmasq.leases; then
+              cp -p /var/lib/misc/dnsmasq.leases "$diagnostics/dnsmasq-leases-before"
+              truncate -s 0 /var/lib/misc/dnsmasq.leases
+            fi
+            printf 'external_dhcp_mode=no_local_lease\n'
+            {% endif %}
             printf 'phase=unauthenticated\n'
             if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/preauth.log"; then
               printf 'unauthenticated_https=unexpectedly_allowed\n'
@@ -183,11 +574,140 @@
             ndsctl deauth 198.18.30.2 >"$diagnostics/revoke.log" 2>&1
             if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/revoked.log"; then exit 1; fi
             printf 'NATIVE_PORTAL_GRANT_REVOKE_PASS\n'
+            printf 'phase=established-connection-revoke\n'
+            ip netns exec owl-portal-client python3 - "$server" "$diagnostics" <<'PY'
+            import http.client
+            import pathlib
+            import socket
+            import ssl
+            import subprocess
+            import sys
+
+            def control(command):
+              if command == 'auth':
+                discovery = subprocess.run(['curl', '--noproxy', '*', '-sS', '--max-time', '8', '--resolve', 'example.com:80:' + sys.argv[1], 'http://example.com/', '-o', '/dev/null', '-w', '%{http_code}'], capture_output=True, timeout=10)
+                assert discovery.returncode == 0 and discovery.stdout in (b'302', b'307'), 'Fresh portal discovery is required'
+              result = subprocess.run(['ndsctl', command, '198.18.30.2'], capture_output=True, timeout=10)
+              assert result.returncode == 0, 'Native session command failed'
+              expected = b'Client 198.18.30.2 ' + (b'authenticated.' if command == 'auth' else b'deauthenticated.')
+              assert expected in result.stdout, 'Native session completion reply missing'
+
+            request = b'GET / HTTP/1.1\r\nHost: example.com\r\nConnection: keep-alive\r\n\r\n'
+            control('auth')
+            context = ssl.create_default_context()
+            with socket.create_connection((sys.argv[1], 443), timeout=5) as transport:
+              with context.wrap_socket(transport, server_hostname='example.com') as connection:
+                connection.settimeout(4)
+                connection.sendall(request)
+                response = http.client.HTTPResponse(connection)
+                response.begin()
+                assert response.status == 200 and not response.will_close, 'An established keep-alive session is required'
+                response.read()
+                control('deauth')
+                try:
+                  connection.sendall(request)
+                  leaked = bool(connection.recv(1))
+                except (TimeoutError, ConnectionError, ssl.SSLError):
+                  leaked = False
+                if leaked:
+                  for name, arguments in [
+                    ('revocation-rules.json', ['nft', '-j', 'list', 'ruleset']),
+                    ('revocation-connections.log', ['conntrack', '-L', '-f', 'ipv4', '-s', '198.18.30.2']),
+                  ]:
+                    captured = subprocess.run(['nsenter', '-t', '1', '-n', *arguments], capture_output=True, timeout=10)
+                    private = pathlib.Path(sys.argv[2]) / name
+                    private.write_bytes(captured.stdout + captured.stderr)
+                    private.chmod(0o600)
+                assert not leaked, 'Revoked established connection still passes application traffic'
+            print('NATIVE_PORTAL_ESTABLISHED_REVOKE_PASS')
+            PY
+            printf 'phase=native-session-expiry\n'
+            ip netns exec owl-portal-client python3 - "$server" <<'PY'
+            import os
+            import pathlib
+            import selectors
+            import subprocess
+            import sys
+            import time
+
+            log = pathlib.Path('/tmp/ndslog/binauthlog.log')
+            observer = subprocess.Popen(
+              ['inotifywait', '-m', '-e', 'modify,create,moved_to', '--format', '%f', str(log.parent)],
+              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            selector = selectors.DefaultSelector()
+            try:
+              assert observer.stderr.readline().startswith('Setting up watches')
+              assert observer.stderr.readline().startswith('Watches established')
+              selector.register(observer.stdout, selectors.EVENT_READ)
+              started = time.monotonic()
+              granted_after = int(time.time())
+              discovery = subprocess.run(['curl', '--noproxy', '*', '-sS', '--max-time', '8', '--resolve', 'example.com:80:' + sys.argv[1], 'http://example.com/', '-o', '/dev/null', '-w', '%{http_code}'], capture_output=True, timeout=10)
+              assert discovery.returncode == 0 and discovery.stdout in (b'302', b'307'), 'Timed session requires fresh portal discovery'
+              grant = subprocess.run(['ndsctl', 'auth', '198.18.30.2', '1'], capture_output=True, timeout=10)
+              assert grant.returncode == 0, 'Native one-minute grant failed'
+              request = ['curl', '--noproxy', '*', '-fsS', '--connect-timeout', '3', '--max-time', '6', '--resolve', 'example.com:443:' + sys.argv[1], 'https://example.com/', '-o', '/dev/null']
+              assert subprocess.run(request, capture_output=True, timeout=8).returncode == 0, 'Timed session never gained access'
+              deadline = started + 80
+              expired = False
+              while time.monotonic() < deadline:
+                try:
+                  lines = log.read_text().splitlines()
+                except FileNotFoundError:
+                  lines = []
+                for line in lines:
+                  fields = dict(part.split('=', 1) for part in line.split(', ') if '=' in part)
+                  if fields.get('clientmac') == '02:6f:77:30:02:04' and fields.get('method') == 'timeout_deauth' and int(fields.get('session_start', '0')) >= granted_after:
+                    expired = True
+                    break
+                if expired:
+                  break
+                events = selector.select(max(0, deadline - time.monotonic()))
+                if not events:
+                  break
+                os.read(observer.stdout.fileno(), 65536)
+              assert expired, 'Native session did not expire within its watchdog allowance'
+              assert subprocess.run(request, capture_output=True, timeout=8).returncode != 0, 'Expired session still has internet access'
+              print('NATIVE_PORTAL_SESSION_EXPIRY_PASS elapsed_seconds=' + str(round(time.monotonic() - started)))
+            finally:
+              selector.close()
+              observer.terminate()
+              observer.communicate(timeout=5)
+            PY
             printf 'phase=authorized-daemon-stop\n'
+            ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null http://example.com/
             ndsctl auth 198.18.30.2 >"$diagnostics/before-stop-grant.log" 2>&1
             systemctl stop opennds
             if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/after-stop.log"; then exit 1; fi
             printf 'NATIVE_PORTAL_FAIL_CLOSED_START_STOP_PASS\n'
+            printf 'phase=crash-cleanup\n'
+            systemctl start opennds
+            if ! test -S /tmp/ndsctl.sock; then
+              inotifywait -qq -t 60 -e create --include 'ndsctl\.sock$' /tmp || test -S /tmp/ndsctl.sock
+            fi
+            ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null http://example.com/
+            ndsctl auth 198.18.30.2 >"$diagnostics/before-crash-grant.log" 2>&1
+            ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null
+            previous_pid=$(systemctl show opennds -p MainPID --value)
+            test "$previous_pid" -gt 1
+            systemctl kill --kill-whom=main --signal=SIGKILL opennds
+            if ! test -e /run/owl-portal-stopped; then
+              inotifywait -qq -t 10 -e create --include 'owl-portal-stopped$' /run || test -e /run/owl-portal-stopped
+            fi
+            nft -j list chain inet owl_portal_guard forward | python3 -c 'import json,sys; data=json.load(sys.stdin)["nftables"]; assert not any("rule" in entry for entry in data); assert any(entry.get("chain",{}).get("policy")=="drop" for entry in data)'
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/after-crash.log"; then exit 1; fi
+            printf 'NATIVE_PORTAL_CRASH_CLEANUP_DENY_PASS\n'
+            if ! test -S /tmp/ndsctl.sock; then
+              inotifywait -qq -t 60 -e create --include 'ndsctl\.sock$' /tmp || test -S /tmp/ndsctl.sock
+            fi
+            test "$(systemctl show opennds -p NRestarts --value)" -ge 1
+            test "$(systemctl show opennds -p MainPID --value)" != "$previous_pid"
+            nft list chain ip nds_filter ndsNET | grep -q 'counter.*reject'
+            if ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 2 --max-time 3 --resolve "example.com:443:$server" https://example.com/ -o /dev/null 2>"$diagnostics/restart-preauth.log"; then exit 1; fi
+            ip netns exec owl-portal-client curl --noproxy '*' -sS --max-time 8 --resolve "example.com:80:$server" -o /dev/null http://example.com/
+            ndsctl auth 198.18.30.2 >"$diagnostics/recovered-grant.log" 2>&1
+            ip netns exec owl-portal-client curl --noproxy '*' -fsS --connect-timeout 3 --max-time 6 --resolve "example.com:443:$server" https://example.com/ -o /dev/null
+            printf 'NATIVE_PORTAL_AUTOMATIC_RESTART_PASS\n'
           args:
             executable: /bin/bash
           register: portal_qualification

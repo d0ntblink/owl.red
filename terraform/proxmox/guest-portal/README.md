@@ -1,8 +1,11 @@
 # Guest Portal Gateway Staging
 
 The owner selected a small Debian VM with native openNDS rather than custom
-session/firewall enforcement. The old OpenWrt portal is retired; only its text
-and concept are reference material. No portal runs on the AP.
+session/firewall enforcement. The old OpenWrt portal is retired and its local
+checkout has been removed. Its reusable artwork and new presentation live in
+[the portal directory](../../../ansible/files/guest-portal/README.md), with the
+[original theme](../../../docs/reference/guest-portal-original-theme.txt)
+retained only as a copy reference. No portal runs on the AP.
 
 ## Current State
 
