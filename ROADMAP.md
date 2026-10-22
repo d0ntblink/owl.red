@@ -74,9 +74,14 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add narrowly scoped device-specific and multicast policies where required;
   verify required media, printing and discovery flows without broad management access.
 - [ ] Finish the separate Debian/openNDS guest gateway: isolated VM 104 passed
-  native denial, redirect and grant/revoke checks. Qualify fail-closed behavior,
-  expiry/existing connections, guest DHCP/DNS, CAPPORT/HTTPS and IPv4/IPv6
-  isolation before enabling guest DHCP and Wi-Fi.
+  native denial, redirect, grant/revoke, fail-closed lifecycle, session expiry,
+  existing-connection revocation, genuine Technitium DHCP lease integration,
+  stale-lease-cache denial and IPv6 packet denial. The no-PHP
+  [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal)
+  now builds/tests and publishes to Docker Hub through Actions. Complete native
+  HTTPS FAS/Authmon integration, CAPPORT, real-device testing and a reviewed
+  production cutover before enabling guest DHCP and Wi-Fi. Technitium remains
+  the DHCP authority on every VLAN.
 - [ ] Extend the existing Tailscale setup with reviewed management routing,
   access rules and split DNS; verify access from outside the home network.
 - [ ] Standardize client NTP configuration on the router through each system's

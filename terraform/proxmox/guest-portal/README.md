@@ -74,14 +74,37 @@ Its client-allocation check requires a real lease, not a fabricated lease file.
 Failure diagnostics under VM `/var/tmp/owl-portal-qualification-*` are private;
 do not dump or commit native session data or generated authentication material.
 
+## Published Portal App
+
+Presentation and its TypeScript FAS integration are owned by the public
+[owl.red-guest-captive-portal repository](https://github.com/d0ntblink/owl.red-guest-captive-portal),
+not this Terraform root. No PHP is used by that app. Its GitHub Actions workflow
+builds and tests the container, verifies a nonroot/read-only runtime, and publishes
+`d0ntblink/owl.red-guest-captive-portal` to Docker Hub using the GitHub-purpose
+Docker Hub token held in Bitwarden Secrets Manager and an encrypted Actions secret.
+
+Qualified build/publication revision: `ff5108db3b1913242f2b980e38a2ddb17b50221a`.
+Public image digest:
+`sha256:6b242856125ca3758ca92c3df4b295da0d4974f7dce9ed796260727efd4c02b3`.
+This verifies app/container publication, not production guest acceptance.
+Do not automatically deploy `latest` or activate a guest scope on image publication.
+
+The app's seven tests include production HTTP consent, foreign-origin rejection,
+and untrusted Authmon denial. Desktop/mobile rendering and local artwork were
+checked. A sandboxed integrated browser submits `Origin: null`; consent correctly
+rejects that origin rather than bypassing CSRF checks for a preview.
+
 ## Production Gates
 
 The guest network remains disabled. Before a separately reviewed cutover:
 
 - Choose and verify the guest-facing VLAN and isolated transit path to VyOS.
   Remove any alternate direct guest-to-VyOS bypass path.
-- Reconcile the single guest DHCP/DNS authority. The dormant Technitium guest
-  scope must not compete with gateway dnsmasq; the lab does not decide ownership.
+- Keep Technitium as DHCP authority on every VLAN. The approved read-only lease
+  adapter passed genuine isolated Technitium allocation/export and native openNDS
+  discovery/grant/revoke. Its kernel freshness timeout denies established traffic
+  when synchronization stalls; IPv6 packet denial also passed in the routed lab.
+  Production API credentials, HTTPS access and scheduling still require deployment.
 - Prove that startup, daemon failure/restart and shutdown cannot open access.
   A listener or a systemd active state is not sufficient readiness.
 - Test session expiry and termination of already-established connections;
