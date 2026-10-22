@@ -442,6 +442,42 @@ retired writers. Baselines, container definitions, client preimages and the
 offline archive remain in `/root/.local/state/owl-red/qbittorrent-cluster`;
 they are not independent backups.
 
+## Fresh Speedtest Tracker
+
+The owner requested a clean replacement for the broken legacy tracker rather
+than a history conversion. `https://speedtest.owl.red` now serves the maintained
+LinuxServer `v1.15.0-ls176` image, pinned by digest in the
+[registry](../../ansible/vars/speedtest.json) and
+[Fleet deployment](../../gitops/speedtest/speedtest.yaml). It uses one replica,
+the administration allowlist, and a verified Let's Encrypt certificate.
+Its normal internet route is not the downloaders' VPN gateway.
+
+The fresh `speedtest` PostgreSQL database has a dedicated non-superuser role
+managed by the existing [database registry](../../ansible/vars/postgresql.json).
+Ordinary config stays live in the new NAS `appdata/speedtest-tracker-v2`
+directory through a retained SMB claim. Neither legacy SQLite file is mounted
+or imported. The LinuxServer init runs normally; application processes use
+the configured `k8s` UID `1001`, GID `100`. The readiness probe uses the pinned
+release's verified `/admin/login` route, not the absent generic `/up` route.
+
+The initial admin is `admin@owl.red`. The generated password is stored in
+Bitwarden as `speedtest__admin-password`, and the stable encryption key as
+`speedtest__app-key`; mapped Kubernetes secrets supply both before the native
+first migration creates the user. Do not rotate the app key on redeploy.
+The native Laravel password-hash/admin-role checks and PostgreSQL query passed.
+One initial test completed and was stored in PostgreSQL. Automatic tests run
+every six hours; results are not automatically pruned. Display timezone is
+`America/Edmonton`, and the public dashboard is disabled.
+
+Use `node scripts/speedtest-run.mjs verify` for the scoped native DB/admin check.
+`initial-test` refuses another run when any result already exists. `prepare`
+and `retire` are guarded initial provisioning/cleanup operations, not data resets.
+The stopped legacy NAS container and its native Unraid template/autostart entry
+were removed after acceptance. Its two old database/history files remain under
+`appdata/speedtest-tracker`, separate from the replacement, pending an explicit
+decision to delete them. Private legacy-definition/template preimages are under
+`/root/.local/state/owl-red/speedtest-fresh`; they are not independent backups.
+
 ## Longhorn Database Volumes
 
 ### Tautulli And Reclaimerr
@@ -467,10 +503,10 @@ update passed using the internal service name. No extra test media operation
 was triggered.
 
 Normal browser URLs are `https://tautulli.owl.red` and
-`https://reclaimerr.owl.red`. At cutover the apps were Ready, but their shared
-certificate was still waiting for Tautulli's public DNS-01 TXT record to
-propagate; browser TLS verification has not yet passed. Do not bypass that
-verification or present the pending certificate as ready. cert-manager creates
+`https://reclaimerr.owl.red`. Their shared certificate completed DNS-01
+validation after the initial propagation delay. TLS verification passed for
+both URLs; Tautulli redirects to its login and Reclaimerr serves its UI.
+cert-manager creates
 and removes temporary Cloudflare TXT records and renews certificates; those
 challenge values are not Terraform-managed persistent records. The internal
 application A records remain in the Technitium zone. Google and Cloudflare
