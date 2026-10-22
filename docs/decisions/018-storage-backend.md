@@ -54,6 +54,15 @@ database, not the default destination for every SQLite database. Changing
 state and qualify the conversion before switching the running app. Ordinary
 configuration remains live in NAS `appdata` in either case.
 
+Batch exception approved by the owner (2026-10-21): migrate the existing Arr
+applications and Bazarr to Kubernetes with their SQLite schemas unchanged on
+Longhorn, and defer PostgreSQL conversion. Upstream does not support converting
+existing Arr SQLite data to PostgreSQL. This separates the host move from the
+database-engine migration and preserves users, integration keys and history.
+Ordinary config remains on NAS appdata; no live SQLite files are opened on SMB.
+The exception does not change the PostgreSQL preference for other applications
+or authorize clearing existing databases.
+
 Longhorn replicas must use suitable node-local storage on different physical
 Proxmox hosts, not SMB-mounted replica directories. Talos system extensions,
 mount propagation, resource capacity and safe single-writer failover must be
