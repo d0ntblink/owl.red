@@ -172,15 +172,16 @@ spec:
             - {name: WIREGUARD_IMPLEMENTATION, value: kernelspace}
             - {name: VPN_PORT_FORWARDING, value: "on"}
             - {name: VPN_PORT_FORWARDING_PROVIDER, value: protonvpn}
+            - {name: VPN_PORT_FORWARDING_PORTS_COUNT, value: "2"}
             - {name: HTTP_CONTROL_SERVER_ADDRESS, value: "127.0.0.1:8000"}
             - {name: HTTP_CONTROL_SERVER_AUTH_CONFIG_FILEPATH, value: /gluetun/control.toml}
-            - {name: FIREWALL_INPUT_PORTS, value: "8080"}
+            - {name: FIREWALL_INPUT_PORTS, value: "8080,5030,8265"}
             - {name: FIREWALL_OUTBOUND_SUBNETS, value: "10.244.0.0/16,10.96.0.0/12,10.0.10.0/24,10.0.20.10/32"}
             - {name: HTTPPROXY, value: "off"}
             - {name: SHADOWSOCKS, value: "off"}
             - name: VPN_PORT_FORWARDING_UP_COMMAND
               value: >-
-                /bin/sh -c 'wget -qO /dev/null --retry-connrefused --tries=30 --waitretry=1 --timeout=2 --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"current_interface_address\":\"\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
+                /bin/sh -c 'ports="{{PORTS}}"; port="${ports#*,}"; test "$port" != "$ports" || exit 1; wget -qO /dev/null --retry-connrefused --tries=30 --waitretry=1 --timeout=2 --post-data "json={\"listen_port\":$port,\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"current_interface_address\":\"\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences'
             - name: VPN_PORT_FORWARDING_DOWN_COMMAND
               value: >-
                 /bin/sh -c 'wget -qO /dev/null --timeout=3 --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences'
@@ -235,11 +236,75 @@ spec:
             - {name: config, mountPath: /config}
             - {name: media, mountPath: /media}
             - {name: shared, mountPath: /shared}
+        - name: slskd
+          image: slskd/slskd@sha256:588af49abc3088d639c8f1174d3bfad6e92c093a275a593140e3ac9311ebf6c4
+          command: [/bin/sh, -ec]
+          args:
+            - >-
+              umask 0022;
+              exec /slskd/slskd --app-dir /app --vpn --vpn-port-forwarding
+              --vpn-gluetun-url http://127.0.0.1:8000
+          env:
+            - {name: TZ, value: America/Edmonton}
+            - {name: DOTNET_BUNDLE_EXTRACT_BASE_DIR, value: /tmp/slskd}
+          securityContext:
+            runAsUser: 1654
+            runAsGroup: 100
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          ports:
+            - {name: slskd-http, containerPort: 5030}
+          startupProbe:
+            httpGet: {path: /, port: slskd-http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /, port: slskd-http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: slskd-config, mountPath: /app}
+            - {name: slskd-data, mountPath: /app/data}
+            - {name: media, mountPath: /media}
+        - name: soularr
+          image: mrusse08/soularr@sha256:89b6809a169f6c78032c9a66abf5130e4877c46c0b95391818a38ab66cd71548
+          env:
+            - {name: TZ, value: America/New_York}
+            - {name: SCRIPT_INTERVAL, value: "300"}
+            - {name: WEBUI_ENABLED, value: "true"}
+            - {name: WEBUI_PORT, value: "8265"}
+          securityContext:
+            runAsUser: 99
+            runAsGroup: 100
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          ports:
+            - {name: soularr-http, containerPort: 8265}
+          startupProbe:
+            httpGet: {path: /, port: soularr-http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /, port: soularr-http}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: soularr-config, mountPath: /data}
+            - {name: media, mountPath: /downloads, subPath: Downloads/slskd}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: config}}
         - {name: gateway, persistentVolumeClaim: {claimName: gateway}}
         - {name: media, persistentVolumeClaim: {claimName: media}}
         - {name: shared, persistentVolumeClaim: {claimName: shared}}
+        - {name: slskd-config, persistentVolumeClaim: {claimName: slskd-config}}
+        - {name: slskd-data, persistentVolumeClaim: {claimName: slskd-data}}
+        - {name: soularr-config, persistentVolumeClaim: {claimName: soularr-config}}
 ---
 apiVersion: v1
 kind: Service

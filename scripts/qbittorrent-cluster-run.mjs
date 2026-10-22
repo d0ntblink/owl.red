@@ -37,8 +37,10 @@ if (phase === 'verify') {
   const preferences = JSON.parse(app('/app/preferences'));
   assert.equal(app('/app/version'), configuration.version);
   assert.equal(preferences.current_network_interface, 'wg0');
-  const forwarded = execute('kubectl', ['-n', namespace, 'exec', pod.metadata.name, '-c', 'gluetun', '--', 'cat', '/tmp/gluetun/forwarded_port']);
-  assert.equal(preferences.listen_port, Number(forwarded));
+  const forwarding = JSON.parse(execute('kubectl', ['-n', namespace, 'exec', pod.metadata.name, '-c', 'qbittorrent', '--', 'curl', '--fail', '--silent', 'http://127.0.0.1:8000/v1/portforward']));
+  const ports = forwarding.ports || [forwarding.port];
+  const sharedSoulseek = workload.spec.template.spec.containers.some(container => container.name === 'slskd');
+  assert.equal(preferences.listen_port, ports[sharedSoulseek ? 1 : 0]);
   const route = execute('kubectl', ['-n', namespace, 'exec', pod.metadata.name, '-c', 'qbittorrent', '--', 'ip', 'route', 'get', '1.1.1.1']);
   assert.ok(route.includes('dev wg0'), 'Public internet must route through WireGuard.');
   const dns = execute('kubectl', ['-n', namespace, 'exec', pod.metadata.name, '-c', 'qbittorrent', '--', 'cat', '/etc/resolv.conf']);
