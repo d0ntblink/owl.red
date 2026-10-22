@@ -328,8 +328,8 @@ preimages remain under `/root/.local/state/owl-red/flaresolverr-migration` on
 the NAS. `rollback` starts the old container and restores the proxy host
 `http://flaresolverr:8191` through the native API. No application data is deleted.
 
-Librespeed has an external PostgreSQL dependency; Tautulli, Seerr and Arr apps
-have persistent state requiring application-specific database/storage checks.
+Librespeed has an external PostgreSQL dependency; Arr apps have persistent
+state requiring application-specific database/storage checks.
 qBittorrent's VPN/shared-network behavior is also a migration boundary. Do not
 copy their config directories onto SMB and assume SQLite, locking, paths or
 VPN isolation remain correct. GPU apps remain on the NAS.
@@ -444,6 +444,48 @@ they are not independent backups.
 
 ## Longhorn Database Volumes
 
+### Tautulli And Reclaimerr
+
+Both apps now run as non-root UID `99`, GID `100` in the `media-apps` namespace,
+using their existing pinned images and one replica with `Recreate` strategy.
+Their ordinary configurations remain live on NAS appdata. Tautulli's native
+`--config /config/config.ini --datadir /data` split puts its active SQLite file
+on Longhorn without relocating the NAS config, caches, logs or backups.
+Reclaimerr's database and IMDb SQLite cache overlay their existing paths with
+subdirectories from one Longhorn volume. This version hardcodes SQLite and
+does not expose a native PostgreSQL backend.
+
+The [registry](../../ansible/vars/media-batch.json),
+[Fleet resources](../../gitops/media-apps/applications.yaml) and
+[batch controller](../../scripts/media-batch-run.mjs) own this migration.
+The three databases were captured with SQLite's native backup API after the
+NAS writers stopped, passed `quick_check`, and matched their SHA-256 hashes
+after transfer. Application table row counts were preserved after startup.
+Tautulli's existing API key worked, Reclaimerr's private session/encryption
+secrets file remained byte-identical, and Seerr's native Tautulli connection
+update passed using the internal service name. No extra test media operation
+was triggered.
+
+Normal browser URLs are `https://tautulli.owl.red` and
+`https://reclaimerr.owl.red`. At cutover the apps were Ready, but their shared
+certificate was still waiting for Tautulli's public DNS-01 TXT record to
+propagate; browser TLS verification has not yet passed. Do not bypass that
+verification or present the pending certificate as ready. cert-manager creates
+and removes temporary Cloudflare TXT records and renews certificates; those
+challenge values are not Terraform-managed persistent records. The internal
+application A records remain in the Technitium zone. Google and Cloudflare
+public resolvers are both retained for self-checks, with Google now first after
+a stale negative response was observed from 1.1.1.1.
+
+NAS containers are stopped with restart disabled. Their original databases are
+retained but are stale once the cluster writes. The batch controller refuses a
+NAS rollback against stale data: pause both Fleet workloads, wait for all app
+pods to disappear, and export the current Longhorn state before host recovery.
+Private snapshots and preimages are under
+`/root/.local/state/owl-red/media-batch`, not independent backups. Temporary
+seed pods were removed; GPU applications, the VPN pod and NAS disk tooling
+were not modified by this batch.
+
 ### slskd And Soularr
 
 The owner approved starting the previously unstarted slskd/Soularr pair on the
@@ -524,8 +566,10 @@ it is not a production database reset command.
 The [Seerr host controller](../../scripts/seerr-run.mjs) prepares peers through
 native settings APIs, stops the old PostgreSQL NAS writer, and verifies the new
 TLS endpoint, existing API key, user/request counts and application/session
-identity. Radarr, Sonarr and Tautulli use the existing NAS DNS name and distinct
-published ports while they await their own migrations. Native API bodies omit
+identity. Radarr and Sonarr use the existing NAS DNS name and distinct
+published ports while they await their own migrations. Tautulli now uses
+`tautulli.media-apps.svc.cluster.local:8181` through Seerr's native settings API.
+Native API bodies omit
 read-only IDs and preserve integration keys/profiles/options.
 
 Only Seerr's non-database config tree received a named `k8s` ACL for SMB writes;
