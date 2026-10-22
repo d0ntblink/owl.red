@@ -10,6 +10,11 @@
       "scope": "vlan10-network-devices",
       "hardwareAddress": "AC-1F-6B-47-87-F1",
       "ipAddress": "10.0.10.4"
+    },
+    {
+      "scope": "vlan50-iot-with-inter",
+      "hardwareAddress": "3C-6D-66-0E-1F-67",
+      "ipAddress": "10.0.50.11"
     }
   ],
 
@@ -220,6 +225,15 @@
         },
 
         {
+          "hardwareAddress": "3C-6D-66-0E-1F-67",
+          "ipAddress": "10.0.20.100",
+          "hostName": "shield.owl.red",
+          "comments": "NVIDIA Shield TV - owner moved to private WiFi/VLAN 20. Preserve the verified current private address without forcing reconnection.",
+          "macSource": "Owner WiFi move and live Technitium private lease, 2026-10-22",
+          "status": "confirmed"
+        },
+
+        {
           "hardwareAddress": "TBD",
           "ipAddress": "10.0.20.12",
           "hostName": "tablet.owl.red",
@@ -304,15 +318,6 @@
           "hostName": "ecobee.owl.red",
           "comments": "Ecobee smart thermostat — needs internet for cloud API",
           "macSource": "Recorded DHCP lease 2026-06-09 (ecobee inc)",
-          "status": "confirmed"
-        },
-
-        {
-          "hardwareAddress": "3C-6D-66-0E-1F-67",
-          "ipAddress": "10.0.50.11",
-          "hostName": "shield.owl.red",
-          "comments": "NVIDIA Shield TV - internet required. Target VLAN 50 allocation; access to local media services requires explicit inter-VLAN policy.",
-          "macSource": "docs/device-inventory.md - recorded Shield network MAC",
           "status": "confirmed"
         }
 

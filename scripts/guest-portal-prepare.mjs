@@ -10,7 +10,7 @@ process.umask(0o077);
 const home = os.homedir();
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const settings = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
-if (['ap-inspect', 'ap-refresh', 'ap-reload', 'ap-reboot', 'ap-allocate', 'ap-enable', 'ap-verify', 'ap-confirm', 'ap-rollback'].includes(process.argv[2])) {
+if (['ap-inspect', 'ap-refresh', 'ap-reload', 'ap-reboot', 'ap-drop-cloud5', 'ap-allocate', 'ap-enable', 'ap-verify', 'ap-confirm', 'ap-rollback'].includes(process.argv[2])) {
   const phase = process.argv[2];
   if (phase !== 'ap-inspect') assert.equal(process.env.GUEST_PORTAL_APPLY_ALLOWED, 'true', 'Explicit guest-only AP approval is required');
   const environment = {
@@ -109,6 +109,20 @@ if request['phase']=='ap-reload':
  selected=shlex.quote(json.dumps({'device':'radio1'}))
  shell('ubus call network.wireless down '+selected+' && ubus call network.wireless up '+selected)
  print(json.dumps({'radio':'radio1','singleNativeReloadIssued':True,'wirelessConfigurationChanged':False})); sys.exit(0)
+if request['phase']=='ap-drop-cloud5':
+ assert not client.call('uci','changes',{'config':'wireless'}).get('changes'),'Refuse pending wireless edits'
+ before=json.loads(json.dumps(wireless))
+ current=runtime_bindings()
+ assert all(item['bridge']==item['expected'] for item in current),'Require the working BSS baseline'
+ snapshot_file=directory/'ap-before-cloud5-retirement.json'
+ assert not snapshot_file.exists(),'Cloud-IoT 5 GHz retirement was already attempted'
+ snapshot_file.write_text(json.dumps({'wireless':before,'network':network})); snapshot_file.chmod(0o600)
+ if transaction_file.exists(): transaction_file.rename(directory/'ap-transaction-before-cloud5-retirement.json')
+ client.call('uci','set',{'config':'wireless','section':'iot_cloud_radio1','values':{'disabled':'1'}})
+ required=[item['section'] for item in current if item['section']!='iot_cloud_radio1']
+ transaction_file.write_text(json.dumps({'session':client.session_id,'guestSections':['guest_radio0'],'beforeFile':str(snapshot_file),'disabledSections':['iot_cloud_radio1'],'requiredSections':required,'baselineBindings':current})); transaction_file.chmod(0o600)
+ client.call('uci','apply',{'rollback':True,'timeout':300})
+ print(json.dumps({'cloud5GHzRetirementPending':True,'cloud2GHzConfigurationUnchanged':True,'rollbackSeconds':300})); sys.exit(0)
 if request['phase']=='ap-allocate':
  assert not client.call('uci','changes',{'config':'wireless'}).get('changes'),'Refuse pending wireless edits'
  assert wireless['private_radio1'].get('disabled','0')=='0' and wireless['guest_radio1']['disabled']=='1','Preserve private 5 GHz and disabled guest 5 GHz'
@@ -164,10 +178,18 @@ if request['phase'] in ['ap-verify','ap-confirm']:
   print(json.dumps({'guestSsidEnabled':True,'guestBand':'2.4GHz','guest5GHzEnabled':False,'otherSsidConfigurationPreserved':True})); sys.exit(0)
  print(json.dumps({'guestBss':active,'allBss':[{'section':interface.get('section'),'ifname':interface.get('ifname')} for interface in interfaces],'nonGuestConfigurationPreserved':True})); sys.exit(0)
 bindings=runtime_bindings()
+cloud5=next((item for item in bindings if item['section']=='iot_cloud_radio1' and item['bridge']!='missing'),None)
+clients=json.loads(shell('ubus call hostapd.'+cloud5['ifname']+' get_clients')).get('clients',{}) if cloud5 else {}
+station_file=directory/'cloud5-current-stations.json'
+station_file.write_text(json.dumps(list(clients))); station_file.chmod(0o600)
+cloud5_summary={'active':cloud5 is not None,'clientCount':len(clients),'shieldAssociated':any(address.lower()=='3c:6d:66:0e:1f:67' for address in clients)}
+cloud2=next((item for item in bindings if item['section']=='iot_cloud_radio0' and item['bridge']!='missing'),None)
+clients2=json.loads(shell('ubus call hostapd.'+cloud2['ifname']+' get_clients')).get('clients',{}) if cloud2 else {}
+cloud2_summary={'active':cloud2 is not None,'ecobeeAssociated':any(address.lower()=='44:61:32:08:d6:2c' for address in clients2)}
 kernel=shell('for device in /sys/class/net/phy*-ap*; do test -d "$device" || continue; name=$(basename "$device"); bridge=$(readlink -f "$device/master" 2>/dev/null || true); master=$(basename "$bridge"); printf "%s %s\\n" "$name" "$master"; done')
 logs=shell('logread | tail -250')
 errors=[re.sub(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}','[mac]',line) for line in logs.splitlines() if re.search(r'phy[01]|radio[01]',line) and re.search(r'fail|error|not supported|no space|busy',line,re.I) and not re.search(r'password|psk|secret|key',line,re.I)]
-print(json.dumps({'guestSections':guest,'guestNetwork':{name:network.get('guest',{}).get(name) for name in ['device','proto']},'guestDevices':[{'name':name,'type':value.get('type'),'ports':value.get('ports')} for name,value in network.items() if value.get('name') in ['br-guest','br-ap.30']],'runtimeBindings':bindings,'kernelBridges':kernel.splitlines(),'radioRuntimeErrors':errors[-8:],'currentBssBridgeBindingsMatch':all(item['bridge']==item['expected'] for item in bindings)}))
+print(json.dumps({'guestSections':guest,'guestNetwork':{name:network.get('guest',{}).get(name) for name in ['device','proto']},'guestDevices':[{'name':name,'type':value.get('type'),'ports':value.get('ports')} for name,value in network.items() if value.get('name') in ['br-guest','br-ap.30']],'runtimeBindings':bindings,'cloud5GHz':cloud5_summary,'cloud2GHz':cloud2_summary,'kernelBridges':kernel.splitlines(),'radioRuntimeErrors':errors[-8:],'currentBssBridgeBindingsMatch':all(item['bridge']==item['expected'] for item in bindings)}))
 `;
   const result = spawnSync(path.join(repository, '.venv/bin/python'), ['-c', code], {
     input: JSON.stringify({ phase, module: path.join(repository, 'ansible/library/openwrt_ap.py'), password: login.login.password, fingerprint: input.certificate_sha256, directory: path.join(home, '.local/state/owl-red/guest-cutover-Bgjxae') }),
