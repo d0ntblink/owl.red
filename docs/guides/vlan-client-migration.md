@@ -35,7 +35,7 @@ Windows adapters, metrics or DNS overrides as a migration shortcut.
 | Bedside tablet | `owl.red`, 20 | Planned `10.0.20.12`; confirm target-SSID MAC before reservation |
 | Work laptop `KAM1WL102916` | `owl.red`, 20 | Dynamic only, no permanent fixed lease |
 | Ecobee | `owl.red-iot-cloud`, 50 | Existing canonical reservation; actual move pending |
-| Shield | `owl.red-iot-cloud`, 50 | `10.0.50.11`; verify NAS Plex access |
+| Shield | `owl.red`, 20 | `10.0.20.100`; owner moved Wi-Fi and private lease verified; playback is an onsite check |
 | Canon printer | `owl.red-iot-local`, 40 | Canonical reservation; verify printing locally |
 | Bambu printer | `owl.red-iot-local`, 40 | Join/onboard locally; report exact required flows before adding exceptions |
 | WUUK foyer camera | `owl.red-iot-local`, 40 | `10.0.40.12`; verify local stream/control without internet |
@@ -57,10 +57,10 @@ on ports 53/853 is denied in both families; arbitrary DoH over 443 is not blocke
 
 ## Home Assistant Device Batch
 
-Move these devices one at a time. Local IoT is 2.4 GHz only; cloud IoT is
-available on both 2.4 and 5 GHz. Use the existing Bitwarden Wi-Fi credentials.
-Prefer 5 GHz for compatible media players; older IoT clients can stay on
-2.4 GHz with the same SSID and VLAN. Leave addressing on DHCP so the canonical
+Move these devices one at a time. Local and cloud IoT are 2.4 GHz only;
+the extra cloud-IoT 5 GHz BSS was retired. Use the existing Bitwarden Wi-Fi credentials.
+The Shield now uses private 5 GHz; IoT retains its existing 2.4 GHz SSIDs and VLANs.
+Leave addressing on DHCP so the canonical
 reservations supply the intended addresses rather than setting static IPs on
 the devices.
 

@@ -49,7 +49,7 @@ Secrets and authentication material are excluded.
 | [printer-canon](#printer-canon) | Network printer | appliance | Canon appliance firmware | `printer.owl.red` / VLAN 40 allocation |
 | [printer-bambu](#printer-bambu) | 3D printer | appliance | Bambu appliance firmware | `bambu.owl.red` / VLAN 40 allocation |
 | [thermostat-ecobee](#thermostat-ecobee) | Thermostat | appliance | ecobee appliance firmware | `ecobee.owl.red` / VLAN 50 allocation |
-| [media-shield](#media-shield) | Media player | appliance | Android TV | `shield.owl.red` / VLAN 50 allocation |
+| [media-shield](#media-shield) | Media player | appliance | Android TV | `shield.owl.red` / private VLAN 20 |
 | [camera-foyer](#camera-foyer) | Foyer camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-foyer.owl.red` / VLAN 40 allocation |
 | [camera-office](#camera-office) | Office camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-office.owl.red` / VLAN 40 allocation |
 
@@ -654,11 +654,11 @@ MAC rather than its permanent address.
 | role | Internet and local-media playback |
 | parent | None |
 | hostname | `shield.owl.red` |
-| network_policy | VLAN 50 with scoped NAS media access |
+| network_policy | Private VLAN 20; owner moved Wi-Fi on 2026-10-22 |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Network identity, interface type not documented | `3c:6d:66:0e:1f:67` | Allocation `10.0.50.11` | Cloud-IoT network |
+| Wi-Fi identity verified by owner move and DHCP | `3c:6d:66:0e:1f:67` | `10.0.20.100` | Private VLAN 20 |
 
 ### camera-foyer
 
