@@ -103,7 +103,7 @@ if (phase === 'bootstrap') {
   }
   const board = JSON.parse(read('ubus call system board'));
   assert.equal(board.board_name, 'dlink,dir-885l');
-  assert.equal(board.release.version, '25.12.2');
+  assert.equal(board.release.version, JSON.parse(fs.readFileSync('ansible/vars/openwrt-firmware.json', 'utf8')).version);
   const wireless = JSON.parse(read('ubus call uci get \'{"config":"wireless"}\'')).values;
   const certificatePath = read('uci -q get uhttpd.main.cert').trim();
   assert.match(certificatePath, /^\/etc\/[A-Za-z0-9_./-]+$/);

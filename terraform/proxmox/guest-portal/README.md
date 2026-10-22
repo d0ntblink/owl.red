@@ -22,6 +22,7 @@ retained only as a copy reference. No portal runs on the AP.
 - Strict SSH host-key pin: `~/.local/state/owl-red/guest-portal-known_hosts`.
 - openNDS, DNS-only dnsmasq, lease refresh timer and guest NTP are enabled; forwarding follows native openNDS lifetime.
 - `silence of the lans` is enabled on 2.4 GHz only, isolated on VLAN 30.
+- The bridge-only AP was clean-reset/upgraded to OpenWrt 25.12.6; private 5 GHz uses the approved channel 36. See the [Wi-Fi implementation guide](../../../docs/guides/wifi-architecture.md) for all SSIDs, components and rules.
 - Private Wi-Fi remains on 5 GHz. The owner approved disabling its 2.4 GHz BSS to keep radio0 at three BSSes: guest, local IoT and cloud IoT.
 - Local and cloud IoT are 2.4 GHz only. The extra cloud-IoT 5 GHz BSS was retired; the Shield moved to private VLAN 20 at its preserved `10.0.20.100` address.
 

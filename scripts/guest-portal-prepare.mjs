@@ -12,6 +12,7 @@ const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname),
 const settings = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
 if (['ap-inspect', 'ap-refresh', 'ap-reload', 'ap-recover-private', 'ap-reboot', 'ap-drop-cloud5', 'ap-allocate', 'ap-enable', 'ap-verify', 'ap-confirm', 'ap-rollback'].includes(process.argv[2])) {
   const phase = process.argv[2];
+  assert.equal(phase, 'ap-inspect', 'AP changes are owned by openwrt-run.mjs and openwrt-refresh.mjs; historical cutover actions are retired');
   if (phase !== 'ap-inspect') assert.equal(process.env.GUEST_PORTAL_APPLY_ALLOWED, 'true', 'Explicit guest-only AP approval is required');
   const environment = {
     ...process.env,
@@ -39,7 +40,7 @@ session=transaction.get('session') if request['phase'] in ['ap-verify','ap-confi
 client=native.NativeAP('https://10.0.10.40',request['password'],request['fingerprint'],session_id=session)
 board=client.call('system','board')
 assert board['board_name']=='dlink,dir-885l'
-assert board['release']['version']=='25.12.2'
+assert board['release']['version']==request['expectedVersion']
 if request['phase']=='ap-rollback':
  client.call('uci','rollback'); print(json.dumps({'guestTrialRolledBack':True})); sys.exit(0)
 wireless=client.call('uci','get',{'config':'wireless'})['values']
@@ -48,12 +49,13 @@ snapshot=directory/'ap-before.json'
 if not snapshot.exists():
  snapshot.write_text(json.dumps({'wireless':wireless,'network':network})); snapshot.chmod(0o600)
 guest=[{'name':name,'device':value.get('device'),'network':value.get('network'),'disabled':value.get('disabled'),'isolate':value.get('isolate')} for name,value in wireless.items() if value.get('.type')=='wifi-iface' and value.get('ssid')=='silence of the lans']
-assert len(guest)==2 and {item['device'] for item in guest}=={'radio0','radio1'}
+assert len(guest)==1 and {item['device'] for item in guest}=={'radio0'}
 assert all(item['network']=='guest' and item['isolate']=='1' for item in guest)
 assert network['guest']['device']=='br-guest' and network['guest']['proto']=='none'
 assert network['guest_bridge']['ports']==['br-ap.30']
 def shell(command,accepted=(0,)):
- result=subprocess.run(['sshpass','-e','ssh','-o','BatchMode=no','-o','StrictHostKeyChecking=yes','-o','HostKeyAlias=10.10.20.1','-o','ConnectTimeout=5','-o','PreferredAuthentications=password','-o','PubkeyAuthentication=no','root@10.0.10.40',command],env={**os.environ,'SSHPASS':request['password']},capture_output=True,text=True,timeout=60)
+ proxy='ssh -i '+str(pathlib.Path.home()/'.ssh/id_ed25519_owl_ansible')+' -o BatchMode=yes -o StrictHostKeyChecking=yes -W %h:%p root@10.0.10.3'
+ result=subprocess.run(['sshpass','-e','ssh','-o','ProxyCommand='+proxy,'-o','BatchMode=no','-o','StrictHostKeyChecking=yes','-o','HostKeyAlias=10.10.20.1','-o','ConnectTimeout=5','-o','PreferredAuthentications=password','-o','PubkeyAuthentication=no','root@10.0.10.40',command],env={**os.environ,'SSHPASS':request['password']},capture_output=True,text=True,timeout=60)
  assert result.returncode in accepted,'Trusted AP runtime '+shlex.split(command)[0]+' failed with exit '+str(result.returncode)+'; private output withheld'
  return result.stdout
 def runtime_bindings(repair=False):
@@ -204,7 +206,7 @@ errors=[re.sub(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}','[mac]',line) for line in
 print(json.dumps({'guestSections':guest,'guestNetwork':{name:network.get('guest',{}).get(name) for name in ['device','proto']},'guestDevices':[{'name':name,'type':value.get('type'),'ports':value.get('ports')} for name,value in network.items() if value.get('name') in ['br-guest','br-ap.30']],'runtimeBindings':bindings,'private5GHz':private5_summary,'cloud5GHz':cloud5_summary,'cloud2GHz':cloud2_summary,'kernelBridges':kernel.splitlines(),'radioRuntimeErrors':errors[-8:],'currentBssBridgeBindingsMatch':all(item['bridge']==item['expected'] for item in bindings)}))
 `;
   const result = spawnSync(path.join(repository, '.venv/bin/python'), ['-c', code], {
-    input: JSON.stringify({ phase, module: path.join(repository, 'ansible/library/openwrt_ap.py'), password: login.login.password, fingerprint: input.certificate_sha256, directory: path.join(home, '.local/state/owl-red/guest-cutover-Bgjxae') }),
+    input: JSON.stringify({ phase, module: path.join(repository, 'ansible/library/openwrt_ap.py'), password: login.login.password, fingerprint: input.certificate_sha256, expectedVersion: JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/openwrt-firmware.json'), 'utf8')).version, directory: path.join(home, '.local/state/owl-red/guest-cutover-Bgjxae') }),
     encoding: 'utf8',
   });
   if (result.status !== 0) {

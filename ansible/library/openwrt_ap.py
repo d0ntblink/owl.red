@@ -156,6 +156,7 @@ def main():
             "phase": {"type": "str", "choices": ["inspect", "qualify", "plan", "trial", "verify", "confirm", "rollback", "finish"], "default": "inspect"},
             "rendered": {"type": "dict", "default": {}, "no_log": True},
             "apply_allowed": {"type": "bool", "default": False},
+            "expected_version": {"type": "str", "default": "25.12.2", "choices": ["25.12.2", "25.12.6"]},
         },
         supports_check_mode=True,
     )
@@ -176,7 +177,7 @@ def main():
         session_id = transaction.get("session") if phase in ["confirm", "rollback"] else None
         client = NativeAP(params["endpoint"], params["password"], fingerprint, session_id)
         board = client.call("system", "board")
-        if board["board_name"] != "dlink,dir-885l" or board["release"]["version"] != "25.12.2":
+        if board["board_name"] != "dlink,dir-885l" or board["release"]["version"] != params["expected_version"]:
             raise APError("Unexpected AP board or firmware")
         if phase == "confirm":
             client.call("uci", "confirm")
@@ -232,7 +233,7 @@ def main():
                 for interface in radio.get("interfaces", []):
                     config = interface.get("config", {})
                     active.append(config.get("ssid"))
-            if active.count("owl.red") != 2 or "owl.red-iot-local" not in active or "owl.red-iot-cloud" not in active or "silence of the lans" in active:
+            if sorted(active) != sorted(["owl.red", "silence of the lans", "owl.red-iot-local", "owl.red-iot-cloud"]):
                 raise APError("Enabled/disabled SSID runtime does not match the target")
             module.exit_json(changed=False, verified=True, active_ssids=active, management="10.0.10.40/24")
         if phase == "finish":
