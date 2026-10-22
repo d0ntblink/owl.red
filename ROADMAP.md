@@ -50,10 +50,11 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
   Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
-- [ ] Deploy Frigate for the two cameras after hardware qualification: bounded
-  RAM recording cache, SSD-only three-day event retention and native UI exports
-  for footage kept longer; verify storage headroom and cleanup without changing
-  production media or adding a custom camera-SD recording pipeline.
+- [x] Deploy Frigate for both qualified cameras with bounded RAM recording cache
+  and SSD-only three-day event retention. Office and foyer both deliver five FPS;
+  foyer's stale gateway watchdog target was corrected without disabling watchdogs.
+- [ ] Verify Frigate retention cleanup and native UI exports for footage kept
+  longer without changing production media or adding a custom camera-SD pipeline.
 - [ ] Activate the Open WebUI Fleet bundle and internal DNS, complete owner/API
   onboarding, and verify a WebUI request releases GPU memory without restarting
   persistent Ollama. Review native model presets and the shared-GPU behavior
