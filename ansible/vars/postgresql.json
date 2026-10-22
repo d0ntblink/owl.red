@@ -9,6 +9,13 @@
     "admin_password_secret": "home-assistant__postgres__admin-password"
   },
   "applications": {
+    "librespeed": {
+      "database": "librespeed",
+      "role": "librespeed",
+      "password_secret": "k8s__librespeed__postgres__password",
+      "url_secret": "k8s__librespeed__postgres__db-url",
+      "kubernetes_namespace": "librespeed"
+    },
     "speedtest": {
       "database": "speedtest",
       "role": "speedtest",
