@@ -1,0 +1,139 @@
+{{- $registry := .Files.Get "apps.json" | fromJson -}}
+{{- range $name, $app := $registry.applications }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: arr-{{ $name }}-config
+spec:
+  capacity: {storage: 2Gi}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=99, gid=100, dir_mode=0770, file_mode=0660]
+  claimRef: {namespace: arr, name: {{ $name }}-config}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: {{ printf "nas.owl.red/appdata#%s#arr-%s-config#retain" $app.subdirectory $name | quote }}
+    volumeAttributes: {source: //nas.owl.red/appdata, subDir: {{ $app.subdirectory | quote }}}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: {{ $name }}-config, namespace: arr}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: arr-{{ $name }}-config
+  resources: {requests: {storage: 2Gi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-data
+  namespace: arr
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-appdata
+  resources: {requests: {storage: 4Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: {{ $name }}, namespace: arr}
+spec:
+  replicas: {{ $.Values.replicas }}
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: {{ $name }}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: {{ $name }}}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      tolerations:
+        - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      securityContext:
+        runAsUser: 99
+        runAsGroup: 100
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: {{ $name }}
+          image: {{ $app.image }}
+          command: [/bin/sh, -ec]
+          {{- if eq $app.kind "bazarr" }}
+          args: ["umask 022; exec /lsiopy/bin/python3 /app/bazarr/bin/bazarr.py --no-update --config /config"]
+          {{- else }}
+          args: [{{ printf "umask 000; exec %s -nobrowser -data=%s" $app.executable $app.mount | quote }}]
+          {{- end }}
+          env:
+            - {name: HOME, value: /config}
+            - {name: TZ, value: {{ $app.timezone | quote }}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          ports: [{name: http, containerPort: {{ $app.port }}}]
+          startupProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 10
+          volumeMounts:
+            {{- if eq $app.kind "bazarr" }}
+            - {name: config, mountPath: /config}
+            - {name: data, mountPath: /config/db, subPath: db}
+            {{- else }}
+            - {name: data, mountPath: {{ $app.mount }}}
+            - {name: config, mountPath: {{ printf "%s/config.xml" $app.mount }}, subPath: config.xml}
+            {{- range $directory := $app.directories }}
+            - {name: config, mountPath: {{ printf "%s/%s" $app.mount $directory | quote }}, subPath: {{ $directory | quote }}}
+            {{- end }}
+            {{- end }}
+            {{- if $app.appdata_downloads }}
+            - {name: config, mountPath: /data, subPath: data}
+            {{- end }}
+            {{- if $app.media_downloads }}
+            - {name: media, mountPath: /data, subPath: {{ $app.media_downloads }}}
+            {{- end }}
+            {{- if ne $app.kind "prowlarr" }}
+            - {name: media, mountPath: /media}
+            {{- end }}
+            {{- if $app.shared }}
+            - {name: shared, mountPath: /shared}
+            {{- end }}
+      volumes:
+        - {name: config, persistentVolumeClaim: {claimName: {{ $name }}-config}}
+        - {name: data, persistentVolumeClaim: {claimName: {{ $name }}-data}}
+        {{- if ne $app.kind "prowlarr" }}
+        - {name: media, persistentVolumeClaim: {claimName: media}}
+        {{- end }}
+        {{- if $app.shared }}
+        - {name: shared, persistentVolumeClaim: {claimName: shared}}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: {{ $name }}, namespace: arr}
+spec:
+  selector: {app.kubernetes.io/name: {{ $name }}}
+  ports: [{name: http, port: {{ $app.port }}, targetPort: http}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: {{ $name }}, namespace: arr}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`{{ $app.hostname }}`)
+      kind: Rule
+      middlewares: [{name: administration-access}]
+      services: [{name: {{ $name }}, port: {{ $app.port }}}]
+  tls: {secretName: arr-tls}
+{{- end }}
