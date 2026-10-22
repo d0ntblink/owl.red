@@ -1,0 +1,12 @@
+{
+  "namespace": "librespeed",
+  "image": "linuxserver/librespeed@sha256:0f85aac620b60a2566049f95d085fd2b044c720abfe88d1f1e14496ea0496833",
+  "version": "v6.3.1-ls297",
+  "webui": "https://librespeed.owl.red",
+  "config_directory": "/mnt/user/appdata/librespeed-v2",
+  "legacy_container": "librespeed",
+  "legacy_image_id": "sha256:7b64f2b0337548a1363eee3ba29f91c81bc3210d52f1d82407ec3cc9efd5d65c",
+  "private_directory": "/root/.local/state/owl-red/librespeed-fresh",
+  "stats_password_secret": "librespeed__stats-password",
+  "database_password_secret": "k8s__librespeed__postgres__password"
+}

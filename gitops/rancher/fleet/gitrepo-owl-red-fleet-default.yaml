@@ -26,6 +26,7 @@ spec:
     - gitops/qbittorrent
     - gitops/media-apps
     - gitops/speedtest
+    - gitops/librespeed
     - gitops/arr
     - gitops/pdm
     - gitops/platform-resilience

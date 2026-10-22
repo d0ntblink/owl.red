@@ -1,0 +1,4 @@
+defaultNamespace: librespeed
+dependsOn:
+  - name: owl-red-gitops-csi-smb
+  - name: owl-red-gitops-bitwarden-secrets
