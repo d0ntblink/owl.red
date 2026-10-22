@@ -14,6 +14,12 @@ and Kubernetes cluster.
 - **Services:** Traefik and cert-manager provide ingress and TLS; Mailgun
   provides automated email delivery.
 
+Guest VLAN 30 is enforced by native openNDS on a separate Debian gateway;
+the [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal)
+serves consent at `https://guest.owl.red`. The AP is bridge-only. See the
+[Wi-Fi architecture](docs/guides/wifi-architecture.md) for the accepted four-SSID
+layout, VLAN paths and access rules.
+
 | Network | Purpose |
 |---------|---------|
 | Native management / VLAN 10 | Infrastructure administration |
@@ -41,6 +47,7 @@ production data during infrastructure changes.
 
 ## Documentation
 
+- [Documentation index](docs/README.md): current runbooks, reference and historical context.
 - [Roadmap](ROADMAP.md): unfinished work and priorities.
 - [Device inventory](docs/device-inventory.md): hardware, interfaces and placement.
 - [Change guide](docs/guides/changing-owl-red.md): which tool to use for a change.

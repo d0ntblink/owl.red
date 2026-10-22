@@ -9,10 +9,10 @@ put it in Git, a command argument, a temporary script or chat.
 
 | Wi-Fi network | Bitwarden item | Effect |
 |---------------|----------------|--------|
-| `owl.red` | `owl-red-wifi-private` | Private Wi-Fi on both bands |
+| `owl.red` | `owl-red-wifi-private` | Private Wi-Fi, VLAN 20, 5 GHz only |
 | `owl.red-iot-local` | `owl-red-wifi-iot-local` | Local-only IoT, VLAN 40 |
-| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50, both bands |
-| `silence of the lans` | `owl-red-wifi-guest` | Stored guest key; changing it does not enable guest Wi-Fi |
+| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50, 2.4 GHz only |
+| `silence of the lans` | `owl-red-wifi-guest` | Active guest Wi-Fi, VLAN 30, 2.4 GHz only; portal consent remains separate |
 
 Change the item's **Password** field, not its name, username or notes. Save it
 and let the Bitwarden application sync. Prefer a generated printable-ASCII

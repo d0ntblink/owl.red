@@ -129,7 +129,8 @@ qualification. Authmon readiness includes its completed startup stale-request
 clear, not merely a TCP listener or control socket.
 
 Actual guest/private/IoT BSS bridge bindings were verified before confirmation.
-A handset captive-browser test and RF/coverage walk remain onsite checks; no
+The owner confirmed a real guest-browser login after the referrer-policy fix.
+Broader handset compatibility and an RF/coverage walk remain onsite checks; no
 workstation Wi-Fi association was changed to claim those tests. DHCP option 114
 is not advertised without a truthful, client-specific CAPPORT endpoint.
 
@@ -150,5 +151,10 @@ reports a boot-flag-only discrepancy. Do not apply it blindly.
 One explicitly approved AP reboot recovered the firmware after failed live
 multi-BSS trials. Four BSSes on radio0 failed to start; the approved three-BSS
 allocation is the accepted source. Do not re-enable private radio0 or guest radio1
-without a new radio-capacity qualification. No firmware was flashed or factory
-reset performed.
+without a new radio-capacity qualification. That earlier capacity trial did not
+flash firmware. Subsequently, on 2026-10-22, the AP was clean-reset/upgraded to
+25.12.6 with a private preseeded image. The approved private channel changed from
+149 to 36; one separately approved post-upgrade reboot restored broadcasting.
+All four SSIDs, their bridge bindings and post-recovery guest acceptance passed.
+See [Wi-Fi architecture](../../../docs/guides/wifi-architecture.md) and
+[guest troubleshooting](../../../docs/guides/guest-wifi-troubleshooting.md).

@@ -50,9 +50,6 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
   Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
-- [x] Deploy Frigate for both qualified cameras with bounded RAM recording cache
-  and SSD-only three-day event retention. Office and foyer both deliver five FPS;
-  foyer's stale gateway watchdog target was corrected without disabling watchdogs.
 - [ ] Verify Frigate retention cleanup and native UI exports for footage kept
   longer without changing production media or adding a custom camera-SD pipeline.
 - [ ] Activate the Open WebUI Fleet bundle and internal DNS, complete owner/API
@@ -75,15 +72,11 @@ Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/
   static-appliance addressing and protected recovery/access ports.
 - [ ] Add narrowly scoped device-specific and multicast policies where required;
   verify required media, printing and discovery flows without broad management access.
-- [x] Deploy the separate Debian/openNDS guest gateway and
-  [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal) at
-  `https://guest.owl.red`. Production acceptance passed genuine Technitium DHCP,
-  unauthenticated denial, HTTPS consent/native Authmon, established TLS revocation,
-  private/admin isolation and IPv6 denial. Guest Wi-Fi is enabled on 2.4 GHz;
-  private Wi-Fi is 5 GHz only under the approved three-BSS radio0 allocation.
-  Technitium remains the only DHCP authority on every VLAN.
-- [ ] Complete a real handset captive-browser/RF walk and separately qualify a
-  truthful client-specific CAPPORT endpoint before advertising DHCP option 114.
+- [ ] Complete an RF/coverage walk and broader handset captive-browser checks.
+  The owner-confirmed browser login and automated guest acceptance already passed;
+  these do not establish coverage, roaming or universal handset compatibility.
+- [ ] Qualify a truthful client-specific CAPPORT endpoint before advertising
+  DHCP option 114; keep it absent until the endpoint is proven.
 - [ ] Replace the constrained WAP with maintained hardware/driver support for the
   required simultaneous VLAN-backed BSSes. Qualify both bands before restoring
   private 2.4 GHz or enabling guest 5 GHz; retain the accepted three-BSS layout meanwhile.
@@ -139,6 +132,9 @@ Reference: [Mailgun configuration](terraform/mailgun/README.md).
   document bootstrap, configuration, upgrades and health checks without regenerating PKI.
 - [ ] Complete reusable VyOS deployment, drift/removal and recovery procedures;
   keep Terraform as VM-lifecycle control and Ansible/native configuration as the router lane.
+- [ ] Resolve the guest gateway provider's boot-flag discrepancy without a blind
+  apply: native VM 104 reports `onboot=1`. Preserve the running router and gateway;
+  see [lifecycle caveats](terraform/proxmox/guest-portal/README.md#recovery-and-lifecycle-caveats).
 - [ ] Finish focused operating guides for Fleet, VLAN changes, storage,
   certificates and remote access; document new tool requirements with each feature.
 

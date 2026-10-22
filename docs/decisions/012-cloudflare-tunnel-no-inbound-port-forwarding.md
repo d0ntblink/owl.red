@@ -4,6 +4,13 @@
 
 Accepted
 
+Router implementation update (2026-10-22): the no-inbound-port-forwarding policy
+remains accepted. VyOS replaced OPNsense; guest enforcement is native openNDS on
+Debian VM 104 with consent at `guest.owl.red`. References to OPNsense below
+describe the original decision context, not an active configuration owner. See
+[ADR 022](022-vyos-router-replacement.md) and
+[Wi-Fi architecture](../guides/wifi-architecture.md).
+
 ## Context
 
 The current platform already depends on Cloudflare for public DNS hosting and cert-manager DNS-01 challenges. Internally, Traefik and MetalLB provide LAN service exposure on VLAN 10, and Technitium remains authoritative for LAN clients.

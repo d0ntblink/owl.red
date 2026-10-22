@@ -12,9 +12,10 @@ applies Git-managed DNS/DHCP data. Some appliance settings have an explicit
 approved execution lane, and verify runtime results plus rollback access.
 
 For networking follow the [roadmap execution order](../../ROADMAP.md#execution-order).
-VyOS retains client DNS/DHCP during preparation; the final handoff waits for
-supporting VLAN paths/interfaces. Existing reservations are a target plan, not
-proof of VLAN membership. This work does not authorize NAS VM/passthrough/disk/
+Technitium is the serving DNS/DHCP authority on every client VLAN. VyOS owns
+upstream routing/firewall/NAT; Debian VM 104 owns the guest gateway and native
+openNDS enforcement. Reservations are not proof of VLAN membership.
+This work does not authorize NAS VM/passthrough/disk/
 array/boot/power or unrelated service changes.
 
 | I want to… | Tool / lane | Where |
@@ -25,7 +26,10 @@ array/boot/power or unrelated service changes.
 | Configure a **Proxmox host OS** (repos, NIC hardening, baseline, upgrades) | **Ansible** | `ansible/playbooks/*` + `ansible/roles/*` |
 | Configure the **MikroTik switch** (ports, VLANs, names) | **Ansible** (SwOS modules) | `ansible/playbooks/swos-*.yml` + `ansible/switch_configs/css326.yml` |
 | Add/change a **DNS record** | **Git-managed Technitium data, LXC systemd sync** | `gitops/technitium/zones/owl.red.zone` (bump SOA); publishing triggers reconciliation, not Fleet |
-| Add/change a **DHCP scope** or a **host's reserved IP** | **Git-managed Technitium target; actual serving authority is migration-dependent** | `gitops/technitium/dhcp/scopes.json` / `dhcp-reservations.json`; coordinate scope lifecycle and lease authority before applying/publishing |
+| Add/change a **DHCP scope** or a **host's reserved IP** | **Git-managed Technitium, LXC systemd sync** | `gitops/technitium/dhcp/scopes.json` / `dhcp-reservations.json`; review scope activation and existing leases before publishing |
+| Change **AP SSIDs, radios, bridges or Wi-Fi passwords** | **Ansible/native UCI** | [Wi-Fi architecture](wifi-architecture.md), [password rotation](wifi-password-rotation.md); use the guarded AP runner, not a second configuration writer |
+| Upgrade/reset **AP firmware** | **Pinned private ImageBuilder workflow** | [Clean reset procedure](wifi-architecture.md#clean-ap-reset-and-upgrade); physical recovery and explicit outage approval required |
+| Change **guest enforcement or portal** | **Ansible gateway/router owners; Fleet frontend** | [Guest gateway](../../terraform/proxmox/guest-portal/README.md), [troubleshooting](guest-wifi-troubleshooting.md); portal application lives in its separate repository |
 | Deploy/change a **k8s app** | **GitOps** (Fleet) | `gitops/<app>/` + add the path to the GitRepo in `gitops/rancher/fleet/` |
 | Add a **k8s secret** | **Bitwarden + operator** | `scripts/bitwarden-k8s-secrets-sync.sh` → `gitops/bitwarden-secrets/` (never a placeholder `bwSecretId`) |
 | Change **VyOS** interfaces, routes, firewall/NAT, DNS/DHCP, NTP or IDS configuration | **Native config through Ansible** | [Native template](../../vyos/config.boot.j2), [profiles](../../vyos/baseline.yml), private inputs and the reviewed candidate/confirmed-commit/save lane; [ADR 022](../decisions/022-vyos-router-replacement.md). No parallel Terraform router-config writer. |
