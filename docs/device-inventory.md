@@ -30,6 +30,7 @@ Secrets and authentication material are excluded.
 | [cp3-pve](#cp3-pve) | Compute host 3 | physical-host | Proxmox VE | `cp3.pve.owl.red` / `10.0.10.13` |
 | [worker1-pve](#worker1-pve) | Compute host 4 | physical-host | Proxmox VE | `worker1.pve.owl.red` / `10.0.10.14` |
 | [switch-core](#switch-core) | Core switch | network-appliance | SwOS | `switch.owl.red` / `10.0.10.2` |
+| [switch-rack-poe](#switch-rack-poe) | Rack PoE access switch | network-appliance | MokerLink unmanaged Ethernet switch | No management address |
 | [ap-main](#ap-main) | Wireless access point | network-appliance | OpenWrt | `ap.owl.red` / `10.0.10.40` |
 | [pdu-rack](#pdu-rack) | Rack power distribution | power-appliance | APC appliance firmware | `pdu.owl.red` / `10.0.10.9` |
 | [ups-rack](#ups-rack) | Rack UPS | power-appliance | USB HID UPS | USB on storage host |
@@ -238,6 +239,25 @@ MAC rather than its permanent address.
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
 | Management | `48:8f:5a:0c:d1:82` | `10.0.10.2` | Native management network |
+
+### switch-rack-poe
+
+| Field | Value |
+|-------|-------|
+| id | `switch-rack-poe` |
+| kind | network-appliance |
+| model | MokerLink POE-G083GS |
+| platform | Unmanaged Gigabit Ethernet / IEEE 802.3af/at PoE switch |
+| role | Downstream rack access switch and PoE source; it is not the VLAN configuration owner |
+| parent | `switch-core` |
+| management | Unmanaged; no management address or configuration interface |
+| location | Rack; between the network-cabinet CSS326 and rack devices, per owner |
+| interfaces | 8 PoE+ Gigabit RJ45 ports (ports 1-8); 2 Gigabit RJ45 uplinks (ports 9-10); 1 Gigabit SFP uplink (port 11) |
+| poe_budget | 120 W total advertised; up to 30 W per PoE port |
+| port_features | Advertised QoS priority on PoE ports 1-2; PoE watchdog/AI restart advertised but trigger, scope and disable control are not verified |
+| dip_switch | Default/Extend; current position not recorded. Extend is advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; it is not documented as configurable 802.1Q VLAN management. |
+| topology_notes | Owner confirms switch is installed inline between the network-cabinet CSS326 and rack. Exact CSS326 port, selected MokerLink uplink, attached endpoint-to-port map and end-to-end VLAN transparency are not recorded here. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
+| specification | [Manufacturer POE-G083GS product page](https://www.mokerlink.com/index.php?route=product/product&product_id=377) |
 
 ### ap-main
 
@@ -719,6 +739,7 @@ passive cable paths, not separately discoverable network devices.
 | SW14 | PP31 | `storage-bmc` |
 | SW16 | PP32 | `pdu-rack` |
 | SW18 | PP33 | `ap-main` VLAN uplink |
+| Unknown | Network cabinet to rack | `switch-core` uplink to downstream `switch-rack-poe`; exact CSS326 port, MokerLink uplink port and VLAN behavior not yet recorded |
 | SW22 | PP35 | Native-management client path |
 | SW24 | PP36 | `edge-pve` management |
 | SFP+1 | PP16 to PP37 | `router-edge` LAN passthrough |
