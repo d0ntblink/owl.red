@@ -607,6 +607,9 @@ remain under `/root/.local/state/owl-red/arr-batch`, not independent backups.
 
 ### Arr Access And Integration Recovery
 
+See the [incident report](../issues/009-arr-access-and-integration-endpoints.md)
+for confirmed failure causes, the fixes and the remaining upstream provider outages.
+
 The existing Bitwarden Password Manager item **ARR Access** is the interactive
 credential reference. Its URL list now contains the six current HTTPS endpoints;
 the username/password are unchanged. On 2026-10-23, native login checks passed
