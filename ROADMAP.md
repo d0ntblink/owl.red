@@ -86,6 +86,8 @@ Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/
 - [ ] Replace the constrained WAP with maintained hardware/driver support for the
   required simultaneous VLAN-backed BSSes. Qualify both bands before restoring
   private 2.4 GHz or enabling guest 5 GHz; retain the accepted three-BSS layout meanwhile.
+  Compare the [WAP buy order](docs/buy-order.md), including verified per-radio
+  limits, local IaC qualification and tri-band candidates before purchase.
 - [ ] Extend the existing Tailscale setup with reviewed management routing,
   access rules and split DNS; verify access from outside the home network.
 - [ ] Standardize client NTP configuration on the router through each system's
