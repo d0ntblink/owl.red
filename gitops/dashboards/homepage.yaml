@@ -7,7 +7,7 @@ data:
   settings.yaml: |
     ---
     title: Owl.red Homepage
-    description: Cappuccino command center for now and next
+    description: Applications and infrastructure
     theme: dark
     color: slate
     headerStyle: boxed
@@ -20,17 +20,25 @@ data:
             description: Kubernetes operations and lifecycle
             icon: rancher
         - Home Assistant:
-          href: https://ha.owl.red
-          description: Home automation
-          icon: home-assistant
+            href: https://ha.owl.red
+            description: Home automation
+            icon: home-assistant
         - Technitium DNS:
             href: https://dns.owl.red
             description: Authoritative DNS management UI
-            icon: dns
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
+        - Open WebUI:
+            href: https://ai.owl.red
+            description: Local AI workspace
+            icon: open-webui
+        - Traefik:
+            href: https://traefik.owl.red/dashboard/
+            description: Ingress routes and services
+            icon: traefik
 
     - Infrastructure:
         - VyOS Console:
-            href: https://10.0.10.3:8006
+            href: https://edge.pve.owl.red:8006/#v1:0:=qemu%2F103
             description: Edge gateway VM 103 on Proxmox
             icon: mdi-router-network
         - MikroTik Switch:
@@ -41,14 +49,18 @@ data:
             href: https://pdm.owl.red
             description: Proxmox Datacenter Manager
             icon: proxmox
-        - PBS:
-            href: https://pbs.owl.red
-            description: Backup operations and restore readiness
-            icon: proxmox-backup-server
         - Unraid:
             href: http://nas.owl.red
             description: Storage and media backbone
             icon: unraid
+        - edge Proxmox:
+            href: https://edge.pve.owl.red:8006
+            description: Router and DNS host
+            icon: proxmox
+        - storage Proxmox:
+            href: https://storage.pve.owl.red:8006
+            description: NAS host
+            icon: proxmox
         - cp1 Proxmox:
             href: https://cp1.pve.owl.red:8006
             description: Control plane host 1
@@ -65,40 +77,136 @@ data:
             href: https://worker1.pve.owl.red:8006
             description: Worker host
             icon: proxmox
+        - Storage IPMI:
+            href: https://ipmi.storage.owl.red
+            description: Independent storage-host management
+            icon: mdi-server-security
+        - OpenWrt AP:
+            href: https://ap.owl.red
+            description: Wireless access-point management
+            icon: openwrt
+        - Rack PDU:
+            href: http://pdu.owl.red
+            description: APC rack power management
+            icon: mdi-power-socket
 
-    - Future Roadmap:
+    - Media:
         - Plex:
-            href: https://plex.owl.red
-            description: Planned media streaming endpoint
+            href: http://nas.owl.red:32400/web
+            description: Media library
             icon: plex
-        - Sonarr:
+        - Seerr:
+            href: https://seerr.owl.red
+            description: Media requests
+            icon: overseerr
+        - Sonarr HD:
             href: https://sonarr.owl.red
-            description: Planned TV automation endpoint
+            description: HD television
             icon: sonarr
-        - Radarr:
+        - Sonarr 4K:
+            href: https://sonarr-uhd.owl.red
+            description: UHD television
+            icon: sonarr
+        - Radarr HD:
             href: https://radarr.owl.red
-            description: Planned movie automation endpoint
+            description: HD movies
             icon: radarr
+        - Radarr 4K:
+            href: https://radarr-uhd.owl.red
+            description: UHD movies
+            icon: radarr
+        - Lidarr:
+            href: https://lidarr.owl.red
+            description: Music library
+            icon: lidarr
         - Bazarr:
             href: https://bazarr.owl.red
-            description: Planned subtitle automation endpoint
+            description: Subtitles
             icon: bazarr
         - Prowlarr:
             href: https://prowlarr.owl.red
-            description: Planned indexer management endpoint
+            description: Indexers through Gluetun
             icon: prowlarr
         - qBittorrent:
             href: https://qbittorrent.owl.red
-            description: Planned download control endpoint
+            description: VPN-backed downloads
             icon: qbittorrent
         - Tautulli:
             href: https://tautulli.owl.red
-            description: Planned Plex analytics endpoint
+            description: Plex activity and analytics
             icon: tautulli
+        - Reclaimerr:
+            href: https://reclaimerr.owl.red
+            description: Media retention
+            icon: mdi-broom
+
+    - Transfers:
+        - slskd:
+            href: https://slskd.owl.red
+            description: Soulseek transfers
+            icon: slskd
+        - Soularr:
+            href: https://soularr.owl.red
+            description: Lidarr and Soulseek integration
+            icon: mdi-music-box
+
+    - Home And Cameras:
+        - Frigate:
+            href: https://nvr.owl.red
+            description: Camera live view and recordings
+            icon: frigate
+        - Foyer Camera:
+            href: http://wuuk-ptz-foyer.owl.red
+            description: Thingino camera management
+            icon: mdi-cctv
+        - Office Camera:
+            href: http://wuuk-ptz-office.owl.red
+            description: Thingino camera management
+            icon: mdi-cctv
+        - Canon Printer:
+            href: http://printer.owl.red
+            description: Printer management
+            icon: mdi-printer
+
+    - Network Tools:
         - Speedtest Tracker:
             href: https://speedtest.owl.red
-            description: Planned WAN telemetry endpoint
+            description: Scheduled WAN measurements
             icon: speedtest-tracker
+        - LibreSpeed:
+            href: https://librespeed.owl.red
+            description: Browser speed test
+            icon: librespeed
+        - Guest Portal:
+            href: https://guest.owl.red
+            description: Guest consent service; guest Wi-Fi paused
+            icon: mdi-wifi-lock
+        - DiskSpeed:
+            href: http://nas.owl.red:18888
+            description: NAS disk diagnostics
+            icon: mdi-harddisk
+
+    - Direct And Recovery:
+        - Technitium Direct:
+            href: http://ns1.owl.red:5380
+            description: Native management network only
+            icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
+        - PDM Direct:
+            href: https://pdm-direct.owl.red:8443
+            description: Direct manager endpoint
+            icon: proxmox
+        - qBittorrent Direct:
+            href: http://qbittorrent-direct.owl.red:8080
+            description: Restricted direct download UI
+            icon: qbittorrent
+        - FlareSolverr Status:
+            href: http://flaresolverr.owl.red:8191
+            description: NAS-restricted solver API
+            icon: mdi-cloud-check
+        - Open WebUI Direct:
+            href: http://nas.owl.red:11436
+            description: Direct NAS backend
+            icon: open-webui
   bookmarks.yaml: |
     ---
     - Dashboards:
