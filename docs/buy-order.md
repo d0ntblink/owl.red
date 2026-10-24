@@ -1,7 +1,45 @@
 # WAP Buy Order
 
-Research date: 2026-10-23. Status: shortlist, not an approved purchase or
-deployment. Prices are CAD buying targets, not verified current listings.
+Research date: 2026-10-23. Status: Grandstream GWN7660E selected as the
+replacement. Prior GWN7665 order cancellation/refund is not confirmed. The
+GWN7660E order, delivery, local IaC qualification and deployment acceptance are
+not confirmed. Other models remain a comparison shortlist.
+
+## Selected Purchase
+
+- **Selected:** Grandstream GWN7660E. The owner showed an Amazon listing at
+  C$69.96; that is the shown price, not a confirmed completed purchase, seller
+  warranty, or delivery.
+- **Previous order:** GWN7665 had been reported ordered at C$156.26. The owner
+  subsequently chose the GWN7660E instead. Whether the earlier order was
+  cancelled or refunded is unknown; verify it with Amazon.
+- **Power path:** connect directly to an 802.3af/at PoE port on the existing MokerLink
+  POE-G083GS. Its manufacturer specification advertises active 802.3af/at,
+  up to 30 W per port and 120 W shared budget; the GWN7665 advertises 22.5 W
+  maximum consumption, and the GWN7660E supports 802.3af/at with advertised
+  12.95 W maximum consumption. **No separate injector is needed** in this topology.
+- The CSS326 remains the core managed switch; the MokerLink stays downstream
+  between the network cabinet and rack. Do not change its DIP to Extend as part
+  of AP installation. The exact port/VLAN path remains to be recorded and
+  tested.
+- Do not cut over or re-enable guest Wi-Fi until the local configuration/IaC
+  path, all required VLANs, backup/recovery and real-client acceptance pass.
+
+### Intended SSID/RF Layout After Qualification
+
+This is the selected target, not current live state. The old AP remains under
+the recovery hold until the replacement is delivered and accepted.
+
+| Band | Intended SSIDs | VLANs |
+|------|----------------|-------|
+| 2.4 GHz | `owl.red`, `silence of the lans`, `owl.red-iot-local`, `owl.red-iot-cloud` | 20, 30, 40, 50 respectively |
+| 5 GHz | `owl.red`, `silence of the lans` | 20 and 30 respectively |
+
+That is four BSSIDs on 2.4 GHz, two on 5 GHz, six total. The GWN7660E vendor
+specification lists 16 SSIDs per radio. Reuse the same SSID name on both bands
+only when both BSSes map to that same VLAN/security policy. Keep the two IoT
+networks on 2.4 GHz unless separately qualified. Guest remains disabled on the
+old AP until the new VLAN 30/openNDS path passes end-to-end acceptance.
 
 ## Requirements
 
@@ -35,7 +73,7 @@ Eight beacons per radio also cost airtime; normally broadcast only needed SSIDs.
 
 Explicitly verified in vendor specifications: U6 Pro, U6 Enterprise and U7 Pro
 advertise 8 BSSIDs per radio; EAP610 and EAP773 advertise 8 SSIDs per band;
-GWN7660 and GWN7665 advertise 16 SSIDs per radio. These are the strongest
+GWN7660, GWN7660E and GWN7665 advertise 16 SSIDs per radio. These are the strongest
 capacity-evidence candidates here. MLO/mesh/security and controller-mode limits
 still need checking for the actual configuration.
 
@@ -66,6 +104,7 @@ All entries in this table are 2.4 + 5 GHz Wi-Fi 6, not tri-band.
 | Ruckus R550 with Unleashed | C$90-160 used | Hardware datasheet: up to 31 SSIDs per AP; HOLD per-radio Unleashed limit | Embedded local controller; native CLI automation, less turnkey Terraform |
 | Ruckus R650 with Unleashed | C$90-160 used if obtainable | Hardware datasheet: up to 31 SSIDs per AP; HOLD per-radio Unleashed limit | Same caveat; stronger 5 GHz radio and 2.5 GbE; PoE+ needed for full functionality |
 | Grandstream GWN7660 | C$60-100 used | Official product comparison: 32 SSIDs total, 16 per radio | Embedded controller or local GWN Manager; full local IaC workflow not yet qualified |
+| Grandstream GWN7660E | C$69.96 shown new on Amazon; listing not independently verified | Official product comparison: 32 SSIDs total, 16 per radio | Dual-band Wi-Fi 6; 1GbE; local embedded controller; IaC qualification remains a hold |
 | Zyxel NWA50AX | C$40-80 used | HOLD standalone per-radio profile limit; retrieved specifications do not state it | Standalone/NebulaFlex; cloud optional, complete IaC coverage unqualified |
 | Zyxel NWA50AX Pro | C$40-80 used if obtainable | HOLD standalone per-radio profile limit; retrieved specifications do not state it | Standalone/NebulaFlex, 2.5 GbE; verify CLI coverage rather than assuming a local GUI is IaC |
 
