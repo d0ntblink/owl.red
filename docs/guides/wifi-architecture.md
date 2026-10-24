@@ -30,6 +30,23 @@ The cause remains unproven: power, hardware and shared driver faults need
 separation. Do not repeat flashes or disable the hardware watchdog as recovery.
 Check physical power/cabling and agree a bounded next step with the owner.
 
+## Replacement AP Target (Not Yet Deployed)
+
+The owner selected Grandstream GWN7660E on 2026-10-23 in place of the previously
+ordered GWN7665; cancellation/refund of the earlier order and purchase/delivery
+of the GWN7660E are not confirmed. The intended target has four 2.4 GHz BSSes
+(private VLAN 20, guest VLAN 30, local IoT VLAN 40, cloud IoT VLAN 50) and two
+5 GHz BSSes (private VLAN 20 and guest VLAN 30). This is six BSSes total, within
+the vendor-advertised 16 SSIDs per radio. Keep identical SSID names tied to the
+same VLAN/security policy across bands.
+
+The existing MokerLink POE-G083GS is already in the cabinet-to-rack path and
+advertises active 802.3af/at PoE; no separate AP injector is planned. The
+MokerLink Extend/DIP state, exact uplink ports and tagged-VLAN transparency are
+not verified. Do not enable the guest target until the replacement's local
+configuration/IaC, VLAN path, backup/recovery and real-client checks pass. This
+target is not current live configuration; the old AP recovery hold remains.
+
 This guide describes the accepted implementation, configuration owners and clean
 AP refresh procedure. Passwords, API tokens, private keys, firmware images with
 preseeded credentials and recovery snapshots stay outside Git.

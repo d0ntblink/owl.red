@@ -84,10 +84,11 @@ Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/
 - [ ] Qualify a truthful client-specific CAPPORT endpoint before advertising
   DHCP option 114; keep it absent until the endpoint is proven.
 - [ ] Replace the constrained WAP with maintained hardware/driver support for the
-  required simultaneous VLAN-backed BSSes. Qualify both bands before restoring
-  private 2.4 GHz or enabling guest 5 GHz; retain the accepted three-BSS layout meanwhile.
-  Compare the [WAP buy order](docs/buy-order.md), including verified per-radio
-  limits, local IaC qualification and tri-band candidates before purchase.
+  required simultaneous VLAN-backed BSSes. Grandstream GWN7660E was selected
+  2026-10-23; purchase/delivery, local IaC qualification, recovery and VLAN-path
+  acceptance remain pending. Confirm cancellation/refund of the previously
+  ordered GWN7665. Target private and guest on 2.4/5 GHz, IoT on 2.4 GHz; keep
+  guest paused until all checks pass. See the [WAP buy order](docs/buy-order.md).
 - [ ] Extend the existing Tailscale setup with reviewed management routing,
   access rules and split DNS; verify access from outside the home network.
 - [ ] Standardize client NTP configuration on the router through each system's
