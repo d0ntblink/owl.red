@@ -1,6 +1,7 @@
 ---
 openwrt_expected_board: dlink,dir-885l
-openwrt_expected_version: 25.12.6
+openwrt_expected_version: "25.12.2"
+openwrt_recovery_hold: true
 openwrt_expected_uplink_mac: 10:be:f5:d9:1e:37
 openwrt_management_host: 10.0.10.40
 openwrt_management_prefix: 24
@@ -16,10 +17,9 @@ openwrt_private_input_file: "{{ lookup('env', 'HOME') }}/.local/state/owl-red/op
 openwrt_password_manager_item_id: 10da341d-20ad-4f4a-b15c-add2008eb0e4
 openwrt_disabled_services: [dnsmasq, odhcpd, firewall, opennds]
 openwrt_bss_bridges:
-  phy0-ap0: br-guest
+  phy0-ap0: br-iot-local
   phy1-ap0: br-private
-  phy0-ap1: br-iot-local
-  phy0-ap2: br-iot-cloud
+  phy0-ap1: br-iot-cloud
 openwrt_coverage_target_sqft: 900
 openwrt_coverage_target_rssi_dbm: -67
 openwrt_radio_profiles:
@@ -33,7 +33,7 @@ openwrt_radio_profiles:
   radio1:
     path: 18000000.axi/bcma0:8/pci0001:00/0001:00:00.0/0001:01:00.0
     band: 5g
-    channel: 36
+    channel: 149
     htmode: VHT80
     country: CA
     txpower: 12
@@ -50,7 +50,7 @@ openwrt_wifi_networks:
     vlan: 30
     ssid: silence of the lans
     radios: [radio0]
-    enabled: true
+    enabled: false
     isolate: true
     key_source: guest
     internet: false

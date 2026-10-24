@@ -12,7 +12,7 @@ const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname),
 process.chdir(repository);
 const pin = JSON.parse(fs.readFileSync('ansible/vars/openwrt-firmware.json', 'utf8'));
 const phase = process.argv[2] ?? 'prepare';
-assert(['fetch', 'prepare', 'build', 'stage', 'apply', 'reboot', 'verify'].includes(phase), 'Use fetch, prepare, build, stage, apply, reboot or verify');
+assert(['fetch', 'prepare', 'build', 'stage', 'apply', 'reboot', 'restore-original', 'verify'].includes(phase), 'Use fetch, prepare, build, stage, apply, reboot, restore-original or verify');
 const directory = path.join(os.homedir(), '.local/state/owl-red/openwrt-refresh', pin.version);
 fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 const builder = path.join(directory, pin.imageBuilder.filename.replace(/\.tar\.zst$/, ''));
@@ -39,7 +39,7 @@ function ssh(command, input, binary = false) {
     rootPassword = login.login.password;
   }
   const proxy = 'ssh -i ' + path.join(os.homedir(), '.ssh/id_ed25519_owl_ansible') + ' -o BatchMode=yes -o StrictHostKeyChecking=yes -W %h:%p root@10.0.10.3';
-  return execute('sshpass', ['-e', 'ssh', '-T', '-o', 'ProxyCommand=' + proxy, '-o', 'StrictHostKeyChecking=yes', '-o', 'HostKeyAlias=10.10.20.1', '-o', 'ConnectTimeout=8', '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no', 'root@10.0.10.40', command], { input, env: { ...process.env, SSHPASS: rootPassword }, encoding: binary ? undefined : 'utf8' });
+  return execute('sshpass', ['-e', 'ssh', '-T', '-o', 'ProxyCommand=' + proxy, '-o', 'StrictHostKeyChecking=yes', '-o', 'HostKeyAlias=10.10.20.1', '-o', 'ConnectTimeout=30', '-o', 'PreferredAuthentications=password', '-o', 'PubkeyAuthentication=no', 'root@10.0.10.40', command], { input, env: { ...process.env, SSHPASS: rootPassword }, encoding: binary ? undefined : 'utf8' });
 }
 function board() {
   const current = JSON.parse(ssh('ubus call system board'));
@@ -104,7 +104,8 @@ for name in ['network','wireless','dhcp','firewall']:
     write('etc/config/'+name,rendered)
 wireless=native.parse_config((overlay/'etc/config/wireless').read_text())
 assert len([value for value in wireless.values() if value['.type']=='wifi-iface'])==4
-assert all(value.get('disabled')=='0' for value in wireless.values())
+assert wireless['guest_radio0']['disabled']==str(int(not profile['openwrt_wifi_networks']['guest']['enabled']))
+assert all(value.get('disabled')=='0' for name,value in wireless.items() if name!='guest_radio0')
 with tarfile.open(root/'before-reset.tar.gz','r:gz') as archive:
     members={member.name.removeprefix('./').lstrip('/'):member for member in archive.getmembers() if member.isfile()}
     def copy(name,mode=0o600):
@@ -129,13 +130,9 @@ with tarfile.open(root/'before-reset.tar.gz','r:gz') as archive:
 write('etc/sysctl.d/90-owl-ap.conf','net.ipv4.ip_forward=0\nnet.ipv6.conf.all.forwarding=0\n',0o644)
 write('etc/resolv.conf','nameserver 10.0.10.30\n',0o644)
 bindings=profile['openwrt_bss_bridges']
-assert set(bindings)=={'phy0-ap0','phy0-ap1','phy0-ap2','phy1-ap0'}
-service=['#!/bin/sh /etc/rc.common','START=99','STOP=10','start() {','    ubus -t 45 wait_for '+' '.join('hostapd.'+name for name in bindings)+' || return 1']
-for device,bridge in bindings.items():
-  assert bridge in ['br-private','br-guest','br-iot-local','br-iot-cloud']
-  service+=['    test -d /sys/class/net/'+device+' || return 1','    test -d /sys/class/net/'+bridge+'/bridge || return 1','    current=$(readlink -f /sys/class/net/'+device+'/master 2>/dev/null || true)','    if test "$current" != /sys/devices/virtual/net/'+bridge+'; then','        if test -n "$current" && test -d "$current/bridge"; then brctl delif "$(basename "$current")" '+device+' || return 1; fi','        brctl addif '+bridge+' '+device+' || return 1','    fi']
-service+=['}','reload() { start; }','']
-write('etc/init.d/owl-bss-bridges','\n'.join(service),0o755)
+assert len(bindings)==sum(len(network['radios']) for network in profile['openwrt_wifi_networks'].values() if network['enabled'])
+service=environment.from_string(pathlib.Path('ansible/templates/openwrt-bss-bridges.j2').read_text()).render(**profile)
+write('etc/init.d/owl-bss-bridges',service,0o755)
 link=overlay/'etc/rc.d/S99owl-bss-bridges'
 link.parent.mkdir(parents=True,exist_ok=True)
 if link.is_symlink() or link.exists(): link.unlink()
@@ -144,7 +141,7 @@ defaults='#!/bin/sh\nset -eu\nuci set system.@system[0].hostname=ap\nuci commit 
 write('etc/uci-defaults/99-owl-ap',defaults,0o700)
 for item in [overlay,*overlay.rglob('*')]:
   if item.is_dir(): item.chmod(0o755)
-print(json.dumps({'activeBssCount':4,'managementIdentityPreserved':True,'oldOverlayRestored':False}))
+print(json.dumps({'activeBssCount':len(bindings),'managementIdentityPreserved':True,'oldOverlayRestored':False}))
 `;
   const rendered = execute(path.join(repository, '.venv/bin/python'), ['-c', render], { input: JSON.stringify({ directory }) });
   state.prepared = true;
@@ -196,6 +193,37 @@ print(json.dumps({'activeBssCount':4,'managementIdentityPreserved':True,'oldOver
     process.exit(0);
   }
   console.log('Reset upgrade requested. Verify boot/version before any retry.');
+} else if (phase === 'restore-original') {
+  assert.equal(process.env.OPENWRT_ORIGINAL_RESTORE_ALLOWED, 'true', 'Explicit original configuration restore approval required');
+  const originalDirectory = path.join(os.homedir(), '.local/state/owl-red/openwrt-refresh/25.12.6');
+  const originalState = JSON.parse(fs.readFileSync(path.join(originalDirectory, 'state.json'), 'utf8'));
+  const archive = fs.readFileSync(path.join(originalDirectory, 'before-reset.tar.gz'));
+  const checksum = createHash('sha256').update(archive).digest('hex');
+  assert.equal(checksum, originalState.backupSha256, 'Original pre-refresh backup checksum mismatch');
+  assert.equal(originalState.boardBefore.board_name, pin.board);
+  assert.equal(originalState.boardBefore.release.version, '25.12.2');
+  const entries = execute('tar', ['-tzf', path.join(originalDirectory, 'before-reset.tar.gz')]).trim().split('\n');
+  assert(entries.every(name => !name.startsWith('/') && !name.split('/').includes('..')), 'Unsafe backup paths');
+  for (const name of ['network', 'wireless', 'system', 'dropbear', 'uhttpd']) {
+    assert(entries.includes('etc/config/' + name), 'Original management/configuration file missing');
+  }
+  assert(!entries.some(name => name.includes('owl-bss-bridges')), 'Original backup unexpectedly contains the added helper');
+  const marker = path.join(originalDirectory, 'original-restore-issued.json');
+  assert(!fs.existsSync(marker), 'Original restore already issued; inspect actual state before any retry');
+  assert.equal(board().release.version, '25.12.2', 'Restore requires the already rolled-back firmware');
+  ssh('umask 077; sysupgrade -b /tmp/owl-red-before-original-restore.tar.gz');
+  fs.writeFileSync(path.join(originalDirectory, 'before-original-restore.tar.gz'), ssh('cat /tmp/owl-red-before-original-restore.tar.gz', undefined, true), { mode: 0o600 });
+  ssh('umask 077; cat > /tmp/owl-red-original-config.tar.gz', archive);
+  assert.equal(ssh('sha256sum /tmp/owl-red-original-config.tar.gz').trim().split(/\s+/)[0], checksum);
+  const bootBefore = ssh('cat /proc/sys/kernel/random/boot_id').trim();
+  fs.writeFileSync(marker, JSON.stringify({ originalBackupSha256: checksum, bootBefore, guestRemainsDisabled: true, oneRestoreRequested: true }), { mode: 0o600 });
+  try {
+    ssh('set -eu; sysupgrade -r /tmp/owl-red-original-config.tar.gz; rm -f /etc/rc.d/S99owl-bss-bridges /etc/init.d/owl-bss-bridges /etc/sysctl.d/90-owl-ap.conf /etc/uci-defaults/99-owl-ap; uci set wireless.guest_radio0.disabled=1; uci commit wireless; sync; /sbin/reboot');
+  } catch {
+    console.log('Original restore issued; SSH outcome unknown. Verify files and boot identity before any retry.');
+    process.exit(0);
+  }
+  console.log('Original restore issued with guest kept disabled. Verify original files and client connectivity.');
 } else if (phase === 'reboot') {
   assert.equal(process.env.OPENWRT_REFRESH_ALLOWED, 'true', 'Explicit AP recovery reboot approval required');
   assert.equal(board().release.version, pin.version);

@@ -233,7 +233,8 @@ def main():
                 for interface in radio.get("interfaces", []):
                     config = interface.get("config", {})
                     active.append(config.get("ssid"))
-            if sorted(active) != sorted(["owl.red", "silence of the lans", "owl.red-iot-local", "owl.red-iot-cloud"]):
+            expected = [config["ssid"] for config in desired["wireless"].values() if config.get(".type") == "wifi-iface" and config.get("disabled", "0") == "0"]
+            if sorted(active) != sorted(expected):
                 raise APError("Enabled/disabled SSID runtime does not match the target")
             module.exit_json(changed=False, verified=True, active_ssids=active, management="10.0.10.40/24")
         if phase == "finish":

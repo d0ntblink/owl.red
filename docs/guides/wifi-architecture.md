@@ -1,20 +1,50 @@
 # Wi-Fi Architecture And Operations
 
+## Current Incident: AP Restarts
+
+Guest Wi-Fi is now paused by owner request until the WAP is replaced. The
+guest-disabled setting is committed and live verification passed for exactly
+three SSIDs: private, local IoT and cloud IoT. Their bridges are `phy1-ap0` to
+`br-private`, `phy0-ap0` to `br-iot-local`, and `phy0-ap1` to `br-iot-cloud`.
+Only radio0 was reloaded; private 5 GHz settings were unchanged. The gateway,
+DHCP scope and portal infrastructure remain in place. This is a mitigation,
+not proof that private-client connectivity or restart stability is fixed.
+Guest-path diagrams below describe the retained infrastructure, not active guest
+wireless service.
+
+On 2026-10-22, the owner reported unusable private Wi-Fi and all SSIDs
+disappearing together without a manual reboot. Earlier source, bridge, beacon
+and wired guest-path checks did not establish stable real-client connectivity.
+Do not treat those checks as acceptance of the AP's reliability.
+
+An explicitly approved single rollback from 25.12.6 to 25.12.2 completed using
+the official checksum-verified ImageBuilder and a private identity-preserving
+image. Native compatibility and on-device checksum checks passed. The four-SSID
+configuration, keys, channel 36 and management identity were preserved; native
+configuration verification and confirmation passed.
+
+The AP subsequently changed boot ID again on 25.12.2 without another controller
+reboot command. The owner still could not connect. One authorized station and
+completed WPA handshakes are not proof that affected clients have internet.
+The cause remains unproven: power, hardware and shared driver faults need
+separation. Do not repeat flashes or disable the hardware watchdog as recovery.
+Check physical power/cabling and agree a bounded next step with the owner.
+
 This guide describes the accepted implementation, configuration owners and clean
 AP refresh procedure. Passwords, API tokens, private keys, firmware images with
 preseeded credentials and recovery snapshots stay outside Git.
 
-## Active SSIDs
+## Configured SSIDs
 
 | SSID | Band / radio | VLAN | BSS bridge | Gateway | Policy |
 |------|--------------|------|------------|---------|--------|
 | `owl.red` | 5 GHz / radio1 | 20 | `br-private` | VyOS `10.0.20.1` | Trusted private clients, subject to canonical VyOS rules |
-| `silence of the lans` | 2.4 GHz / radio0 | 30 | `br-guest` | openNDS VM `10.0.30.1` | Isolated clients; HTTPS consent before internet; no private/admin or forwarded IPv6 access |
+| `silence of the lans` | Paused / disabled | 30 | `br-guest` | openNDS VM `10.0.30.1` | Retained configuration; not broadcasting until WAP replacement and acceptance |
 | `owl.red-iot-local` | 2.4 GHz / radio0 | 40 | `br-iot-local` | VyOS `10.0.40.1` | Isolated clients; no internet; explicit local integrations only |
 | `owl.red-iot-cloud` | 2.4 GHz / radio0 | 50 | `br-iot-cloud` | VyOS `10.0.50.1` | Isolated clients; internet permitted; no general lateral access |
 
-Both radios are active. There are exactly four active `wifi-iface` definitions:
-`private_radio1`, `guest_radio0`, `iot_local_radio0`, `iot_cloud_radio0`.
+Both radios are active. Three `wifi-iface` definitions are enabled:
+`private_radio1`, `iot_local_radio0`, `iot_cloud_radio0`; `guest_radio0` is disabled.
 There are no inactive private-2.4, guest-5 or cloud-IoT-5 definitions in desired
 state. Four BSSes on radio0 failed on this hardware/firmware combination; the
 owner accepted three on radio0 and one on radio1 rather than repeated experiments.
@@ -177,7 +207,7 @@ associated with cloud-IoT on 2.4 GHz. AP SSH automation uses the existing
 strict-key management jump through `edge` (`10.0.10.3`), preserving the AP's
 trusted host identity without adding firewall exceptions or workstation routes.
 
-The refresh pins OpenWrt `25.12.6`, `bcm53xx/generic`, exact `dlink_dir-885l`
+The refresh currently pins the rollback target OpenWrt `25.12.2`, `bcm53xx/generic`, exact `dlink_dir-885l`
 profile and official checksums. Its generated reset image contains private
 credentials and keys and must never be published as an ordinary build artifact.
 

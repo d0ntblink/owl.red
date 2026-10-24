@@ -1,0 +1,17 @@
+#!/bin/sh /etc/rc.common
+START=99
+STOP=10
+start() {
+    ubus -t 45 wait_for{% for device in openwrt_bss_bridges %} hostapd.{{ device }}{% endfor %} || return 1
+{% for device, bridge in openwrt_bss_bridges.items() %}
+    test -d /sys/class/net/{{ device }} || return 1
+    test -d /sys/class/net/{{ bridge }}/bridge || return 1
+    current=$(readlink /sys/class/net/{{ device }}/master || true)
+    current=${current##*/}
+    if test "$current" != {{ bridge }}; then
+        if test -n "$current"; then brctl delif "$current" {{ device }} || return 1; fi
+        brctl addif {{ bridge }} {{ device }} || return 1
+    fi
+{% endfor %}
+}
+reload() { start; }

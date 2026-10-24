@@ -67,6 +67,12 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/guides/wifi-architecture.md).
 
+- [ ] Restore stable AP/client connectivity before further network changes.
+  Guest Wi-Fi is intentionally paused until WAP replacement; keep the gateway
+  infrastructure but do not re-enable the SSID during further troubleshooting.
+  Unexpected whole-device restarts continued after the approved 25.12.6 to
+  25.12.2 rollback. Separate physical power/hardware from shared driver faults;
+  require real-client internet and sustained uptime, not just visible SSIDs.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):
   target-SSID tablet identity, remaining client placement, RF coverage,
   static-appliance addressing and protected recovery/access ports.

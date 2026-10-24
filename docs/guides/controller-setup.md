@@ -317,7 +317,7 @@ Terraform/OpenTofu ownership is being evaluated, not selected or deployed:
 - [Foxboron's OpenWrt provider](https://github.com/Foxboron/terraform-provider-openwrt)
   is registry-published (the inspected latest release is `0.3.0`), but requires
   `luasocket`, `luci-mod-rpc`, `luci-lib-ipkg` and `luci-compat` on the device.
-  Compatibility with this AP's OpenWrt `25.12.6` is not qualified.
+  Compatibility with this AP's current OpenWrt `25.12.2` is not qualified.
 - [reznakt's native-ubus provider](https://github.com/reznakt/terraform-provider-openwrt)
   uses the existing LuCI/ubus API without an extra agent and advertises native
   UCI rollback, import and write-only secret attributes. It is new, has no

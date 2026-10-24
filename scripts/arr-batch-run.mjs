@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { parseEnv } from 'node:util';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'plan';
-assert.ok(['plan', 'stop', 'seed', 'verify', 'peers', 'retire'].includes(phase), 'Use plan, stop, seed, verify, peers or retire.');
+assert.ok(['plan', 'stop', 'seed', 'verify', 'peers', 'retire', 'inspect-integrations', 'repair-downloaders', 'repair-prowlarr', 'repair-access', 'update-access-urls', 'sync-indexers', 'verify-integrations', 'verify-app-connections'].includes(phase), 'Unknown Arr operation.');
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const registry = JSON.parse(fs.readFileSync(path.join(repository, 'gitops/arr/chart/apps.json'), 'utf8'));
 const home = os.homedir();
@@ -21,6 +22,21 @@ function execute(program, args, input) {
 }
 function kubectl(args, input) { return execute('kubectl', ['-n', registry.namespace, ...args], input); }
 function ssh(code) { return execute('ssh', ['-T', '-i', path.join(home, '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'php'], code); }
+function accessVault() {
+  const stored = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
+  const binary = path.join(home, '.local/share/owl-red/tools/bitwarden/2026.7.0/bw');
+  const environment = { ...process.env, BW_SECRET: stored.BW_SECRET, BITWARDENCLI_APPDATA_DIR: path.join(home, '.local/state/owl-red/bitwarden-cli-2026.7.0') };
+  const call = (args, input) => {
+    const result = spawnSync(binary, args, { input, encoding: 'utf8', env: environment, timeout: 60000, maxBuffer: 8 * 1024 * 1024 });
+    assert.equal(result.status, 0, 'Vault operation failed; sensitive output suppressed');
+    return result.stdout.trim();
+  };
+  environment.BW_SESSION = call(['unlock', '--passwordenv', 'BW_SECRET', '--raw']);
+  call(['sync']);
+  const item = JSON.parse(call(['get', 'item', '6fbf8cf7-3871-4cfa-9a71-af7f00009fa4']));
+  assert(item.name === 'ARR Access' && item.login?.username && item.login?.password, 'Expected Arr vault credentials missing');
+  return { item, call };
+}
 const common = String.raw`<?php
 ini_set('zend.exception_ignore_args','1');
 set_exception_handler(function($error){file_put_contents('php://stderr','Arr batch failed: '.$error->getMessage().PHP_EOL);exit(1);});
@@ -57,6 +73,131 @@ function bazarrPeers(yaml) {
   ].join('\n')], yaml);
 }
 async function main() {
+  if (phase === 'update-access-urls') {
+    assert.equal(process.env.ARR_REPAIR_ALLOWED, 'true', 'Explicit Arr repair approval required');
+    const { item, call } = accessVault();
+    const before = fs.mkdtempSync(path.join(home, '.local/state/owl-red/arr-vault-'));
+    fs.writeFileSync(path.join(before, 'arr-access-before.json'), JSON.stringify(item), { mode: 0o600 });
+    const uris = Object.values(registry.applications).filter(app => app.kind !== 'bazarr').map(app => ({ uri: 'https://' + app.hostname, match: null }));
+    const updated = { ...item, login: { ...item.login, uris } };
+    call(['edit', 'item', item.id], Buffer.from(JSON.stringify(updated)).toString('base64') + '\n');
+    const verified = JSON.parse(call(['get', 'item', item.id]));
+    assert.equal(verified.login.password, item.login.password);
+    assert.equal(verified.login.username, item.login.username);
+    assert.deepEqual(verified.login.uris.map(entry => entry.uri), uris.map(entry => entry.uri));
+    console.log(JSON.stringify({ vaultItem: item.name, credentialsUnchanged: true, urls: uris.map(entry => entry.uri) }));
+    return;
+  }
+  if (['inspect-integrations', 'repair-downloaders', 'repair-prowlarr', 'repair-access', 'sync-indexers', 'verify-integrations', 'verify-app-connections'].includes(phase)) {
+    const repairing = !['inspect-integrations', 'verify-integrations', 'verify-app-connections'].includes(phase);
+    if (repairing) assert.equal(process.env.ARR_REPAIR_ALLOWED, 'true', 'Explicit Arr repair approval required');
+    const recovery = repairing ? fs.mkdtempSync(path.join(home, '.local/state/owl-red/arr-integrations-')) : null;
+    const access = phase === 'repair-access' ? accessVault().item.login : null;
+    const safeFields = fields => (fields || []).filter(field => /^(host|port|useSsl|urlBase|baseUrl|proxyType|proxyHost|proxyPort)$/.test(field.name)).map(field => ({ name: field.name, value: field.value }));
+    for (const [name, app] of Object.entries(registry.applications)) {
+      if (app.kind === 'bazarr') continue;
+      if (['repair-prowlarr', 'sync-indexers'].includes(phase) && app.kind !== 'prowlarr') continue;
+      const xml = kubectl(['exec', 'deployment/' + name, '-c', name, '--', 'cat', app.mount + '/config.xml']);
+      const config = JSON.parse(execute(path.join(repository, '.venv/bin/python'), ['-c', 'import json,sys,xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(json.dumps({name:root.findtext(name) for name in ["ApiKey","UrlBase","Port","AuthenticationMethod","AuthenticationRequired"]}))'], xml));
+      const native = (route, method = 'GET', body) => {
+        const settings = ['url = "http://127.0.0.1:' + app.port + (config.UrlBase || '') + '/api/' + app.api + route + '"', 'header = "X-Api-Key: ' + config.ApiKey + '"', 'header = "Content-Type: application/json"', 'request = "' + method + '"'];
+        if (body !== undefined) settings.push('data = ' + JSON.stringify(JSON.stringify(body)));
+        const output = kubectl(['exec', '-i', 'deployment/' + name, '-c', name, '--', 'curl', '--fail-with-body', '--silent', '--max-time', '120', '--config', '-'], settings.join('\n'));
+        return output ? JSON.parse(output) : null;
+      };
+      if (phase === 'sync-indexers') {
+        const peers = native('/applications');
+        fs.writeFileSync(path.join(recovery, 'prowlarr-applications-before-sync.json'), JSON.stringify(peers), { mode: 0o600 });
+        for (const peer of peers) native('/applications/test', 'POST', peer);
+        const command = native('/command', 'POST', { name: 'ApplicationIndexerSync', forceSync: true });
+        console.log(JSON.stringify({ application: name, applicationPeersTested: peers.length, syncCommandId: command.id, syncStatus: command.status }));
+        continue;
+      }
+      if (phase === 'repair-access') {
+        const loginWorks = () => {
+          const settings = ['url = "http://127.0.0.1:' + app.port + (config.UrlBase || '') + '/login"', 'header = "Content-Type: application/x-www-form-urlencoded"', 'data = ' + JSON.stringify(new URLSearchParams({ username: access.username, password: access.password, rememberMe: 'on' }).toString())];
+          const headers = kubectl(['exec', '-i', 'deployment/' + name, '-c', name, '--', 'curl', '--silent', '--max-time', '20', '--dump-header', '-', '--output', '/dev/null', '--config', '-'], settings.join('\n'));
+          return /^set-cookie:.*(?:Auth|AspNetCore)/im.test(headers) && !/loginFailed=true/i.test(headers);
+        };
+        const before = loginWorks();
+        if (!before) {
+          const host = native('/config/host');
+          assert('username' in host && 'password' in host, 'Native host settings do not expose supported credential fields');
+          fs.writeFileSync(path.join(recovery, name + '-host-before.json'), JSON.stringify(host), { mode: 0o600 });
+          host.username = access.username;
+          host.password = access.password;
+          host.passwordConfirmation = access.password;
+          if (host.allowedHosts === '') host.allowedHosts = [app.hostname, name, name + '.arr.svc.cluster.local', 'localhost', '127.0.0.1'].join(',');
+          native('/config/host', 'PUT', host);
+          assert(loginWorks(), name + ' vault login verification failed');
+        }
+        console.log(JSON.stringify({ application: name, vaultLoginVerified: true, existingLoginPreserved: before }));
+        continue;
+      }
+      if (phase === 'repair-prowlarr') {
+        const host = native('/config/host');
+        fs.writeFileSync(path.join(recovery, 'prowlarr-host-before.json'), JSON.stringify(host), { mode: 0o600 });
+        Object.assign(host, { proxyEnabled: true, proxyType: 'http', proxyHostname: 'gluetun-proxy.qbittorrent.svc.cluster.local', proxyPort: 8888, proxyUsername: '', proxyPassword: '', proxyBypassFilter: '\\.svc\\.cluster\\.local', proxyBypassLocalAddresses: true });
+        if (host.allowedHosts === '') host.allowedHosts = [app.hostname, name, name + '.arr.svc.cluster.local', 'localhost', '127.0.0.1'].join(',');
+        native('/config/host', 'PUT', host);
+        for (const proxy of native('/indexerproxy').filter(proxy => proxy.implementation === 'FlareSolverr')) {
+          fs.writeFileSync(path.join(recovery, 'prowlarr-proxy-' + proxy.id + '-before.json'), JSON.stringify(proxy), { mode: 0o600 });
+          proxy.fields.find(field => field.name === 'host').value = 'http://flaresolverr.flaresolverr.svc.cluster.local:8191';
+          native('/indexerproxy/test', 'POST', proxy);
+          native('/indexerproxy/' + proxy.id, 'PUT', proxy);
+        }
+        console.log(JSON.stringify({ application: name, gluetunProxyEnabled: true, solverNativeTestPassed: true, internalServiceBypass: true }));
+        continue;
+      }
+      const clients = native('/downloadclient');
+      if (['verify-integrations', 'verify-app-connections'].includes(phase)) {
+        for (const client of clients.filter(client => client.implementation === 'QBittorrent' && client.enable)) {
+          native('/downloadclient/test', 'POST', client);
+          console.log(JSON.stringify({ application: name, qBittorrentNativeTestPassed: true }));
+        }
+        if (phase === 'verify-app-connections' && app.kind !== 'prowlarr') {
+          const indexer = native('/indexer').find(indexer => /The Pirate Bay|YTS/.test(indexer.name));
+          assert(indexer, name + ' has no known-working synced indexer to verify');
+          native('/indexer/test', 'POST', indexer);
+          console.log(JSON.stringify({ application: name, indexer: indexer.name, downstreamNativeIndexerTestPassed: true }));
+        }
+        if (phase === 'verify-integrations' && app.kind === 'prowlarr') {
+          let failures = 0;
+          for (const indexer of native('/indexer').filter(indexer => indexer.enable)) {
+            try {
+              native('/indexer/test', 'POST', indexer);
+              console.log(JSON.stringify({ application: name, indexer: indexer.name, nativeTestPassed: true }));
+            } catch (error) {
+              failures++;
+              console.log(JSON.stringify({ application: name, indexer: indexer.name, nativeTestPassed: false, diagnostics: error.message }));
+            }
+          }
+          if (failures) process.exitCode = 1;
+        }
+        continue;
+      }
+      if (phase === 'repair-downloaders') {
+        fs.writeFileSync(path.join(recovery, name + '-downloadclients.json'), JSON.stringify(clients), { mode: 0o600 });
+        for (const client of clients.filter(client => client.implementation === 'QBittorrent' && client.enable)) {
+          const host = client.fields.find(field => field.name === 'host');
+          assert(host, 'qBittorrent host field missing');
+          host.value = 'qbittorrent.qbittorrent.svc.cluster.local';
+          await native('/downloadclient/test', 'POST', client);
+          await native('/downloadclient/' + client.id, 'PUT', client);
+          console.log(JSON.stringify({ application: name, qBittorrentNativeTestPassed: true, endpoint: host.value, credentialsAndCategoriesPreserved: true }));
+        }
+        continue;
+      }
+      console.log(JSON.stringify({ application: name, authenticationMethod: config.AuthenticationMethod, health: native('/health').map(item => ({ source: item.source, message: item.message })), downloadClients: clients.map(client => ({ id: client.id, name: client.name, implementation: client.implementation, enable: client.enable, fields: safeFields(client.fields) })) }));
+      if (app.kind !== 'prowlarr') console.log(JSON.stringify({ application: name, indexers: native('/indexer').map(indexer => ({ id: indexer.id, name: indexer.name, fields: safeFields(indexer.fields) })) }));
+      if (app.kind === 'prowlarr') {
+        const host = native('/config/host');
+        console.log(JSON.stringify({ application: name, applicationPeers: native('/applications').map(peer => ({ name: peer.name, syncLevel: peer.syncLevel, tags: peer.tags, fields: safeFields(peer.fields), categories: peer.fields.find(field => field.name === 'syncCategories')?.value })), publicIndexerUrlFields: native('/indexer').filter(indexer => ['1337x', 'Nyaa.si', 'RuTracker'].includes(indexer.name)).map(indexer => ({ name: indexer.name, tags: indexer.tags, fields: indexer.fields.filter(field => field.name === 'baseUrl') })) }));
+        console.log(JSON.stringify({ application: name, proxySettings: Object.fromEntries(Object.entries(host).filter(([key]) => /^proxy/.test(key) && !/password|username/i.test(key))), indexers: native('/indexer').map(indexer => ({ id: indexer.id, name: indexer.name, enable: indexer.enable, fields: safeFields(indexer.fields), advertisedBaseUrls: indexer.fields.find(field => field.name === 'baseUrl')?.selectOptions })), proxies: native('/indexerproxy').map(proxy => ({ id: proxy.id, name: proxy.name, implementation: proxy.implementation, fields: safeFields(proxy.fields) })), indexerStatus: native('/indexerstatus') }));
+      }
+    }
+    return;
+  }
   if (phase === 'retire') {
     const deployments = JSON.parse(kubectl(['get', 'deployments', '-o', 'json'])).items;
     assert.equal(deployments.length, 7);
