@@ -34,22 +34,28 @@ for name, network in profile['openwrt_wifi_networks'].items():
     assert sections[name + '_bridge']['type'] == 'bridge'
     assert sections[name + '_bridge']['ports'] == ['br-ap.' + str(network['vlan'])]
 assert profile['openwrt_bss_bridges'] == {
-    'phy0-ap0': 'br-guest', 'phy1-ap0': 'br-private',
-    'phy0-ap1': 'br-iot-local', 'phy0-ap2': 'br-iot-cloud',
+  'phy0-ap0': 'br-iot-local', 'phy1-ap0': 'br-private',
+  'phy0-ap1': 'br-iot-cloud',
 }
-assert profile['openwrt_wifi_networks']['guest']['enabled'] is True
+assert profile['openwrt_wifi_networks']['guest']['enabled'] is False
 profile['openwrt_wifi_keys'] = {name: 'test-only-' + name + '-passphrase' for name in ['private', 'guest', 'iot_local', 'iot_cloud']}
 wireless = module.parse_config(environment.from_string(Path('ansible/templates/openwrt-wireless.j2').read_text()).render(**profile))
 assert wireless['iot_cloud_radio0']['disabled'] == '0'
 assert 'iot_cloud_radio1' not in wireless
 assert 'iot_local_radio1' not in wireless
-assert wireless['guest_radio0']['disabled'] == '0'
+assert wireless['guest_radio0']['disabled'] == '1'
 assert 'guest_radio1' not in wireless
 assert 'private_radio0' not in wireless
 assert wireless['private_radio1']['disabled'] == '0'
-assert len([item for item in wireless.values() if item.get('.type') == 'wifi-iface' and item['device'] == 'radio0' and item['disabled'] == '0']) == 3
+assert len([item for item in wireless.values() if item.get('.type') == 'wifi-iface' and item['device'] == 'radio0' and item['disabled'] == '0']) == 2
 assert len([item for item in wireless.values() if item.get('.type') == 'wifi-iface']) == 4
-assert all(item['disabled'] == '0' for item in wireless.values())
+assert all(item['disabled'] == '0' for name, item in wireless.items() if name != 'guest_radio0')
+service = environment.from_string(Path('ansible/templates/openwrt-bss-bridges.j2').read_text()).render(**profile)
+assert 'hostapd.phy0-ap2' not in service
+assert 'br-guest' not in service
+assert 'br-iot-local' in service and 'br-iot-cloud' in service and 'br-private' in service
+import subprocess
+subprocess.run(['sh', '-n'], input=service, text=True, check=True)
 `], { cwd: repository, encoding: 'utf8' });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });
@@ -58,6 +64,32 @@ test('runtime bridge reconciliation refuses missing explicit approval before con
   const result = spawnSync(ansible, [
     '-i', 'ansible/inventory/hosts.yml', 'ansible/playbooks/openwrt-ap.yml',
     '-e', JSON.stringify({ openwrt_phase: 'rebind', openwrt_apply_allowed: false }),
+  ], {
+    cwd: repository,
+    encoding: 'utf8',
+    env: { ...process.env, ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg') },
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /TASK \[Refuse unsupported hardware/);
+  assert.doesNotMatch(result.stdout, /TASK \[Reconcile the declared AP configuration/);
+});
+
+test('original backup restore refuses missing approval before contacting the AP', () => {
+  const environment = { ...process.env };
+  delete environment.OPENWRT_ORIGINAL_RESTORE_ALLOWED;
+  const result = spawnSync(process.execPath, ['scripts/openwrt-refresh.mjs', 'restore-original'], {
+    cwd: repository,
+    encoding: 'utf8',
+    env: environment,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Explicit original configuration restore approval required/);
+});
+
+test('recovery hold refuses AP writes even with apply approval', () => {
+  const result = spawnSync(ansible, [
+    '-i', 'ansible/inventory/hosts.yml', 'ansible/playbooks/openwrt-ap.yml',
+    '-e', JSON.stringify({ openwrt_phase: 'rebind', openwrt_apply_allowed: true }),
   ], {
     cwd: repository,
     encoding: 'utf8',

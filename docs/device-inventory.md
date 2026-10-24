@@ -246,7 +246,7 @@ MAC rather than its permanent address.
 | id | `ap-main` |
 | kind | network-appliance |
 | model | D-Link DIR-885L |
-| platform | OpenWrt 25.12.6; clean reset/upgrade accepted 2026-10-22 |
+| platform | OpenWrt 25.12.2; approved rollback 2026-10-22; unexpected restarts and client connectivity remain unresolved |
 | role | VLAN-aware Layer-2 wireless access point |
 | parent | None |
 | hostname | `ap.owl.red` |

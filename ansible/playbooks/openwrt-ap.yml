@@ -23,13 +23,14 @@
           - openwrt_private_ports == ['lan1', 'lan2', 'lan3']
           - openwrt_management_host == '10.0.10.40'
           - openwrt_native_management_vid | int == 1
-          - openwrt_wifi_networks.guest.enabled is sameas true
+          - openwrt_wifi_networks.guest.enabled is boolean
           - openwrt_wifi_networks.guest.gateway_owner == 'opennds'
           - openwrt_wifi_networks.private.radios == ['radio1']
           - openwrt_wifi_networks.guest.radios == ['radio0']
           - openwrt_wifi_networks.iot_local.radios == ['radio0']
           - openwrt_wifi_networks.iot_cloud.radios == ['radio0']
           - openwrt_phase in ['inspect', 'qualify', 'plan', 'trial', 'verify', 'rebind', 'confirm', 'rollback', 'finish']
+          - openwrt_phase in ['inspect', 'plan', 'verify'] or not (openwrt_recovery_hold | default(false) | bool)
           - openwrt_phase != 'rebind' or openwrt_apply_allowed | bool
 
     - name: Wait for the new wired management listener during acceptance
@@ -98,6 +99,17 @@
               changed=1
           fi
           {% endfor %}
+            cat > /tmp/owl-bss-bridges.new <<'OWL_BSS_SERVICE'
+            {{ lookup('template', playbook_dir ~ '/../templates/openwrt-bss-bridges.j2') | indent(10) }}
+            OWL_BSS_SERVICE
+            sh -n /tmp/owl-bss-bridges.new
+            if ! cmp -s /tmp/owl-bss-bridges.new /etc/init.d/owl-bss-bridges; then
+              chmod 755 /tmp/owl-bss-bridges.new
+              mv /tmp/owl-bss-bridges.new /etc/init.d/owl-bss-bridges
+              changed=1
+            else
+              rm /tmp/owl-bss-bridges.new
+            fi
           printf 'OWL_AP_BINDINGS_CHANGED=%s\n' "$changed"
       environment:
         SSHPASS: "{{ lookup('env', 'OPENWRT_ROOT_PASSWORD') }}"
@@ -180,7 +192,8 @@
           - >-
             openwrt_wireless_runtime.stdout | from_json | dict2items | map(attribute='value.interfaces') |
             flatten | map(attribute='config.ssid') | list | sort ==
-            ['owl.red', 'owl.red-iot-cloud', 'owl.red-iot-local', 'silence of the lans'] | sort
+            (openwrt_wifi_networks | dict2items | map(attribute='value') |
+            selectattr('enabled', 'equalto', true) | map(attribute='ssid') | list | sort)
         fail_msg: The exact AP target, wired interface or active radio/SSID state did not converge.
       when: openwrt_phase == 'verify'
 

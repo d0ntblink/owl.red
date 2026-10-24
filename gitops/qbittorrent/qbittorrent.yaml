@@ -178,9 +178,10 @@ spec:
             - {name: VPN_PORT_FORWARDING_PORTS_COUNT, value: "2"}
             - {name: HTTP_CONTROL_SERVER_ADDRESS, value: "127.0.0.1:8000"}
             - {name: HTTP_CONTROL_SERVER_AUTH_CONFIG_FILEPATH, value: /gluetun/control.toml}
-            - {name: FIREWALL_INPUT_PORTS, value: "8080,5030,8265"}
+            - {name: FIREWALL_INPUT_PORTS, value: "8080,5030,8265,8888"}
             - {name: FIREWALL_OUTBOUND_SUBNETS, value: "10.244.0.0/16,10.96.0.0/12,10.0.10.0/24,10.0.20.10/32"}
-            - {name: HTTPPROXY, value: "off"}
+            - {name: HTTPPROXY, value: "on"}
+            - {name: HTTPPROXY_LISTENING_ADDRESS, value: ":8888"}
             - {name: SHADOWSOCKS, value: "off"}
             - name: VPN_PORT_FORWARDING_UP_COMMAND
               value: >-
@@ -324,6 +325,17 @@ spec:
   selector: {app.kubernetes.io/name: qbittorrent}
   ports:
     - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gluetun-proxy
+  namespace: qbittorrent
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: qbittorrent}
+  ports:
+    - {name: http-proxy, port: 8888, targetPort: 8888}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware

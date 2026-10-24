@@ -1,5 +1,9 @@
 # Guest Wi-Fi Troubleshooting
 
+Guest Wi-Fi is intentionally disabled until WAP replacement. The retained
+gateway and portal do not mean the guest SSID should be visible. Do not enable
+it as a troubleshooting step; see the [current AP incident](wifi-architecture.md#current-incident-ap-restarts).
+
 Start with [Wi-Fi architecture](wifi-architecture.md) for the accepted topology
 and [gateway operations](../../terraform/proxmox/guest-portal/README.md) for
 enforcement ownership. Use the supported Node 24 controller environment and

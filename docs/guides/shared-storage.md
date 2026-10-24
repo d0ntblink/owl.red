@@ -605,6 +605,61 @@ after cluster writes. Never restart them without first quiescing the cluster
 and exporting the current Longhorn databases. Private preimages and snapshots
 remain under `/root/.local/state/owl-red/arr-batch`, not independent backups.
 
+### Arr Access And Integration Recovery
+
+The existing Bitwarden Password Manager item **ARR Access** is the interactive
+credential reference. Its URL list now contains the six current HTTPS endpoints;
+the username/password are unchanged. On 2026-10-23, native login checks passed
+for all six applications. Radarr HD was aligned to those expected credentials;
+the other five working logins were preserved. API keys were not rotated.
+
+| Application | Browser URL |
+|-------------|-------------|
+| Prowlarr | `https://prowlarr.owl.red` |
+| Sonarr HD | `https://sonarr.owl.red` |
+| Sonarr 4K | `https://sonarr-uhd.owl.red` |
+| Radarr HD | `https://radarr.owl.red` |
+| Radarr 4K | `https://radarr-uhd.owl.red` |
+| Lidarr | `https://lidarr.owl.red` |
+
+All six Arr download-client records use
+`qbittorrent.qbittorrent.svc.cluster.local:8080`, not the external
+`qbittorrent-direct.owl.red` endpoint. Native connection tests passed with
+existing credentials/categories and without adding a download.
+
+Prowlarr's native HTTP proxy uses
+`gluetun-proxy.qbittorrent.svc.cluster.local:8888`. The existing Gluetun gateway
+provides the proxy through a separate ClusterIP-only service; it has no public
+ingress or LoadBalancer port. Its VPN firewall remains enabled. The proxy bypass
+expression `\.svc\.cluster\.local` and local-address bypass keep internal app
+and solver requests out of the VPN. FlareSolverr uses
+`http://flaresolverr.flaresolverr.svc.cluster.local:8191`; Prowlarr passes the
+global VPN proxy in its native browser-request payload. The native solver test
+and actual Prowlarr HTTPS egress through Gluetun passed.
+
+Prowlarr's five application-peer tests and one downstream indexer test in every
+HD/4K/music app passed. EZTV, EZTVL, SubsPlease, The Pirate Bay and YTS passed
+Prowlarr's native provider tests. Nyaa.si, RuTracker and 1337x still returned
+upstream gateway/challenge timeouts during acceptance. They were not disabled,
+silently replaced or routed outside the VPN. These remaining provider failures
+do not invalidate the separately tested downloader and working-provider paths.
+
+The existing [Arr controller](../../scripts/arr-batch-run.mjs) now supports
+`inspect-integrations`, `verify-app-connections` and `verify-integrations`
+without relying on migration snapshots. The full provider verification reports
+individual failures and exits unsuccessfully if any remain. Native tests can
+contact upstream sites but do not download or import media. Mutating
+`repair-downloaders`, `repair-prowlarr`, `repair-access`, `update-access-urls`
+and `sync-indexers` require `ARR_REPAIR_ALLOWED=true` and save owner-only
+controller preimages outside Git. Do not replay `stop` or `seed` as a repair.
+
+The gateway rollout briefly interrupted downloader service. The stale old Pod
+object was cleared only after all three application containers were confirmed
+stopped or absent; one replacement became ready. Source changes are local until
+reviewed publication, while native app settings persist in their existing data
+volumes. Publish the gateway source before a later Fleet rollout so it retains
+the enabled internal proxy.
+
 ### Tautulli And Reclaimerr
 
 Both apps now run as non-root UID `99`, GID `100` in the `media-apps` namespace,
