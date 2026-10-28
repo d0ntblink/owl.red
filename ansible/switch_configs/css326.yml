@@ -131,7 +131,7 @@ ports:
 
   - port: 18
     name: "unpatched-18"
-    enabled: true
+    enabled: false
     assigned_to: unpatched
 
   - port: 19
@@ -140,9 +140,9 @@ ports:
     assigned_to: unpatched
 
   - port: 20
-    name: "pvt-drop-20"
-    enabled: true
-    assigned_to: unpatched            # VLAN 20 private-net drop (active clients seen in FDB)
+    name: "unpatched-20"
+    enabled: false
+    assigned_to: unpatched
 
   - port: 21
     name: "unpatched-21"
@@ -174,29 +174,29 @@ ports:
     enabled: true
     assigned_to: nas.owl.red          # AQUA DAC → 82599ES iX10 — 10G storage uplink (active)
 
-# VLAN table — created without port assignments.
-# Port-VLAN assignments (access/trunk mode per port) come in Phase 2.
+# Client memberships are reconciled by swos-ap; ingress filtering is not yet hardened.
+# Native management remains untagged/PVID 1, not tagged VLAN 10.
 vlans:
   - vlan_id: 10
-    member_ports: [5]          # port 5 = edge.pve trunk (VLAN 10 untagged/native)
+    member_ports: [5]          # Legacy row on a disabled port; not the native management path.
     name: "network-devices"   # 10.0.10.0/24 — infra mgmt, DHCP 100-199 via Technitium LXC
 
   - vlan_id: 20
-    member_ports: [2, 18, 22, 24, 25]
+    member_ports: [2, 22, 24, 25]
     learning: true
     name: "private-net"       # 10.0.20.0/24 — trusted wired + WiFi
 
   - vlan_id: 30
-    member_ports: [18, 22, 24, 25]
+    member_ports: [22, 24, 25]
     learning: true
     name: "guest-net"         # 10.0.30.0/24 — guest WiFi, internet only
 
   - vlan_id: 40
-    member_ports: [18, 22, 24, 25]
+    member_ports: [22, 24, 25]
     learning: true
     name: "iot-no-inter"      # 10.0.40.0/24 — IoT local only
 
   - vlan_id: 50
-    member_ports: [18, 22, 24, 25]
+    member_ports: [22, 24, 25]
     learning: true
     name: "iot-with-inter"    # 10.0.50.0/24 — IoT internet permitted

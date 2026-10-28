@@ -11,8 +11,8 @@ import { parseEnv } from 'node:util';
 process.umask(0o077);
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const phase = process.argv[2] ?? 'plan';
-assert.ok(['plan', 'create', 'deploy', 'inspect'].includes(phase), 'Unknown controller lifecycle phase');
-if (['create', 'deploy'].includes(phase)) assert.equal(process.env.GWN_LXC_APPLY_ALLOWED, 'true', 'Explicit controller lifecycle approval required');
+assert.ok(['plan', 'create', 'deploy', 'inspect', 'resize'].includes(phase), 'Unknown controller lifecycle phase');
+if (['create', 'deploy', 'resize'].includes(phase)) assert.equal(process.env.GWN_LXC_APPLY_ALLOWED, 'true', 'Explicit controller lifecycle approval required');
 const manifest = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/gwn-manager.json'), 'utf8'));
 assert.ok(manifest.container.id === 201 && manifest.container.node === 'edge' && manifest.container.unprivileged, 'Unexpected controller boundary');
 const home = os.homedir();
@@ -74,10 +74,36 @@ if (phase === 'inspect') {
   assert.ok(changes.length <= 1, 'Refuse changes outside one controller resource');
   for (const change of changes) {
     const after = change.change.after;
-    assert.ok(change.address === 'proxmox_virtual_environment_container.gwn_manager' && change.change.actions.join(',') === 'create' &&
-      after.vm_id === 201 && after.node_name === 'edge' && after.unprivileged === true, 'Refuse anything except new unprivileged controller creation');
+    assert.ok(change.address === 'proxmox_virtual_environment_container.gwn_manager' &&
+      after.vm_id === 201 && after.node_name === 'edge' && after.unprivileged === true, 'Unexpected controller resource');
+    if (change.change.actions.join(',') === 'update') {
+      assert.ok(['plan', 'resize'].includes(phase), 'Use the explicit memory-only resize phase');
+      const before = structuredClone(change.change.before);
+      assert.ok(before.memory[0].dedicated === 6144 && after.memory[0].dedicated === 4096, 'Only the reviewed 6-to-4-GiB reduction is allowed');
+      before.memory[0].dedicated = after.memory[0].dedicated;
+      assert.deepEqual(before, after, 'Refuse changes other than the controller memory limit');
+    } else assert.ok(change.change.actions.join(',') === 'create' && phase !== 'resize', 'Refuse controller replacement or destruction');
   }
-  console.log(JSON.stringify({ planCreates: changes.length, existingController: current.length === 1, otherGuestsChanged: false }));
+  console.log(JSON.stringify({ planCreates: changes.filter(change => change.change.actions[0] === 'create').length,
+    memoryUpdates: changes.filter(change => change.change.actions[0] === 'update').length,
+    existingController: current.length === 1, otherGuestsChanged: false }));
+  if (phase === 'resize' && changes.length) {
+    assert.ok(current.length === 1 && current[0].type === 'lxc' && current[0].name === 'gwn', 'Expected owned controller LXC');
+    const before = remote('pct config 201');
+    assert.ok(/^memory: 6144$/m.test(before), 'Live memory differs from the resize preimage');
+    const servicePid = remote('pct exec 201 -- /run/current-system/sw/bin/systemctl show gwn-manager.service --property=MainPID --value');
+    assert.ok(Number(servicePid) > 0, 'Controller service must be running before hot resize');
+    fs.writeFileSync(path.join(state, 'memory-before.conf'), before, { mode: 0o600 });
+    remote('pct set 201 --memory 4096');
+    const after = remote('pct config 201');
+    assert.ok(/^memory: 4096$/m.test(after), 'Memory reduction was not applied');
+    assert.equal(before.replace(/^memory: .*$/m, ''), after.replace(/^memory: .*$/m, ''), 'Unrelated container configuration changed');
+    assert.equal(remote('pct exec 201 -- /run/current-system/sw/bin/systemctl show gwn-manager.service --property=MainPID --value'), servicePid, 'Controller service restarted during resize');
+    const refresh = path.join(state, 'memory-refresh.tfplan');
+    execute('terraform', [root, 'plan', '-refresh-only', '-input=false', '-out=' + refresh], { env: environment });
+    execute('terraform', [root, 'apply', '-input=false', refresh], { env: environment });
+    console.log(JSON.stringify({ controller: 201, memoryMiB: 4096, liveMemoryOnly: true, servicePidUnchanged: true }));
+  }
   if (phase === 'create' && changes.length) {
     assert.ok(current.length === 0, 'CT 201 already exists; inspect before retrying');
     const marker = path.join(state, 'create-requested.json');

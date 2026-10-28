@@ -11,6 +11,7 @@
     "model": "GWN7660E",
     "name": "ap"
   },
+  "retired_bootstrap_ssids": ["GWN Manager"],
   "source": {
     "url": "https://firmware.grandstream.com/GWN_Manager-1.1.39.8-Ubuntu.tar.gz",
     "sha256": "37cd47703c1e2d91c4f35568e6c580a01af8713af55aabd6cbd79c68ac865de1"
@@ -24,7 +25,7 @@
     "dns": "10.0.10.30",
     "mac": "02:6f:77:10:02:01",
     "cores": 2,
-    "memory_mib": 6144,
+    "memory_mib": 4096,
     "disk_gib": 24,
     "unprivileged": true
   },

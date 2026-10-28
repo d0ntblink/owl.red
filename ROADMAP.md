@@ -67,6 +67,10 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/guides/wifi-architecture.md).
 
+- [ ] Harden CSS326 VLAN ingress: declare native VLAN 1 membership and a recovery
+  path before Strict filtering, preserve hybrid trunks 22/24/25, classify access
+  ports and reject injected tags. Review retained CP1 port 2 membership in VLAN 20;
+  the unmanaged MokerLink cannot enforce per-endpoint VLAN permissions.
 - [ ] Soak AP stability and test controller-outage recovery, cross-band client
   isolation, broader IoT integrations and measured MokerLink Extend-mode speed.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):

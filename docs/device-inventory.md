@@ -256,7 +256,7 @@ MAC rather than its permanent address.
 | interfaces | 8 PoE+ Gigabit RJ45 ports (ports 1-8); 2 Gigabit RJ45 uplinks (ports 9-10); 1 Gigabit SFP uplink (port 11) |
 | poe_budget | 120 W total advertised; up to 30 W per PoE port |
 | port_features | Advertised QoS priority on PoE ports 1-2; PoE watchdog/AI restart advertised but trigger, scope and disable control are not verified |
-| dip_switch | Extend, owner-confirmed 2026-10-27; left unchanged. Advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; tagged-VLAN transport and actual link speed remain unverified. It is not configurable 802.1Q VLAN management. |
+| dip_switch | Extend, owner-confirmed 2026-10-27; left unchanged. Advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; tagged private/guest service is verified, but actual link speed remains unverified. It is not configurable 802.1Q VLAN management. |
 | topology_notes | CSS326 port 22 to MokerLink uplink 10; PoE port 4 to `ap-main`. Native management plus tagged client VLANs 20/30/40/50. Other endpoint ports are not documented. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
 | specification | [Manufacturer POE-G083GS product page](https://www.mokerlink.com/index.php?route=product/product&product_id=377) |
 
@@ -442,7 +442,7 @@ MAC rather than its permanent address.
 | hostname | `gwn.owl.red`; container hostname `gwn` |
 | guest_id | `201` |
 | cpu | 2 vCPU |
-| memory | 6 GiB |
+| memory | 4 GiB |
 | storage | 24 GiB local root filesystem |
 | isolation | Unprivileged; native management interface only |
 | access | `https://gwn.owl.red` through trusted management ingress; direct AP control TCP `10014` |
@@ -765,7 +765,7 @@ passive cable paths, not separately discoverable network devices.
 | SW12 | PP30 | `storage-pve` second management NIC |
 | SW14 | PP31 | `storage-bmc` |
 | SW16 | PP32 | `pdu-rack` |
-| SW18 | PP33 | Unassigned; existing switch port/VLAN state retained pending separate review |
+| SW18 | PP33 | Unassigned; disabled and removed from client VLAN memberships |
 | SW22 | PP35; cabinet-to-rack path | `switch-rack-poe` uplink 10; native management plus tagged VLANs 20/30/40/50 |
 | MokerLink PoE 4 | AP Ethernet cable | `ap-main` NET/POE; owner-confirmed connection |
 | SW24 | PP36 | `edge-pve` management |
