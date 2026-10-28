@@ -1,8 +1,8 @@
 # WAP Buy Order
 
 Research date: 2026-10-23. Updated 2026-10-27: Grandstream GWN7660E received
-and connected; model confirmed by read-only SSH status. Local IaC qualification
-and deployment acceptance remain pending. Prior GWN7665 cancellation/refund is
+and deployed with local GWN Manager IaC. All four SSIDs are active on both bands;
+phone private-internet and guest-portal checks passed. Prior GWN7665 cancellation/refund is
 not confirmed. Other models remain historical comparison candidates.
 
 ## Selected Purchase
@@ -23,26 +23,24 @@ not confirmed. Other models remain historical comparison candidates.
   between the network cabinet and rack. Its DIP is already in Extend, confirmed
   by the owner on 2026-10-27; leave it unchanged pending a controlled test.
   The owner confirms CSS326 port 22 to MokerLink uplink 10,
-  with the AP on PoE port 4. Tagged-VLAN transport remains untested.
-- Do not cut over or re-enable guest Wi-Fi until the local configuration/IaC
-  path, all required VLANs, backup/recovery and real-client acceptance pass.
+  with the AP on PoE port 4. The trunk carries native management and tagged
+  VLANs 20/30/40/50; private and guest service are phone-confirmed. Link-speed,
+  coverage and broader IoT tests remain follow-ups.
 
-### Intended SSID/RF Layout After Qualification
+### Deployed SSID Layout
 
-This is the selected target, not current live state. Reuse the established SSID
-names and credentials after qualification; no SSID activation is implied by
-the hardware connection.
+The established SSID names and Bitwarden credentials are retained. The local
+Manager API applies and verifies these profiles; repeats report no changes.
 
 | Band | Intended SSIDs | VLANs |
 |------|----------------|-------|
 | 2.4 GHz | `owl.red`, `silence of the lans`, `owl.red-iot-local`, `owl.red-iot-cloud` | 20, 30, 40, 50 respectively |
-| 5 GHz | `owl.red`, `silence of the lans` | 20 and 30 respectively |
+| 5 GHz | `owl.red`, `silence of the lans`, `owl.red-iot-local`, `owl.red-iot-cloud` | 20, 30, 40, 50 respectively |
 
-That is four BSSIDs on 2.4 GHz, two on 5 GHz, six total. The GWN7660E vendor
+That is four BSSIDs on each radio, eight total. The GWN7660E vendor
 specification lists 16 SSIDs per radio. Reuse the same SSID name on both bands
-only when both BSSes map to that same VLAN/security policy. Keep the two IoT
-networks on 2.4 GHz unless separately qualified. Guest remains paused until the
-new VLAN 30/openNDS path passes end-to-end acceptance.
+only when both BSSes map to that same VLAN/security policy. Guest is active
+behind the retained openNDS gateway; its acceptance fixture and phone login passed.
 
 ## Requirements
 
@@ -50,7 +48,7 @@ new VLAN 30/openNDS path passes end-to-end acceptance.
 - Repeatable IaC for SSIDs, VLAN mapping, bands, security and radio settings.
   A local GUI or configuration download alone does not satisfy this requirement.
 - Preserve private VLAN 20, guest VLAN 30, local IoT VLAN 40 and cloud IoT VLAN
-  50; guest remains paused until replacement and acceptance.
+  50; retain the separate accepted guest-session enforcement path.
 - Keep VyOS, Technitium and the separate openNDS gateway as their existing
   owners. The new AP is a wired VLAN-aware bridge, not another router.
 - Verify room for eight BSSIDs per required radio if eight-per-band expansion

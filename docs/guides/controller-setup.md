@@ -288,14 +288,25 @@ strict-key SSH jump, temporary credential reference and physical path are in
 [Wi-Fi architecture](wifi-architecture.md#bootstrap-discovery-and-access).
 Discovery uses Node.js 24 `util.parseEnv`, OpenSSH and `sshpass`; passwords
 stay in child environments and must not enter Git or command arguments. SSH
-exposes an interactive menu, not a shell. No AP deployer or firmware runner is
-currently qualified.
+exposes an interactive menu, not a shell. Bootstrap set Manager Address to
+`10.0.10.32:10014`; production SSIDs are now reconciled through the local API.
+Firmware upgrades remain separately reviewed operations.
+
+The temporary WSL Manager now has a
+[qualified local API and disabled-SSID CRUD probe](wifi-architecture.md#local-manager-api-qualification).
+Use Node 24 with built-in HTTPS/crypto and the existing Bitwarden CLI/profile;
+no extra npm package is required. Production runs in unprivileged NixOS CT `201`
+on edge at `10.0.10.32`; `https://gwn.owl.red` has trusted frontend/backend TLS
+and a Homepage link. AP adoption, all eight BSS broadcasts and phone private/
+guest access are accepted. See the [controller root](../../terraform/proxmox/gwn-manager/README.md)
+for the Nix/Terraform/OpenSSH lifecycle prerequisites and guarded commands.
 
 The [shared network profile](../../ansible/vars/wifi-networks.yml) supplies SSID
-names and upstream VLAN policy to VyOS, not AP configuration. Use the existing
-[password authority](wifi-password-rotation.md). Before any AP apply, qualify
-one local configuration owner, repeatable comparison/removal behavior,
-backup/recovery, secret handling and the full native/tagged uplink path.
+names, bands, vault references and enablement to the production API runner, and
+upstream policy to VyOS. Guest gateway ownership stays on openNDS even while
+the SSID is enabled. Use the existing [password authority](wifi-password-rotation.md).
+Review desired changes and private recovery inputs before applying; restore and
+controller-outage testing remain follow-ups.
 Sensitive plan masking alone does not keep keys out of Terraform state.
 
 Qualify coverage for the 900-sq-ft site and radio power on this hardware;

@@ -7,7 +7,7 @@ set service dns forwarding name-server 10.0.10.30 &&
 {% endif %}
 delete service ntp listen-address &&
 set service ntp listen-address 0.0.0.0 &&
-{% for name, network in wifi_networks.items() if network.enabled %}
+{% for name, network in wifi_networks.items() if network.enabled and (network.gateway_owner | default('vyos')) == 'vyos' %}
 {% set vlan = network.vlan %}
 {% set subnet = '10.0.' ~ vlan ~ '.0/24' %}
 {% set gateway = '10.0.' ~ vlan ~ '.1' %}

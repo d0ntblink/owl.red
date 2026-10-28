@@ -162,6 +162,24 @@
         },
 
         {
+          "hardwareAddress": "EC-74-D7-B3-3E-BA",
+          "ipAddress": "10.0.10.107",
+          "hostName": "ap.owl.red",
+          "comments": "Grandstream GWN7660E native management",
+          "macSource": "GWN Manager adopted device and Technitium lease",
+          "status": "confirmed"
+        },
+
+        {
+          "hardwareAddress": "02-6F-77-10-02-01",
+          "ipAddress": "10.0.10.32",
+          "hostName": "gwn-direct.owl.red",
+          "comments": "GWN Manager NixOS LXC 201; static native management",
+          "macSource": "Terraform and pct config 201 on edge",
+          "status": "confirmed"
+        },
+
+        {
           "hardwareAddress": "BC-24-11-D4-5B-7B",
           "ipAddress": "10.0.10.30",
           "hostName": "ns1.owl.red",

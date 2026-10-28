@@ -1,0 +1,5 @@
+defaultNamespace: infra-services
+helm:
+  takeOwnership: true
+kustomize:
+  dir: .

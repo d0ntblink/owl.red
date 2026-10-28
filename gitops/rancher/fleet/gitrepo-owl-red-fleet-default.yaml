@@ -29,4 +29,5 @@ spec:
     - gitops/librespeed
     - gitops/arr
     - gitops/pdm
+    - gitops/gwn-manager
     - gitops/platform-resilience

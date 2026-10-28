@@ -1,8 +1,8 @@
 # Guest Wi-Fi Troubleshooting
 
-Guest Wi-Fi is intentionally disabled until WAP replacement. The retained
-gateway and portal do not mean the guest SSID should be visible. Do not enable
-it as a troubleshooting step; see the [AP qualification target](wifi-architecture.md#replacement-ap-target-not-yet-deployed).
+Guest Wi-Fi is active on both 2.4 and 5 GHz through the Grandstream AP and the
+retained openNDS gateway. Native acceptance and a real phone consent flow passed;
+see the [current AP](wifi-architecture.md#replacement-ap-target-not-yet-deployed).
 
 Start with [Wi-Fi architecture](wifi-architecture.md) for the accepted topology
 and [gateway operations](../../terraform/proxmox/guest-portal/README.md) for
@@ -13,7 +13,7 @@ existing private credentials from [controller setup](controller-setup.md).
 
 | Symptom | First check | Do not assume |
 |---------|-------------|---------------|
-| SSID missing | Independent over-air scan; compare the intended Grandstream bands and guest pause | A configured profile proves beacon visibility |
+| SSID missing | Independent over-air scan; guest is configured on both bands | A configured profile proves beacon visibility |
 | SSID visible, association fails | Selected SSID and current Bitwarden key; client radio support | A portal failure explains WPA authentication |
 | Associated, no lease | Guest VLAN 30 bridge path and Technitium scope/service | The AP or VyOS should start a replacement DHCP server |
 | Lease, no internet before consent | Check portal reachability and client captive detection | Pre-auth internet denial is a fault |
@@ -31,8 +31,15 @@ Do not use the retired `captive.owl.red` address or expect DHCP option 114.
 
 Use the Grandstream's native SSH `1` / Status menu through the documented
 [bootstrap access](wifi-architecture.md#bootstrap-discovery-and-access).
-Preserve strict host-key checking. No general shell or repeatable AP inspection
-runner is qualified yet. Share only sanitized status, never credentials.
+Preserve strict host-key checking. Production Manager inspection is available:
+
+```bash
+node scripts/gwn-manager-run.mjs inspect-production
+node scripts/gwn-manager-run.mjs ap-plan-production
+```
+
+Share only sanitized status, never credentials. The native SSH menu is not a
+general shell and its access may be controlled by Manager.
 
 Verify each configured SSID's VLAN mapping and an independent over-air scan;
 then test association and the intended VLAN's lease. Management reachability

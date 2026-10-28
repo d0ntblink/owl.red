@@ -67,10 +67,8 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/guides/wifi-architecture.md).
 
-- [ ] Establish stable client connectivity through the Grandstream AP using the
-  existing SSID names, credentials and VLAN policies. Require real-client
-  internet and sustained uptime, not just visible SSIDs. Keep guest paused
-  until the AP path and retained gateway/portal pass acceptance.
+- [ ] Soak AP stability and test controller-outage recovery, cross-band client
+  isolation, broader IoT integrations and measured MokerLink Extend-mode speed.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):
   target-SSID tablet identity, remaining client placement, RF coverage,
   static-appliance addressing and protected recovery/access ports.
@@ -81,13 +79,11 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   these do not establish coverage, roaming or universal handset compatibility.
 - [ ] Qualify a truthful client-specific CAPPORT endpoint before advertising
   DHCP option 114; keep it absent until the endpoint is proven.
-- [ ] Replace the constrained WAP with maintained hardware/driver support for the
-  required simultaneous VLAN-backed BSSes. The GWN7660E is received and connected;
-  qualify local IaC, backup/recovery and the CSS326-22 / MokerLink-10 / PoE-4
-  VLAN path, establish permanent management addressing and replace the temporary
-  credential through the established secret store. Confirm cancellation/refund of the previously
-  ordered GWN7665. Target private and guest on 2.4/5 GHz, IoT on 2.4 GHz; keep
-  guest paused until all checks pass. See the [WAP buy order](docs/buy-order.md).
+- [ ] Qualify GWN Manager backup/restore and backend certificate renewal; rotate
+  temporary bootstrap credentials through the established secret store.
+- [ ] Publish the reviewed controller/ingress sources and reconcile the active
+  Fleet GitRepo path; local deployment alone is not automatic GitOps ownership.
+- [ ] Confirm cancellation/refund of the earlier GWN7665 order.
 - [ ] Extend the existing Tailscale setup with reviewed management routing,
   access rules and split DNS; verify access from outside the home network.
 - [ ] Standardize client NTP configuration on the router through each system's

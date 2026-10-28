@@ -228,7 +228,7 @@ for network in plan['vlans'][1:]:
 assert ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '6300', 'action', 'drop'] in commands
 assert not any(command[:3] == ['set', 'nat', 'source'] for command in commands)
 profile = yaml.safe_load(Path('ansible/vars/wifi-networks.yml').read_text())
-assert profile['wifi_networks']['guest']['enabled'] is False
+assert profile['wifi_networks']['guest']['enabled'] is True
 assert profile['wifi_networks']['guest']['gateway_owner'] == 'opennds'
 handoff = next(task['ansible.builtin.raw'] for task in yaml.safe_load(Path('ansible/playbooks/guest-portal-router.yml').read_text())[0]['tasks'] if task['name'] == 'Handoff only the quarantined guest gateway path')
 assert 'delete interfaces ethernet eth1 vif 30 address 10.0.30.1/24' in handoff
@@ -244,6 +244,7 @@ wifi = environment.from_string(Path('ansible/templates/vyos-wifi-services.j2').r
 assert 'set service dhcp-server disable' in wifi
 assert 'set service dhcp-server shared-network-name' not in wifi
 assert 'set service dns forwarding name-server 10.0.10.30' in wifi
+assert 'set interfaces ethernet eth1 vif 30 address 10.0.30.1/24' not in wifi
 `], { cwd: repository, encoding: 'utf8' });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 });

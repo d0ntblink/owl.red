@@ -1,33 +1,33 @@
 # Wi-Fi Architecture And Operations
 
-## Replacement AP Target (Not Yet Deployed)
+<a id="replacement-ap-target-not-yet-deployed"></a>
 
-The Grandstream GWN7660E arrived and was connected on 2026-10-27. Read-only
-SSH status confirms the model, embedded-controller role `Master`, firmware
-`1.0.25.34`, part number `9640011012C`, device MAC `ec:74:d7:b3:3e:ba` and
-`NET/POE` connected. The previously ordered GWN7665 cancellation/refund remains
-unconfirmed. The intended target has four 2.4 GHz BSSes
-(private VLAN 20, guest VLAN 30, local IoT VLAN 40, cloud IoT VLAN 50) and two
-5 GHz BSSes (private VLAN 20 and guest VLAN 30). This is six BSSes total, within
-the vendor-advertised 16 SSIDs per radio. Keep identical SSID names tied to the
-same VLAN/security policy across bands.
+## Current Access Point
+
+The Grandstream GWN7660E is adopted by the production GWN Manager on 2026-10-27.
+It reports firmware `1.0.25.34`, device MAC `ec:74:d7:b3:3e:ba`, online/paired
+state and successful configuration. All four established SSIDs broadcast on
+both 2.4 and 5 GHz: eight BSSes total. Independent Windows scans verified both
+bands and WPA2-Personal/CCMP for every SSID. The user confirmed private internet
+and the guest consent flow on a phone. Keep identical names and VLAN/security
+policy across bands; this acceptance is not a coverage or throughput survey.
 
 The owner confirms the installed path: **CSS326 port 22 -> MokerLink uplink 10
 -> MokerLink PoE port 4 -> GWN7660E NET/POE**. The MokerLink POE-G083GS supplies
 power directly; no separate injector is used. Preserve port 22's existing native
 management/client path. The owner confirmed the MokerLink DIP is in **Extend**
 on 2026-10-27; leave it unchanged pending a specific need and controlled test.
-Advertised PoE-port isolation still permits uplink communication, but does not
-prove tagged-VLAN transparency or actual link speed on this installed path.
-Do not enable the guest target until the replacement's local
-configuration/IaC, VLAN path, backup/recovery and real-client checks pass. This
-target is not yet verified live configuration. The Grandstream is the sole AP
-hardware target; guest Wi-Fi remains paused until acceptance.
+CSS326 port 22 now retains native management and carries tagged VLANs
+20/30/40/50; existing VLAN members and per-port native settings were preserved
+and read back. Private and guest service through the installed path are
+phone-confirmed. Exact link speed, Extend-mode performance, broader IoT
+integration checks and cross-band client-isolation testing remain follow-ups.
 
 ### Bootstrap Discovery And Access
 
-- Current reachable address: `10.0.10.107`, observed 2026-10-27; this is not a
-    permanent reservation or DNS allocation.
+- Management: `ap.owl.red` / `10.0.10.107`, reserved for the verified device MAC
+    in Technitium. `gwn-direct.owl.red` identifies the controller's static
+    `10.0.10.32`; normal browser access is `https://gwn.owl.red` through ingress.
 - SSH login: `admin`; the supplied temporary password remains only in the ignored
     controller secret input under variable `grandstream`. Its file permissions
     were verified as `0600`. Rotate and move it to the established secret store
@@ -40,27 +40,128 @@ hardware target; guest Wi-Fi remains paused until acceptance.
     manufacturer identity attestation.
 - The native SSH menu's `1` / Status screen supplied the identity above.
     General shell commands are not applicable to this menu.
-- Discovery did not change passwords, firmware, SSIDs, VLANs, radio settings,
-    DHCP/DNS, switch settings or power. Existing SSID/client configuration,
-    address-assignment mode, tagged-VLAN transport, local IaC and recovery remain
-    unqualified. Reuse the established SSID names and their vault credentials.
+- A native factory reset switched the AP from embedded Master to Slave.
+    The supported SSH menu `11` / Manager Settings was used to set and save
+    `10.0.10.32:10014`. The AP then paired with Manager. This is bootstrap only;
+    steady-state WLAN configuration is owned by Manager's documented local API.
 
-This guide separates the intended AP layout from the retained routing and portal
+This guide describes the deployed AP layout and the retained routing and portal
 infrastructure. Passwords, API tokens, private keys and recovery snapshots stay
 outside Git.
 
-## Intended SSIDs
+## Local Manager API Qualification
 
-These are qualification targets, not a claim that the AP is broadcasting them.
-The [shared network profile](../../ansible/vars/wifi-networks.yml) preserves
-the established SSID names and upstream network policy; it is not an AP deployer.
+On 2026-10-27, the existing WSL GWN Manager at `https://localhost:8443` was
+qualified as a temporary controller-side test environment. It is not the
+production endpoint and must not be used as the future Homepage link.
+
+The production hostname and URL are **`gwn.owl.red`** and
+**`https://gwn.owl.red`**. The unprivileged NixOS LXC is deployed on edge as CT
+`201`, with static native-management address `10.0.10.32/24`, 2 CPU cores,
+6 GiB memory and a 24 GiB local root disk. The URL has trusted frontend TLS,
+verified backend CA/IP identity and management/owner access restrictions, and
+is linked from Homepage. The contact email is `admin@owl.red`.
+The [controller manifest](../../ansible/vars/gwn-manager.json) references the
+existing Bitwarden Password Manager entry **GWN Manager**. Reuse that login
+username/password when initializing production; do not generate or log a new
+login implicitly. API app credentials are separate, instance-specific secrets.
+
+### Proven Controller Behaviour
+
+- The saved vault account successfully logs into the local `/user/app/login`
+    account service, then establishes the `/app/login` Manager session. Sending
+    credentials directly to the second route fails; that is not proof of a bad
+    vault password.
+- API Developer Mode was enabled on the temporary WSL instance. Local OAuth
+    client-credentials tokens and signed official API requests work without cloud
+    authentication.
+- An isolated network with a counted zero-AP inventory passed SSID
+    create/list/read/update/delete. The disabled, unbound fixture verified VLANs
+    20/30/40/50, `2,5` versus `2` band selection, client isolation, WPA2-Personal
+    and exact PSK equality. The owned test SSID and network were deleted.
+- Security requires **`ssidSecurityType: 1`** as well as
+    `ssidEncryption: 3` and `ssidWpaEncryption: 0`. Omitting the security-type
+    discriminator defaulted to Open during the disabled test. Always verify
+    actual security mode after writes; API success alone is insufficient.
+- The official AP-list endpoint returned an empty string for an empty fixture,
+    rather than a counted list. The qualification probe independently verified
+    native `/app/ap/configure/list` inventory as `total=0` and `result=[]` before
+    writes or network cleanup. Do not equate an unrecognized response with zero
+    devices.
+- Production account login, local API tokens, signed requests, adopted-AP
+    configuration and repeated no-change SSID reconciliation passed. Trusted
+    `https://gwn.owl.red` returns HTTP 200 through the real ingress. Backend TLS
+    uses the controller's generated public CA, not an insecure transport override.
+
+The [local probe](../../scripts/gwn-manager-run.mjs) uses the supported Node 24
+runtime, the established private Bitwarden CLI/profile, and built-in HTTPS and
+crypto modules. Its self-signed TLS exception is restricted to fixed loopback
+`https://localhost:8443`; do not copy it into production. Credentials, cookies,
+tokens and PSKs stay out of output. Private API material and sanitized test
+records live under `~/.local/state/owl-red/gwn-manager/`, outside Git.
+
+```bash
+node scripts/gwn-manager-run.mjs inspect-local
+node scripts/gwn-manager-run.mjs api-local
+GWN_MANAGER_QUALIFY_ALLOWED=true node scripts/gwn-manager-run.mjs enable-api-local
+GWN_MANAGER_QUALIFY_ALLOWED=true node scripts/gwn-manager-run.mjs qualify-local
+```
+
+The last two commands mutate only the fixed local test controller. Production
+operations use explicit `-production` phases and a separate API credential.
+Production backend TLS is verified; the loopback self-signed exception is not
+used there. AP-reset permission does not imply unrelated infrastructure changes.
+
+### Production Operations
+
+```bash
+node scripts/gwn-lxc-run.mjs plan
+node scripts/gwn-lxc-run.mjs inspect
+node scripts/gwn-manager-run.mjs inspect-production
+node scripts/gwn-manager-run.mjs ap-plan-production
+GWN_MANAGER_APPLY_ALLOWED=true node scripts/gwn-manager-run.mjs apply-production
+```
+
+The shared policy and vault references are in
+[wifi-networks.yml](../../ansible/vars/wifi-networks.yml). Apply compares the
+owned SSID fields, stores private preimages, writes only drifted profiles and
+verifies WPA2-Personal/AES, PSK, bands, VLAN, enablement and isolation. Repeats
+have reported no changes. The AP's native portal stays off: openNDS is the sole
+guest-session enforcer. Radio channel/power optimisation remains site work, not
+a claim made by SSID read-back.
+
+The [controller root](../../terraform/proxmox/gwn-manager/README.md) documents
+the pinned NixOS package, lifecycle and recovery boundaries. Private controller
+preimages are not independent backups. Restore testing, backend certificate
+renewal, controller-outage behaviour, cross-band isolation and measured RF/link
+performance remain explicit follow-ups. No unrelated guest lifecycle, router
+policy, workstation routes or DNS settings were changed for this deployment.
+
+### Captive Portal Decision
+
+Keep the existing Debian/openNDS gateway and the existing portal application for
+this cutover. Production DHCP, HTTPS consent, native Authmon, established-session
+revocation and private/IPv6 denial passed again before guest activation, and a
+phone guest login was confirmed. This is a demonstrated enforcement path.
+Grandstream's native portal may simplify the architecture later, but it does
+not speak the existing FAS/Authmon protocol. Replacing it requires a separate
+review of custom-page integration, IPv6 bypass, expiry/revocation and controller
+failure behaviour; do not enable two captive-session enforcers at once.
+
+<a id="intended-ssids"></a>
+
+## Configured SSIDs
+
+All eight BSSes are active and independently visible. The
+[shared network profile](../../ansible/vars/wifi-networks.yml) is the source for
+the production API reconciler and upstream network policy.
 
 | SSID | Intended bands | VLAN | Gateway | Policy |
 |------|----------------|------|---------|--------|
 | `owl.red` | 2.4 / 5 GHz | 20 | VyOS `10.0.20.1` | Private clients; canonical VyOS rules |
-| `silence of the lans` | 2.4 / 5 GHz; paused | 30 | openNDS `10.0.30.1` | Portal consent and isolated guest internet |
-| `owl.red-iot-local` | 2.4 GHz | 40 | VyOS `10.0.40.1` | Local-only IoT; no internet |
-| `owl.red-iot-cloud` | 2.4 GHz | 50 | VyOS `10.0.50.1` | Internet-enabled IoT; no general lateral access |
+| `silence of the lans` | 2.4 / 5 GHz | 30 | openNDS `10.0.30.1` | Portal consent and isolated guest internet |
+| `owl.red-iot-local` | 2.4 / 5 GHz | 40 | VyOS `10.0.40.1` | Local-only IoT; no internet |
+| `owl.red-iot-cloud` | 2.4 / 5 GHz | 50 | VyOS `10.0.50.1` | Internet-enabled IoT; no general lateral access |
 
 Retain the existing Bitwarden Wi-Fi credentials. Apply client isolation to the
 three untrusted SSIDs; it does not replace VLAN boundaries or firewall policy.
@@ -73,11 +174,11 @@ flowchart LR
     Internet[Internet / ISP] --- VyOS[VyOS VM 103\nPhysical WAN and LAN]
     VyOS --- Switch[CSS326 switch\nNative management + tagged client VLANs]
     Switch ---|Port 22 to uplink 10| PoE[MokerLink POE-G083GS\nExtend mode]
-    PoE ---|PoE port 4| AP[GWN7660E\nBootstrap 10.0.10.107\nSSID/VLAN acceptance pending]
-    AP -.-> Private[owl.red\n2.4 and 5 GHz / VLAN 20]
-    AP -.-> Guest[silence of the lans\nPaused; target 2.4 and 5 GHz / VLAN 30]
-    AP --- Local[owl.red-iot-local\n2.4 GHz / VLAN 40]
-    AP --- Cloud[owl.red-iot-cloud\n2.4 GHz / VLAN 50]
+    PoE ---|PoE port 4| AP[GWN7660E\nap.owl.red / 10.0.10.107]
+    AP --- Private[owl.red\n2.4 and 5 GHz / VLAN 20]
+    AP --- Guest[silence of the lans\n2.4 and 5 GHz / VLAN 30]
+    AP --- Local[owl.red-iot-local\n2.4 and 5 GHz / VLAN 40]
+    AP --- Cloud[owl.red-iot-cloud\n2.4 and 5 GHz / VLAN 50]
     Switch --- DNS[Technitium LXC 200\nDHCP + DNS on every VLAN]
     Switch --- PVE[Proxmox vmbr0v30]
     PVE --- Gateway[Debian openNDS VM 104\nGuest 10.0.30.1]
