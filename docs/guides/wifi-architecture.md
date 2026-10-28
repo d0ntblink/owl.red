@@ -23,6 +23,39 @@ and read back. Private and guest service through the installed path are
 phone-confirmed. Exact link speed, Extend-mode performance, broader IoT
 integration checks and cross-band client-isolation testing remain follow-ups.
 
+### VLAN Audit And Port Cleanup
+
+Manager readback confirms all four SSIDs have VLAN tagging enabled: private
+`20`, guest `30`, local IoT `40`, cloud IoT `50`, on both bands. The AP bridges
+clients without NAT; untrusted SSIDs retain client isolation. Manager's portal
+is disabled because openNDS owns guest enforcement. The enabled, untagged wizard
+SSID `GWN Manager` was archived privately and deleted; only the four intended
+tagged profiles remain.
+
+The infrastructure subnet `10.0.10.0/24` currently travels **untagged with
+PVID 1**, not as tagged VLAN 10. CSS326 ports `22` (rack/AP), `24` (edge/DNS/guest
+gateway) and `25` (VyOS) carry the required client tags plus native management.
+Guest routing uses openNDS over its dedicated VyOS transit, not a second direct
+VyOS guest gateway; Technitium remains the DHCP authority.
+
+Unused port `18` is removed from VLANs 20/30/40/50 and disabled. Port `20` was
+the temporary Telus router, now removed by the owner; it is also disabled. Both
+are named `unpatched-<port>`. The bounded switch reconciler saved a private
+preimage, verified unchanged active-port/native settings and all writable link
+fields, and passed an idempotent repeat. Recovery is under controller-local
+`~/.local/state/owl-red/wifi-switch-retire-uLXarQ/`; use the same directory and
+`wifi_switch_phase=rollback` through the approved switch playbook to restore
+that exact preimage, after reviewing the intended effect of re-enabling ports.
+
+**Functional trunks are not complete ingress isolation.** Remaining enabled
+ports still use Optional/Any/PVID 1. Optional mode does not reject unknown VLANs,
+and lacks Strict mode's ingress membership checks. Before hardening, declare
+native VLAN 1 membership and recovery access, retain hybrid native/tagged trunks,
+and classify access ports to reject client-supplied tags. Review retained CP1
+port `2` membership in VLAN 20. Do not blanket-change PVIDs to 10 or enable Strict
+without the native membership plan. The unmanaged MokerLink cannot enforce
+per-endpoint tag permissions on its shared uplink.
+
 ### Bootstrap Discovery And Access
 
 - Management: `ap.owl.red` / `10.0.10.107`, reserved for the verified device MAC
@@ -58,9 +91,12 @@ production endpoint and must not be used as the future Homepage link.
 The production hostname and URL are **`gwn.owl.red`** and
 **`https://gwn.owl.red`**. The unprivileged NixOS LXC is deployed on edge as CT
 `201`, with static native-management address `10.0.10.32/24`, 2 CPU cores,
-6 GiB memory and a 24 GiB local root disk. The URL has trusted frontend TLS,
+4 GiB memory and a 24 GiB local root disk. The URL has trusted frontend TLS,
 verified backend CA/IP identity and management/owner access restrictions, and
 is linked from Homepage. The contact email is `admin@owl.red`.
+The initial 6 GiB allocation was reduced live without a service restart. The
+vendor stack used roughly 3 GiB; 4 GiB retains working headroom and 512 MiB swap.
+No OOM event was observed after the reduction. A 2 GiB limit is not qualified.
 The [controller manifest](../../ansible/vars/gwn-manager.json) references the
 existing Bitwarden Password Manager entry **GWN Manager**. Reuse that login
 username/password when initializing production; do not generate or log a new

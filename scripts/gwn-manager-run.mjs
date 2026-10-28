@@ -13,7 +13,7 @@ import { parseEnv } from 'node:util';
 process.umask(0o077);
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const selectedPhase = process.argv[2] ?? 'inspect-local';
-assert.ok(['inspect-local', 'enable-api-local', 'api-local', 'qualify-local', 'bootstrap-production', 'status-production', 'inspect-production', 'enable-api-production', 'api-production', 'ap-plan-production', 'adopt-production', 'apply-production'].includes(selectedPhase), 'Unknown controller phase');
+assert.ok(['inspect-local', 'enable-api-local', 'api-local', 'qualify-local', 'bootstrap-production', 'status-production', 'inspect-production', 'enable-api-production', 'api-production', 'ap-plan-production', 'audit-production', 'adopt-production', 'apply-production'].includes(selectedPhase), 'Unknown controller phase');
 const production = selectedPhase.endsWith('-production');
 const phase = production ? selectedPhase.replace('-production', '-local') : selectedPhase;
 const home = os.homedir();
@@ -158,7 +158,7 @@ if (phase === 'bootstrap-local') {
   const result = await client.request('/app/wizard/initial_info');
   assert.ok(result.retCode === 0, 'Controller status read failed');
   console.log(JSON.stringify({ strictTls: production, wizard: result.data.setup_wizard, accountRoute: result.data.account_domain }));
-} else if (['api-local', 'qualify-local', 'ap-plan-local', 'adopt-local', 'apply-local'].includes(phase)) {
+} else if (['api-local', 'qualify-local', 'ap-plan-local', 'audit-local', 'adopt-local', 'apply-local'].includes(phase)) {
   if (phase === 'qualify-local') assert.equal(process.env.GWN_MANAGER_QUALIFY_ALLOWED, 'true', 'Explicit local CRUD qualification approval required');
   if (['adopt-local', 'apply-local'].includes(phase)) assert.equal(process.env.GWN_MANAGER_APPLY_ALLOWED, 'true', 'Explicit production AP change approval required');
   const credential = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
@@ -177,7 +177,7 @@ if (phase === 'bootstrap-local') {
   }
   const listing = await api('network/list', { pageNum: 1, pageSize: 100 });
   assert.ok(Array.isArray(listing.result) && listing.total <= 100, 'Incomplete network inventory');
-  if (['ap-plan-local', 'adopt-local', 'apply-local'].includes(phase)) {
+  if (['ap-plan-local', 'audit-local', 'adopt-local', 'apply-local'].includes(phase)) {
     assert.ok(production && listing.result.length === 1, 'Expected one production network');
     const networkId = listing.result[0].id;
     const target = configuration.access_point;
@@ -189,7 +189,25 @@ if (phase === 'bootstrap-local') {
       assert.ok(inventory.retCode === 0 && Array.isArray(inventory.data?.result) && inventory.data.total <= 100, 'Incomplete production AP inventory');
       const owned = inventory.data.result.filter(item => canonical(item.mac) === canonical(target.mac));
       assert.ok(owned.length <= 1, 'Duplicate target AP');
-      if (phase === 'adopt-local' && !owned.length) {
+      if (phase === 'audit-local') {
+        const ssids = await api('ssid/list', { networkId, pageNum: 1, pageSize: 100 });
+        assert.ok(Array.isArray(ssids.result) && ssids.total <= 100, 'Incomplete SSID inventory');
+        const records = [];
+        for (const ssid of ssids.result) {
+          const response = await api('ssid/configuration', { id: ssid.id }, 'GET');
+          const actual = response.configuration;
+          assert.ok(actual, 'SSID configuration missing');
+          records.push({ ssid: ssid.ssidName, enabled: actual.ssidEnable, vlanEnabled: actual.ssidVlan,
+            vlan: actual.ssidVlanid, bands: actual.ssidNewSsidBand, securityType: actual.ssidSecurityType,
+            encryption: actual.ssidEncryption, clientIsolation: actual.ssidIsolation,
+            isolationMode: actual.ssidIsolationMode, portalEnabled: actual.ssidPortalEnable,
+            ipAssignment: actual.ssidClientIPAssignment, onlineDevices: ssid.onlineDevices,
+            bindingFields: Object.keys(response).filter(key => /bind|device|mac/i.test(key)) });
+        }
+        console.log(JSON.stringify({ accessPoint: owned.map(item => ({ mac: item.mac, ip: item.ipv4 ?? item.ip,
+          status: item.status, paired: item.paired, configSuccess: item.configSuccess, natSwitch: item.natSwitch,
+          portFields: { devicePortInfos: item.devicePortInfos, portsInfo: item.portsInfo } })), ssids: records }, null, 2));
+      } else if (phase === 'adopt-local' && !owned.length) {
         const stored = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
         assert.ok(stored.grandstream, 'Existing AP bootstrap credential required');
         fs.writeFileSync(path.join(directory, 'adoption-requested.json'), JSON.stringify({ mac: target.mac, networkId, at: new Date().toISOString() }), { mode: 0o600 });
@@ -205,6 +223,22 @@ if (phase === 'bootstrap-local') {
         assert.ok(Array.isArray(ssids.result) && ssids.total <= 100, 'Incomplete SSID inventory');
         const preimage = { networkId, ap: target.mac, ssids: [] };
         const preimageFile = path.join(directory, 'production-ssids-before-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.json');
+        for (const name of configuration.retired_bootstrap_ssids ?? []) {
+          assert.ok(!Object.values(networks).some(network => network.ssid === name), 'Bootstrap and managed SSID names collide');
+          const matches = ssids.result.filter(item => item.ssidName === name);
+          assert.ok(matches.length <= 1, 'Duplicate bootstrap SSID');
+          if (!matches.length) continue;
+          const id = matches[0].id;
+          const before = (await api('ssid/configuration', { id }, 'GET')).configuration;
+          assert.ok(before, 'Bootstrap SSID configuration missing');
+          assert.ok(Number(before.ssidVlan) === 0, 'Refuse retirement of a tagged production SSID');
+          preimage.ssids.push({ name, id, configuration: before });
+          fs.writeFileSync(preimageFile, JSON.stringify(preimage), { mode: 0o600 });
+          await api('ssid/delete', { id });
+          const after = await api('ssid/list', { networkId, pageNum: 1, pageSize: 100 });
+          assert.ok(!after.result.some(item => item.id === id), 'Bootstrap management SSID still exists');
+          console.log(JSON.stringify({ ssid: name, retired: true, verified: true }));
+        }
         for (const [name, network] of Object.entries(networks)) {
           const matches = ssids.result.filter(item => item.ssidName === network.ssid);
           assert.ok(matches.length <= 1, 'Duplicate managed SSID');

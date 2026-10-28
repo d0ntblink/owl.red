@@ -2,7 +2,7 @@
 
 Production: `https://gwn.owl.red`, linked from Homepage. The unprivileged NixOS
 LXC is CT `201` on `edge`, native `10.0.10.32/24`, MAC `02:6f:77:10:02:01`,
-2 cores, 6 GiB RAM and 24 GiB local disk. It has no client-VLAN interfaces and
+2 cores, 4 GiB RAM and 24 GiB local disk. It has no client-VLAN interfaces and
 does not route or serve DHCP. AP control uses direct TCP `10014`, not ingress.
 
 ## Owners
@@ -35,10 +35,19 @@ node scripts/gwn-manager-run.mjs ap-plan-production
 GWN_MANAGER_APPLY_ALLOWED=true node scripts/gwn-manager-run.mjs apply-production
 ```
 
-`plan` accepts only a no-op or creation of this single unprivileged container.
-Updates/replacements are refused for review. Creation is single-request guarded;
+`plan` accepts a no-op, creation of this single unprivileged container, or the
+reviewed memory-only reduction from 6144 to 4096 MiB. Other updates and all
+replacements are refused for review. Creation is single-request guarded;
 after an uncertain result inspect actual CT/state instead of retrying blindly.
 `prevent_destroy` protects the Terraform resource, not every Proxmox operation.
+
+The completed reduction used `GWN_LXC_APPLY_ALLOWED=true node
+scripts/gwn-lxc-run.mjs resize`: native `pct set` hot-updates only the memory
+limit, checks the service PID and remaining container configuration are unchanged,
+then refreshes Terraform state without applying a resource update. It is a no-op
+once source/state agree. The original 6 GiB was conservative startup headroom;
+the running vendor stack used roughly 3 GiB. Keep 4 GiB and 512 MiB swap rather
+than reducing to 2 GiB without heap/load qualification.
 
 The production account was initialized by the user. Reuse Bitwarden's **GWN
 Manager** login; contact `admin@owl.red`. Production OAuth app credentials are
