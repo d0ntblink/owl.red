@@ -3,7 +3,6 @@
 Gateway deployment and network configuration are part of `owl.red`. The custom
 Astro/TypeScript app and its artwork now live in the public
 [owl.red-guest-captive-portal repository](https://github.com/d0ntblink/owl.red-guest-captive-portal).
-The retired OpenWrt project is not used, and its local checkout was removed.
 
 - The app contains no PHP. Its FAS integration submits consent through native
   openNDS Authmon; openNDS owns sessions and firewall enforcement.
@@ -16,14 +15,14 @@ The retired OpenWrt project is not used, and its local checkout was removed.
 - [Gateway staging](../../../terraform/proxmox/guest-portal/README.md) documents
   the VM lifecycle and qualification commands.
 
-Do not restore the retired project's OpenWrt deployment script, routing, NAT,
-DHCP configuration or AP-hosted portal. OpenWrt remains bridge-only. Technitium
-retains DHCP authority on every VLAN; the gateway only reads lease facts.
+The Grandstream is a VLAN-aware bridge, not the portal/session enforcer.
+Technitium retains DHCP authority on every VLAN; the gateway only reads lease
+facts.
 
 HTTPS deployment and the production DHCP/consent/native Authmon enforcement path
-are accepted. The guest SSID is active on 2.4 GHz only; private Wi-Fi is 5 GHz only
-under the owner's approved three-BSS radio0 allocation. A real handset/RF walk
-remains an onsite follow-up. Publishing an app image alone never activates networking.
+are accepted on the retained gateway path. Guest Wi-Fi is paused while the
+Grandstream SSID/VLAN path is qualified. A real handset/RF walk remains an
+onsite follow-up. Publishing an app image alone never activates networking.
 
 The migration preserved a private recovery archive outside this Git repository,
 including the retired checkout's uncommitted changes. No secret, old environment

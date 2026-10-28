@@ -1,0 +1,29 @@
+---
+wifi_management_gateway: 10.0.10.1
+wifi_networks:
+  private:
+    vlan: 20
+    ssid: owl.red
+    enabled: true
+    isolate: false
+    internet: true
+  guest:
+    vlan: 30
+    ssid: silence of the lans
+    enabled: false
+    isolate: true
+    internet: false
+    gateway_owner: opennds
+    activation_gate: Verified HTTPS Authmon, native enforcement, Technitium DHCP and IPv6 denial
+  iot_local:
+    vlan: 40
+    ssid: owl.red-iot-local
+    enabled: true
+    isolate: true
+    internet: false
+  iot_cloud:
+    vlan: 50
+    ssid: owl.red-iot-cloud
+    enabled: true
+    isolate: true
+    internet: true

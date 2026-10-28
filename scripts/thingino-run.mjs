@@ -65,7 +65,7 @@ function main() {
     return;
   }
   const items = JSON.parse(vault(['list', 'items', '--nointeraction']));
-  const matches = items.filter(item => /wuuk|thingino|camera|owl-red-wifi|openwrt|10\.0\.10\.(186|124)/i.test(item.name + ' ' + JSON.stringify(item.login?.uris ?? [])));
+  const matches = items.filter(item => /wuuk|thingino|camera|owl-red-wifi|10\.0\.10\.(186|124)/i.test(item.name + ' ' + JSON.stringify(item.login?.uris ?? [])));
   console.log(JSON.stringify({
     vaultReadVerified: true,
     items: matches.map(item => ({ id: item.id, name: item.name, username: item.login?.username,

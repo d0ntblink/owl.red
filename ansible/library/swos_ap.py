@@ -57,8 +57,8 @@ def main():
     }, supports_check_mode=True)
     params = module.params
     directory = Path(params["recovery_directory"]).resolve()
-    if directory.parent != Path.home() / ".local/state/owl-red" or not directory.name.startswith(("openwrt-rebuild-", "technitium-vlan-")) or not directory.is_dir():
-        module.fail_json(msg="An existing private AP rebuild recovery directory is required")
+    if directory.parent != Path.home() / ".local/state/owl-red" or not directory.name.startswith(("wifi-switch-", "technitium-vlan-")) or not directory.is_dir():
+        module.fail_json(msg="An existing private Wi-Fi switch recovery directory is required")
     if not params["password"]:
         module.fail_json(msg="The existing Bitwarden switch login is required")
     swos_platform.detect_platform = lambda *args: PlatformType.SWOS
@@ -72,7 +72,7 @@ def main():
         ports, native = get_links(*args), get_port_vlans(*args)
         if len(ports) != 26 or len(native) != 26:
             raise ValueError("Incomplete switch response")
-        for number, name in [(2, "cp1.pve"), (18, "ap.owl.red"), (22, "cab-trunk"), (24, "edge.pve-mgmt"), (25, "sfp1-vyos")]:
+        for number, name in [(2, "cp1.pve"), (22, "cab-trunk"), (24, "edge.pve-mgmt"), (25, "sfp1-vyos")]:
             port, vlan = ports[number - 1], native[number - 1]
             if port["port_name"] != name or not port["enabled"] or not port["link_up"]:
                 raise ValueError("A required AP/native management port is not ready")

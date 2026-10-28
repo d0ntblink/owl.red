@@ -107,10 +107,6 @@ async function main() {
   async function reconcileArea(name, device, entry) {
     if (device.area === undefined) return false;
     ensure(typeof device.area === 'string' && device.area.trim().length > 0, 'Area must name an existing HA area.');
-    if (device.integration === 'luci') {
-      console.log(JSON.stringify({ device: name, area: device.area, areaAssignment: 'not_applied_service_has_client_entities_not_one_physical_device', changed: false }));
-      return false;
-    }
     const areas = await registry({ type: 'config/area_registry/list' });
     const matchingAreas = areas.filter(area => area.name === device.area);
     ensure(matchingAreas.length === 1, 'Create exactly one HA area named ' + device.area + ' before applying this device.');
@@ -218,7 +214,7 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
   }
   ensure(!['apply', 'pair'].includes(phase) || selected, 'Apply/pair requires one explicitly named device.');
   for (const [name, device] of Object.entries(config.devices).filter(([name]) => !selected || name === selected)) {
-    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller', 'luci', 'androidtv_remote'].includes(device.integration), 'This device flow has not been qualified.');
+    ensure(['ipp', 'onvif', 'bambu_lab', 'homekit_controller', 'androidtv_remote'].includes(device.integration), 'This device flow has not been qualified.');
     ensure(phase !== 'pair' || device.integration === 'androidtv_remote', 'Pair is only for Android TV Remote.');
     const lan = device.integration === 'bambu_lab' ? bambuSettings(device) : null;
     if (device.integration === 'bambu_lab' && !lan) {
@@ -287,18 +283,12 @@ print(json.dumps({'host':'10.0.50.10','port':srv.port,'verifiedAdvertisement':Tr
       if (device.integration === 'bambu_lab' && flow.type === 'form' && flow.step_id === 'user') {
         flow = await api('config/config_entries/flow/' + flow.flow_id, 'POST', { printer_mode: 'lan' });
       }
-      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair', luci: 'user', androidtv_remote: 'pair' }[device.integration];
+      const step = { ipp: 'user', onvif: 'configure', bambu_lab: 'Lan', homekit_controller: 'pair', androidtv_remote: 'pair' }[device.integration];
       ensure(flow.type === 'form' && flow.step_id === step, 'Unexpected integration setup step.');
       ensure(!Object.keys(flow.errors ?? {}).length, 'Integration setup returned errors before credential submission.');
       const { integration, credential_secret_id, credential_item, mac, homekit_id, service_name, area, name: deviceName, pairing_secret_key, ...settings } = device;
       if (['onvif', 'homekit_controller'].includes(integration)) settings.name = deviceName;
       if (integration === 'onvif') Object.assign(settings, cameraLogin(credential_secret_id));
-      if (integration === 'luci') {
-        ensure(settings.ssl === true && settings.verify_ssl === true && settings.host === 'ap.owl.red', 'Use the verified AP HTTPS endpoint.');
-        const item = vaultItem(credential_item);
-        ensure(item.login?.username && item.login.password, 'OpenWrt credential is incomplete.');
-        Object.assign(settings, { username: item.login.username, password: item.login.password });
-      }
       let pairing = integration === 'homekit_controller' ? { pairing_code: homekitCode(credential_secret_id) } : null;
       if (integration === 'androidtv_remote') pairing = tvPairing;
       const configured = await api('config/config_entries/flow/' + flow.flow_id, 'POST', pairing ?? lan ?? settings);

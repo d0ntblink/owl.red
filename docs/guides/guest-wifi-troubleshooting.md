@@ -2,7 +2,7 @@
 
 Guest Wi-Fi is intentionally disabled until WAP replacement. The retained
 gateway and portal do not mean the guest SSID should be visible. Do not enable
-it as a troubleshooting step; see the [current AP incident](wifi-architecture.md#current-incident-ap-restarts).
+it as a troubleshooting step; see the [AP qualification target](wifi-architecture.md#replacement-ap-target-not-yet-deployed).
 
 Start with [Wi-Fi architecture](wifi-architecture.md) for the accepted topology
 and [gateway operations](../../terraform/proxmox/guest-portal/README.md) for
@@ -13,7 +13,7 @@ existing private credentials from [controller setup](controller-setup.md).
 
 | Symptom | First check | Do not assume |
 |---------|-------------|---------------|
-| SSID missing | Independent over-air scan; guest is 2.4 GHz channel 1, private is 5 GHz channel 36 | A hostapd `ENABLED` report proves beacon visibility |
+| SSID missing | Independent over-air scan; compare the intended Grandstream bands and guest pause | A configured profile proves beacon visibility |
 | SSID visible, association fails | Selected SSID and current Bitwarden key; client radio support | A portal failure explains WPA authentication |
 | Associated, no lease | Guest VLAN 30 bridge path and Technitium scope/service | The AP or VyOS should start a replacement DHCP server |
 | Lease, no internet before consent | Check portal reachability and client captive detection | Pre-auth internet denial is a fault |
@@ -29,23 +29,15 @@ Do not use the retired `captive.owl.red` address or expect DHCP option 114.
 
 ## Read-Only Controller Checks
 
-From the repository root, with Node 24 on PATH:
+Use the Grandstream's native SSH `1` / Status menu through the documented
+[bootstrap access](wifi-architecture.md#bootstrap-discovery-and-access).
+Preserve strict host-key checking. No general shell or repeatable AP inspection
+runner is qualified yet. Share only sanitized status, never credentials.
 
-```bash
-node scripts/openwrt-refresh.mjs verify
-node scripts/guest-portal-prepare.mjs ap-inspect
-```
-
-These inspect firmware/radio state and actual bridge membership without an AP
-configuration apply. AP SSH uses the strict-key jump through `edge` at
-`10.0.10.3`; preserve the existing pinned AP host identity. Never accept a
-replacement host key merely to make a check pass. Diagnostics can contain private
-material; share only sanitized failure classes and public status.
-
-Confirm all four BSS interfaces belong to their declared ordinary bridges. An
-independent scan must establish actual broadcasting; then test the affected
-client's association and lease. Do not change workstation adapter routes, DNS
-or SSID association merely to manufacture a passing result.
+Verify each configured SSID's VLAN mapping and an independent over-air scan;
+then test association and the intended VLAN's lease. Management reachability
+does not prove tagged transport. Do not change workstation routes, DNS or SSID
+association merely to manufacture a passing result.
 
 ## Bounded End-To-End Acceptance
 
@@ -74,6 +66,6 @@ intentional failure mode is denial rather than unauthenticated forwarding.
 
 Capture the failing boundary, sanitized error, time and affected client/VLAN.
 If a live apply timed out, inspect actual state before retrying: the outcome may
-be unknown. Firmware reset/recovery requires a new approved outage and physical
-LAN4 access. A VyOS VM lifecycle apply is not AP recovery; the provider previously
+be unknown. Firmware reset/recovery requires a new approved outage and qualified
+local recovery access. A VyOS VM lifecycle apply is not AP recovery; the provider previously
 restarted the router despite `reboot=false`.

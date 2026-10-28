@@ -31,7 +31,7 @@ Secrets and authentication material are excluded.
 | [worker1-pve](#worker1-pve) | Compute host 4 | physical-host | Proxmox VE | `worker1.pve.owl.red` / `10.0.10.14` |
 | [switch-core](#switch-core) | Core switch | network-appliance | SwOS | `switch.owl.red` / `10.0.10.2` |
 | [switch-rack-poe](#switch-rack-poe) | Rack PoE access switch | network-appliance | MokerLink unmanaged Ethernet switch | No management address |
-| [ap-main](#ap-main) | Wireless access point | network-appliance | OpenWrt | `ap.owl.red` / `10.0.10.40` |
+| [ap-main](#ap-main) | Wireless access point | network-appliance | Grandstream GWN firmware | Bootstrap access documented in the Wi-Fi guide; no permanent allocation yet |
 | [pdu-rack](#pdu-rack) | Rack power distribution | power-appliance | APC appliance firmware | `pdu.owl.red` / `10.0.10.9` |
 | [ups-rack](#ups-rack) | Rack UPS | power-appliance | USB HID UPS | USB on storage host |
 | [router-edge](#router-edge) | Production router | virtual-machine | VyOS | `edge.owl.red` / `10.0.10.1` |
@@ -255,9 +255,14 @@ MAC rather than its permanent address.
 | interfaces | 8 PoE+ Gigabit RJ45 ports (ports 1-8); 2 Gigabit RJ45 uplinks (ports 9-10); 1 Gigabit SFP uplink (port 11) |
 | poe_budget | 120 W total advertised; up to 30 W per PoE port |
 | port_features | Advertised QoS priority on PoE ports 1-2; PoE watchdog/AI restart advertised but trigger, scope and disable control are not verified |
-| dip_switch | Default/Extend; current position not recorded. Extend is advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; it is not documented as configurable 802.1Q VLAN management. |
-| topology_notes | Owner confirms switch is installed inline between the network-cabinet CSS326 and rack. Exact CSS326 port, selected MokerLink uplink, attached endpoint-to-port map and end-to-end VLAN transparency are not recorded here. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
+| dip_switch | Extend, owner-confirmed 2026-10-27; left unchanged. Advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; tagged-VLAN transport and actual link speed remain unverified. It is not configurable 802.1Q VLAN management. |
+| topology_notes | Owner-confirmed path: CSS326 port 22 to MokerLink uplink 10; MokerLink PoE port 4 to `ap-main`. Other endpoint ports and end-to-end VLAN transparency remain unverified. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
 | specification | [Manufacturer POE-G083GS product page](https://www.mokerlink.com/index.php?route=product/product&product_id=377) |
+
+| Interface | MAC | Address | Connection |
+|-----------|-----|---------|------------|
+| Uplink 10 | Not applicable | None | CSS326 SW22; existing cabinet/native-management path |
+| PoE port 4 | Not applicable | None | `ap-main` NET/POE; Ethernet and power |
 
 ### ap-main
 
@@ -265,20 +270,17 @@ MAC rather than its permanent address.
 |-------|-------|
 | id | `ap-main` |
 | kind | network-appliance |
-| model | D-Link DIR-885L |
-| platform | OpenWrt 25.12.2; approved rollback 2026-10-22; unexpected restarts and client connectivity remain unresolved |
-| role | VLAN-aware Layer-2 wireless access point |
-| parent | None |
-| hostname | `ap.owl.red` |
-| radios | 2.4 GHz channel 1 HT20, 8 dBm: guest/local-IoT/cloud-IoT; 5 GHz channel 36 VHT80, 12 dBm: private |
-| management | Native untagged management; LAN4 local recovery connection |
-| networks | VLAN 20 private; VLAN 30 guest; VLAN 40 local IoT; VLAN 50 cloud IoT |
-| services | Routing, DNS, DHCP and captive-portal enforcement run off the AP |
-| configuration | [AP inventory variables](../ansible/inventory/group_vars/aps.yml), [Wi-Fi architecture](guides/wifi-architecture.md), [Wi-Fi maintenance](guides/wifi-password-rotation.md) |
+| model | Grandstream GWN7660E |
+| platform | Grandstream GWN embedded-controller firmware |
+| role | Replacement wireless AP; not yet accepted for production SSID/VLAN cutover |
+| parent | `switch-rack-poe` |
+| part_number | `9640011012C` |
+| management | Local embedded controller; SSH `admin` exposes an interactive menu, not a general shell |
+| configuration | [Wi-Fi architecture and acceptance](guides/wifi-architecture.md#replacement-ap-target-not-yet-deployed); local configuration/IaC remains to be qualified |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Management bridge | `10:be:f5:d9:1e:37` | `10.0.10.40` | SW18 / PP33; native management plus tagged client VLANs |
+| NET/POE / device MAC | `ec:74:d7:b3:3e:ba` | No permanent allocation; see bootstrap address in Wi-Fi guide | MokerLink PoE port 4; upstream port 10 to CSS326 SW22 |
 
 ### pdu-rack
 
@@ -738,9 +740,9 @@ passive cable paths, not separately discoverable network devices.
 | SW12 | PP30 | `storage-pve` second management NIC |
 | SW14 | PP31 | `storage-bmc` |
 | SW16 | PP32 | `pdu-rack` |
-| SW18 | PP33 | `ap-main` VLAN uplink |
-| Unknown | Network cabinet to rack | `switch-core` uplink to downstream `switch-rack-poe`; exact CSS326 port, MokerLink uplink port and VLAN behavior not yet recorded |
-| SW22 | PP35 | Native-management client path |
+| SW18 | PP33 | Unassigned; existing switch port/VLAN state retained pending separate review |
+| SW22 | PP35; cabinet-to-rack path | `switch-rack-poe` uplink 10; native-management path retained; client VLAN transport not yet accepted |
+| MokerLink PoE 4 | AP Ethernet cable | `ap-main` NET/POE; owner-confirmed connection |
 | SW24 | PP36 | `edge-pve` management |
 | SFP+1 | PP16 to PP37 | `router-edge` LAN passthrough |
 | SFP+2 | PP39 | `nas` SFP+ passthrough |

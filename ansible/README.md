@@ -12,10 +12,11 @@ run order authorizes execution. Use the resource's documented owner and review
 the target, diff and recovery path before applying.
 
 For current AP and guest-network ownership, start with the
-[Wi-Fi architecture](../docs/guides/wifi-architecture.md). AP configuration uses
-`playbooks/openwrt-ap.yml` through `scripts/openwrt-run.mjs`; firmware refresh
-uses the separate guarded `scripts/openwrt-refresh.mjs` entry point. Guest
-gateway, router and transit playbooks are deployment tools, not health checks.
+[Wi-Fi architecture](../docs/guides/wifi-architecture.md). Grandstream AP
+configuration/IaC remains to be qualified; no AP deployer is active here.
+`vars/wifi-networks.yml` retains shared SSID/VLAN policy for the independent
+VyOS owner. Guest gateway, router, switch and transit playbooks are deployment
+tools, not health checks.
 
 ## Contents
 

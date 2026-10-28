@@ -1,32 +1,32 @@
 ---
 - name: Stage only the declared off-AP Wi-Fi gateway services
-  hosts: "{{ openwrt_gateway_target | default('edge_lab') }}"
+  hosts: "{{ wifi_gateway_target | default('edge_lab') }}"
   gather_facts: false
   vars_files:
-    - ../inventory/group_vars/aps.yml
+    - ../vars/wifi-networks.yml
     - ../../vyos/baseline.yml
   vars:
-    openwrt_apply_allowed: false
-    openwrt_gateway_phase: trial
-    openwrt_gateway_scope: wifi
-    openwrt_dhcp_authority: "{{ 'vyos' if inventory_hostname == 'edge_lab' else vyos_production_baseline.dhcp_authority }}"
-    openwrt_ipv6_delegate: "{{ inventory_hostname == 'edge_router' }}"
-    openwrt_ipv6_plan: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/network.json') | from_json }}"
-    openwrt_target_registry: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/dhcp-reservations.json') | from_json }}"
-    openwrt_gateway_commands: "{{ lookup('template', playbook_dir ~ '/../templates/' ~ {'wifi': 'vyos-wifi-services.j2', 'ipv6': 'vyos-vlan-ipv6.j2', 'handoff': 'vyos-dhcp-handoff.j2'}[openwrt_gateway_scope]) }}"
+    wifi_apply_allowed: false
+    wifi_gateway_phase: trial
+    wifi_gateway_scope: wifi
+    wifi_dhcp_authority: "{{ 'vyos' if inventory_hostname == 'edge_lab' else vyos_production_baseline.dhcp_authority }}"
+    wifi_ipv6_delegate: "{{ inventory_hostname == 'edge_router' }}"
+    wifi_ipv6_plan: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/network.json') | from_json }}"
+    wifi_target_registry: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/dhcp-reservations.json') | from_json }}"
+    wifi_gateway_commands: "{{ lookup('template', playbook_dir ~ '/../templates/' ~ {'wifi': 'vyos-wifi-services.j2', 'ipv6': 'vyos-vlan-ipv6.j2', 'handoff': 'vyos-dhcp-handoff.j2'}[wifi_gateway_scope]) }}"
   tasks:
     - name: Require explicit gateway scope and the accepted AP allocation
       ansible.builtin.assert:
         that:
-          - openwrt_apply_allowed | bool
+          - wifi_apply_allowed | bool
           - inventory_hostname in ['edge_lab', 'edge_router']
           - (inventory_hostname == 'edge_lab' and vm_id | int == 102) or (inventory_hostname == 'edge_router' and vm_id | int == 103)
-          - openwrt_gateway_phase in ['trial', 'confirm']
-          - openwrt_gateway_scope in ['wifi', 'ipv6', 'handoff']
-          - openwrt_wifi_networks.guest.enabled is sameas false
-          - openwrt_wifi_networks.private.vlan | int == 20
-          - openwrt_wifi_networks.iot_local.vlan | int == 40
-          - openwrt_wifi_networks.iot_cloud.vlan | int == 50
+          - wifi_gateway_phase in ['trial', 'confirm']
+          - wifi_gateway_scope in ['wifi', 'ipv6', 'handoff']
+          - wifi_networks.guest.enabled is sameas false
+          - wifi_networks.private.vlan | int == 20
+          - wifi_networks.iot_local.vlan | int == 40
+          - wifi_networks.iot_cloud.vlan | int == 50
 
     - name: Refuse collisions with non-owned gateway nodes
       ansible.builtin.raw: |
@@ -37,7 +37,7 @@
         if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810; then
           [[ $(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 description) == OWL-WIFI-PRIVATE-INGRESS ]] || builtin exit 1
         fi
-        {% for name, network in openwrt_wifi_networks.items() if network.enabled %}
+        {% for name, network in wifi_networks.items() if network.enabled %}
         {% if network.vlan != 20 %}
         if /bin/cli-shell-api existsActive interfaces ethernet eth1 vif {{ network.vlan }}; then
           [[ $(/bin/cli-shell-api returnActiveValue interfaces ethernet eth1 vif {{ network.vlan }} description) == OWL-WIFI-{{ network.vlan }} ]] || builtin exit 1
@@ -52,10 +52,10 @@
 
     - name: Retain the actual gateway boot configuration privately
       ansible.builtin.raw: sudo -n cat /config/config.boot
-      register: openwrt_gateway_before
+      register: wifi_gateway_before
       changed_when: false
       no_log: true
-      when: openwrt_gateway_phase == 'trial'
+      when: wifi_gateway_phase == 'trial'
 
     - name: Refuse collisions in the dual-stack VLAN ownership slice
       ansible.builtin.raw: |
@@ -65,25 +65,25 @@
           [[ $(/bin/cli-shell-api returnActiveValue firewall {{ family }} forward filter rule {{ number }} description) == {{ marker }} ]] || builtin exit 1
         fi
         {% endfor %}
-        {% for network in openwrt_ipv6_plan.vlans if network.id != 10 %}
+        {% for network in wifi_ipv6_plan.vlans if network.id != 10 %}
         if /bin/cli-shell-api existsActive firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }}; then
           [[ $(/bin/cli-shell-api returnActiveValue firewall ipv6 forward filter rule {{ 6000 + network.id * 10 }} description) == OWL-VLAN-IPV6-{{ network.id }} ]] || builtin exit 1
         fi
         {% endfor %}
         '
       changed_when: false
-      when: openwrt_gateway_scope == 'ipv6'
+      when: wifi_gateway_scope == 'ipv6'
 
     - name: Preserve the private gateway recovery preimage
       ansible.builtin.copy:
-        content: "{{ openwrt_gateway_before.stdout }}"
-        dest: "{{ openwrt_recovery_directory }}/{{ inventory_hostname }}-before.config.boot"
+        content: "{{ wifi_gateway_before.stdout }}"
+        dest: "{{ wifi_recovery_directory }}/{{ inventory_hostname }}-before.config.boot"
         mode: "0600"
       delegate_to: localhost
       vars:
         ansible_python_interpreter: "{{ ansible_playbook_python }}"
       no_log: true
-      when: openwrt_gateway_phase == 'trial'
+      when: wifi_gateway_phase == 'trial'
 
     - name: Stage and trial the declared services under native timed rollback
       ansible.builtin.raw: |
@@ -95,7 +95,7 @@
         confirm >/dev/null 2>&1 || true
         {% endif %}
         owl_command_output=$(
-        {{ openwrt_gateway_commands }}
+        {{ wifi_gateway_commands }}
         ) || builtin exit 1
         printf "%s\n" "$owl_command_output"
         if [[ "$owl_command_output" == *"Set failed"* || "$owl_command_output" == *"Delete failed"* ]]; then
@@ -111,12 +111,12 @@
         fi
         exit
         '
-      register: openwrt_gateway_trial
-      changed_when: "'OWL_WIFI_GATEWAY_TRIAL' in openwrt_gateway_trial.stdout"
+      register: wifi_gateway_trial
+      changed_when: "'OWL_WIFI_GATEWAY_TRIAL' in wifi_gateway_trial.stdout"
       failed_when: >-
-        openwrt_gateway_trial.rc != 0 or 'Set failed' in openwrt_gateway_trial.stdout or
-        'Commit failed' in openwrt_gateway_trial.stdout or 'OWL_WIFI_GATEWAY_' not in openwrt_gateway_trial.stdout
-      when: openwrt_gateway_phase == 'trial'
+        wifi_gateway_trial.rc != 0 or 'Set failed' in wifi_gateway_trial.stdout or
+        'Commit failed' in wifi_gateway_trial.stdout or 'OWL_WIFI_GATEWAY_' not in wifi_gateway_trial.stdout
+      when: wifi_gateway_phase == 'trial'
 
     - name: Confirm gateway services only after their acceptance
       ansible.builtin.raw: |
@@ -127,21 +127,21 @@
         save /config/config.boot || builtin exit 1
         exit
         '
-      when: openwrt_gateway_phase == 'confirm'
+      when: wifi_gateway_phase == 'confirm'
 
     - name: Verify actual native services and new gateway addresses
       ansible.builtin.raw: |
         ip -j -4 address show dev eth1.40 &&
         ip -j -4 address show dev eth1.50 &&
         systemctl is-active pdns-recursor.service chrony.service &&
-        {% if openwrt_gateway_scope == 'handoff' or openwrt_dhcp_authority == 'technitium' %}
+        {% if wifi_gateway_scope == 'handoff' or wifi_dhcp_authority == 'technitium' %}
         ! systemctl is-active --quiet isc-kea-dhcp4-server.service
         {% else %}
         systemctl is-active isc-kea-dhcp4-server.service
         {% endif %}
-      register: openwrt_gateway_runtime
+      register: wifi_gateway_runtime
       changed_when: false
       failed_when: >-
-        openwrt_gateway_runtime.rc != 0 or
-        '10.0.40.1' not in openwrt_gateway_runtime.stdout or
-        '10.0.50.1' not in openwrt_gateway_runtime.stdout
+        wifi_gateway_runtime.rc != 0 or
+        '10.0.40.1' not in wifi_gateway_runtime.stdout or
+        '10.0.50.1' not in wifi_gateway_runtime.stdout

@@ -171,8 +171,8 @@ import shlex
 import yaml
 from jinja2 import Environment, StrictUndefined
 
-profile = yaml.safe_load(Path('ansible/inventory/group_vars/aps.yml').read_text())
-profile['openwrt_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
+profile = yaml.safe_load(Path('ansible/vars/wifi-networks.yml').read_text())
+profile['wifi_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
 environment = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
 environment.filters['quote'] = shlex.quote
 rendered = environment.from_string(Path('ansible/templates/vyos-wifi-services.j2').read_text()).render(**profile)
@@ -208,7 +208,7 @@ environment = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_bl
 environment.filters['bool'] = bool
 plan = json.loads(Path('gitops/technitium/network.json').read_text())
 rendered = environment.from_string(Path('ansible/templates/vyos-vlan-ipv6.j2').read_text()).render(
-    openwrt_ipv6_plan=plan, openwrt_ipv6_delegate=True)
+    wifi_ipv6_plan=plan, wifi_ipv6_delegate=True)
 commands = [shlex.split(line.removesuffix(' &&')) for line in rendered.splitlines() if line.startswith('set ')]
 for family in ['ipv4', 'ipv6']:
     stem = ['set', 'firewall', family, 'forward', 'filter', 'rule', '90']
@@ -227,9 +227,9 @@ for network in plan['vlans'][1:]:
         assert not any(command[:len(forbidden)] == forbidden for command in commands)
 assert ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '6300', 'action', 'drop'] in commands
 assert not any(command[:3] == ['set', 'nat', 'source'] for command in commands)
-profile = yaml.safe_load(Path('ansible/inventory/group_vars/aps.yml').read_text())
-assert profile['openwrt_wifi_networks']['guest']['enabled'] is True
-assert profile['openwrt_wifi_networks']['guest']['gateway_owner'] == 'opennds'
+profile = yaml.safe_load(Path('ansible/vars/wifi-networks.yml').read_text())
+assert profile['wifi_networks']['guest']['enabled'] is False
+assert profile['wifi_networks']['guest']['gateway_owner'] == 'opennds'
 handoff = next(task['ansible.builtin.raw'] for task in yaml.safe_load(Path('ansible/playbooks/guest-portal-router.yml').read_text())[0]['tasks'] if task['name'] == 'Handoff only the quarantined guest gateway path')
 assert 'delete interfaces ethernet eth1 vif 30 address 10.0.30.1/24' in handoff
 assert 'set interfaces ethernet eth1 vif 30 disable' in handoff
@@ -238,14 +238,33 @@ assert 'set protocols static route 10.0.30.0/24 next-hop 172.31.30.2' in handoff
 assert 'commit-confirm 10 no-prompt' in handoff
 authority = yaml.safe_load(Path('vyos/baseline.yml').read_text())['vyos_production_baseline']['dhcp_authority']
 assert authority == 'technitium'
-profile['openwrt_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
-profile['openwrt_dhcp_authority'] = authority
+profile['wifi_target_registry'] = json.loads(Path('gitops/technitium/dhcp-reservations.json').read_text())
+profile['wifi_dhcp_authority'] = authority
 wifi = environment.from_string(Path('ansible/templates/vyos-wifi-services.j2').read_text()).render(**profile)
 assert 'set service dhcp-server disable' in wifi
 assert 'set service dhcp-server shared-network-name' not in wifi
 assert 'set service dns forwarding name-server 10.0.10.30' in wifi
 `], { cwd: repository, encoding: 'utf8' });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
+});
+
+test('shared Wi-Fi owners refuse execution without explicit approval', () => {
+  const attempts = [
+    { playbook: 'vyos-wifi', forbidden: 'Refuse collisions with non-owned gateway nodes' },
+    { playbook: 'swos-ap', forbidden: 'Reconcile only the declared AP VLAN rows' },
+  ];
+  for (const { playbook, forbidden } of attempts) {
+    const result = spawnSync(ansible, [
+      '-i', 'ansible/inventory/hosts.yml', `ansible/playbooks/${playbook}.yml`,
+    ], {
+      cwd: repository,
+      encoding: 'utf8',
+      env: { ...process.env, ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg') },
+    });
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /TASK \[Require/);
+    assert.ok(!result.stdout.includes(`TASK [${forbidden}`), result.stdout);
+  }
 });
 
 test('candidate parses with the authenticated release library and uses its actual CLI paths', {

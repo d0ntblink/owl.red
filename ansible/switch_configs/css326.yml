@@ -36,7 +36,7 @@ ports:
   # SW12:  PP30 → storage.pve    VLAN 10 access (bond0 standby / obnic1)
   # SW14:  PP31 → ipmi.storage   VLAN 10 access
   # SW16:  PP32 → pdu.owl.red    VLAN 10 access
-  # SW18:  PP33 → ap.owl.red     802.1Q trunk all VLANs, 1G
+  # SW18:  PP33 unassigned; port/VLAN state retained pending a separate review
   # SW22:  PP35 → network cabinet 802.1Q trunk all VLANs
   # SW23:  direct → edge.owl.red eth0 (VyOS WAN) — not a LAN port
   # SW24:  PP36 → edge.pve eth0 VLAN 10 mgmt
@@ -130,9 +130,9 @@ ports:
     assigned_to: unpatched
 
   - port: 18
-    name: "ap.owl.red"
+    name: "unpatched-18"
     enabled: true
-    assigned_to: ap.owl.red           # 10.0.10.40 — PP33 <-> SW18 — 802.1Q trunk all VLANs
+    assigned_to: unpatched
 
   - port: 19
     name: "unpatched-19"

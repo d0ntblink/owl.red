@@ -5,7 +5,7 @@ and Kubernetes cluster.
 
 ## Architecture
 
-- **Network:** VyOS routing and firewall policy, MikroTik switching, OpenWrt
+- **Network:** VyOS routing and firewall policy, MikroTik switching, Grandstream
   wireless access, and Technitium DNS/DHCP.
 - **Compute:** Proxmox infrastructure guests and Talos Kubernetes nodes,
   with Rancher Fleet managing Kubernetes deployments.
