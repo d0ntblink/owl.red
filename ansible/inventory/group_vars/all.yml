@@ -28,10 +28,6 @@ management_tcp_checks:
     host: 10.0.10.3
     port: 8006
     required: true
-  - name: ap_openwrt_web
-    host: 10.0.10.40
-    port: 443
-    required: false
   - name: unraid_web
     host: 10.0.10.5
     port: 443

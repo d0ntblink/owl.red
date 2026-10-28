@@ -81,10 +81,6 @@ data:
             href: https://ipmi.storage.owl.red
             description: Independent storage-host management
             icon: mdi-server-security
-        - OpenWrt AP:
-            href: https://ap.owl.red
-            description: Wireless access-point management
-            icon: openwrt
         - Rack PDU:
             href: http://pdu.owl.red
             description: APC rack power management

@@ -273,77 +273,35 @@ remote hosts. Inspect `ansible --version` and `ansible-galaxy collection list`
 before execution. The bootstrap script does not install these switch libraries
 or the complete collection set.
 
-### OpenWrt AP Scope And Power
+### Grandstream AP Scope And Power
 
 The [existing wired probe](../../ansible/files/wifi-vlan-probe.sh) also accepts
 `20 services` for the narrow private-service policy check. It uses a temporary
 cp1 namespace, real gateway routing and verified TLS to shared ingress, then
-requires direct AP/Proxmox/NAS administration to time out. It does not reconnect
+requires direct switch/Proxmox/NAS administration to time out. It does not reconnect
 Wi-Fi, request a lease, change client DNS/metrics or repeat a password test.
 The rule is owned by the native gateway template/Ansible lane; application
 hostname/authentication restrictions on a shared VIP remain ingress-owned.
 
-For routine credential changes, follow
-[Wi-Fi Password Rotation](wifi-password-rotation.md). The controller runner
-syncs Bitwarden before reading keys, defaults to wired `10.0.10.40`, and requires
-explicit approval for a timed native trial. No key should be edited in LuCI.
+The Grandstream GWN7660E is the AP target. Its current bootstrap address,
+strict-key SSH jump, temporary credential reference and physical path are in
+[Wi-Fi architecture](wifi-architecture.md#bootstrap-discovery-and-access).
+Discovery uses Node.js 24 `util.parseEnv`, OpenSSH and `sshpass`; passwords
+stay in child environments and must not enter Git or command arguments. SSH
+exposes an interactive menu, not a shell. No AP deployer or firmware runner is
+currently qualified.
 
-Selected implementation: controller-side Ansible/native UCI. The
-[versioned entry point](../../scripts/openwrt-run.mjs) uses the supported Node.js 24 runtime
-(`util.parseEnv`), the existing Ansible/PyYAML/Jinja venv, `requests`/`urllib3`,
-the working private Bitwarden CLI profile, and OpenSSH/sshpass for the trusted
-bootstrap reads. No Python, new daemon or package is installed on the AP.
-`bootstrap` adopts existing private/guest/local-IoT Wi-Fi keys into named
-Bitwarden items and creates a distinct cloud-IoT key only if that item is absent;
-it does not change the AP. Values go through child environment/stdin and
-mode-`0600` controller files, never Git or credential-bearing command arguments.
-Other phases run the [AP playbook](../../ansible/playbooks/openwrt-ap.yml).
-Live `trial`/`confirm`/`rollback`/`finish` require an explicit private recovery
-directory and `OPENWRT_APPLY_ALLOWED=true`. Native rollback remains armed until
-verification and confirmation; provider evaluation below is historical context.
+The [shared network profile](../../ansible/vars/wifi-networks.yml) supplies SSID
+names and upstream VLAN policy to VyOS, not AP configuration. Use the existing
+[password authority](wifi-password-rotation.md). Before any AP apply, qualify
+one local configuration owner, repeatable comparison/removal behavior,
+backup/recovery, secret handling and the full native/tagged uplink path.
+Sensitive plan masking alone does not keep keys out of Terraform state.
 
-The [AP profile](../../ansible/inventory/group_vars/aps.yml) describes a
-lightweight Layer-2 access point, not a second router or compute host. Its
-900-sq-ft coverage target starts at `txpower=8` dBm on 2.4 GHz and `12` dBm on
-5 GHz, retaining the actual `CA` regulatory domain. These are provisional IaC
-values; the accepted AP now reports these exact effective limits, but apartment
-coverage/exterior spill is not yet measured. Verify signal at the weakest normal-use locations
-(initial target about `-67` dBm) before tuning further. Lower power can reduce
-spill but cannot guarantee that beacons/signals are undetectable outside walls.
-SSID hiding is not a range or security control.
-
-Terraform/OpenTofu ownership is being evaluated, not selected or deployed:
-
-- [Foxboron's OpenWrt provider](https://github.com/Foxboron/terraform-provider-openwrt)
-  is registry-published (the inspected latest release is `0.3.0`), but requires
-  `luasocket`, `luci-mod-rpc`, `luci-lib-ipkg` and `luci-compat` on the device.
-  Compatibility with this AP's current OpenWrt `25.12.2` is not qualified.
-- [reznakt's native-ubus provider](https://github.com/reznakt/terraform-provider-openwrt)
-  uses the existing LuCI/ubus API without an extra agent and advertises native
-  UCI rollback, import and write-only secret attributes. It is new, has no
-  published release/registry package, and requires a pinned controller-side
-  build plus isolated qualification before production use. Those advertised
-  safeguards have not been independently verified here.
-- [The uapi provider](https://github.com/openwrt-iac/terraform-provider-uapi)
-  targets an additional `uapi` package/API stack, not just the AP's existing
-  ubus endpoint; it is not the minimum-footprint default for this device.
-
-Any selected provider must prove DSA bridge-VLANs, radio power/BSS settings,
-service disablement, import/removal, recovery and secret/state handling first.
-Sensitive plan masking alone does not keep a Wi-Fi key out of state. Keep one
-steady-state owner: choosing Terraform means retiring overlapping Ansible
-configuration writes, not adding a `remote-exec`/shell wrapper beside them.
-Provider evaluation does not approve an AP apply or a new router-side daemon.
-
-Accepted deployment (2026-10-17): the native Ansible owner is applied, verified
-and confirmed at wired `10.0.10.40/24`; a subsequent plan and finish report no
-changes. Native UCI configuration is compared exactly; runtime acceptance uses
-the existing pinned SSH service because optional remote file-exec/per-interface
-methods were not available on this AP. `finish` verifies there are no running
-dnsmasq/odhcpd/OpenNDS processes, disables their startup and local firewall, and
-persists both IP forwarding flags off. No extra AP package is installed.
-Private preimages, native session records, gateway packet acceptance and final
-result are under `~/.local/state/owl-red/openwrt-rebuild-eyuSab`.
+Qualify coverage for the 900-sq-ft site and radio power on this hardware;
+initial weak-spot signal target is about `-67` dBm. Lower transmit power cannot
+guarantee that signals are undetectable outside walls. Keep the MokerLink in
+its confirmed Extend position until a specific controlled change is needed.
 
 ### Technitium VLAN DNS Preparation
 
@@ -378,8 +336,8 @@ The pinned [module check](../../nix/hosts/technitium/check.nix) asserts these
 resolver, firewall and disabled-DHCP invariants.
 
 Reuse [the guarded switch playbook](../../ansible/playbooks/swos-ap.yml) directly,
-not the AP runner: `openwrt_apply_allowed=true`, `openwrt_switch_phase=prepare`
-then `apply`, and `openwrt_recovery_directory` set to that private directory.
+with `wifi_apply_allowed=true`, `wifi_switch_phase=prepare`
+then `apply`, and `wifi_recovery_directory` set to that private directory.
 Supply `SWOS_PASSWORD` only in the child environment and use the venv Python
 interpreter. Its complete preimage supports `rollback`; only VLAN-20 port 24
 was added for the first stage. The accepted IoT batch additionally retains
@@ -1008,7 +966,7 @@ state; cleanup removes only its own namespaces, links, processes and test lease.
 4. Publish only reviewed VLAN/DHCP desired state after owner approval. Source
   scope intent and the independently deployed host activation lock must agree.
   A commit/push is an operational action because the LXC pulls `origin/main`.
-5. Run the existing VyOS owner with `openwrt_gateway_scope=handoff` and the
+5. Run the existing VyOS owner with `wifi_gateway_scope=handoff` and the
   private recovery directory. It disables Kea and forwards compatibility DNS
   through Technitium. Verify Kea inactive and DNS healthy, then confirm/save
   this retirement BEFORE enabling Technitium, so a native rollback timer
@@ -1050,7 +1008,7 @@ CoreDNS owns its generated ConfigMap through Talos; no competing writer was
 added. Its `dnsPolicy: Default` pods retained old resolver files, so each of two
 replicas was replaced through the `policy/v1` eviction API with UID preconditions.
 Require two Ready DNS replicas before each eviction and wait for rollout before
-the next. Real Homepage-pod lookups then passed `rancher.owl.red`, `ap.owl.red`,
+the next. Real Homepage-pod lookups then passed `rancher.owl.red`,
 `kubernetes.default.svc.cluster.local` and `example.com`.
 
 Final evidence is under `~/.local/state/owl-red/technitium-vlan-final-azMB1X`:

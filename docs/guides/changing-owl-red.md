@@ -28,7 +28,7 @@ array/boot/power or unrelated service changes.
 | Add/change a **DNS record** | **Git-managed Technitium data, LXC systemd sync** | `gitops/technitium/zones/owl.red.zone` (bump SOA); publishing triggers reconciliation, not Fleet |
 | Add/change a **DHCP scope** or a **host's reserved IP** | **Git-managed Technitium, LXC systemd sync** | `gitops/technitium/dhcp/scopes.json` / `dhcp-reservations.json`; review scope activation and existing leases before publishing |
 | Change **AP SSIDs, radios, bridges or Wi-Fi passwords** | **Ansible/native UCI** | [Wi-Fi architecture](wifi-architecture.md), [password rotation](wifi-password-rotation.md); use the guarded AP runner, not a second configuration writer |
-| Upgrade/reset **AP firmware** | **Pinned private ImageBuilder workflow** | [Clean reset procedure](wifi-architecture.md#clean-ap-reset-and-upgrade); physical recovery and explicit outage approval required |
+| Upgrade/reset **AP firmware** | **Grandstream local controller; workflow not yet qualified** | [AP qualification](wifi-architecture.md#replacement-ap-target-not-yet-deployed); native backup/recovery and explicit outage approval required |
 | Change **guest enforcement or portal** | **Ansible gateway/router owners; Fleet frontend** | [Guest gateway](../../terraform/proxmox/guest-portal/README.md), [troubleshooting](guest-wifi-troubleshooting.md); portal application lives in its separate repository |
 | Deploy/change a **k8s app** | **GitOps** (Fleet) | `gitops/<app>/` + add the path to the GitRepo in `gitops/rancher/fleet/` |
 | Add a **k8s secret** | **Bitwarden + operator** | `scripts/bitwarden-k8s-secrets-sync.sh` → `gitops/bitwarden-secrets/` (never a placeholder `bwSecretId`) |

@@ -25,8 +25,9 @@ does not infer one.
   VLAN trunk configuration.
 - Use the POE-G083GS only as the existing downstream rack access/PoE switch.
   Its unmanaged status means it is not the place to configure tagged VLANs.
-- Do not change its DIP switch from Default without a specific need and a
-  controlled link/client acceptance test.
+- Preserve the owner-confirmed Extend position for now. Change the DIP only
+  for a specific need with a controlled link/client acceptance test; do not
+  assume the installed switch is in Default mode.
 - Do not claim that the PoE watchdog is configurable or limited to the two QoS
   ports. The available product information does not document its enable/disable
   control, exact trigger, or per-port scope.
@@ -45,7 +46,7 @@ does not infer one.
 | SFP uplink | Port 11; Gigabit SFP |
 | QoS | Product graphic/listing identify QoS priority on PoE ports 1-2 only |
 | Watchdog | Product listing advertises PoE watchdog/AI detection that automatically restarts a disconnected/offline attached device; exact algorithm and port scope are unspecified |
-| DIP mode | Default / Extend. Product graphic advertises that Extend prevents PoE ports 1-8 communicating with each other while allowing communication to uplink ports 9-11. Current switch setting is not recorded. |
+| DIP mode | Extend, owner-confirmed 2026-10-27; unchanged. Product graphic advertises that Extend prevents PoE ports 1-8 communicating with each other while allowing communication to uplink ports 9-11. Actual link speed and tagged-VLAN transport remain unverified. |
 | Extend/VLAN caveat | The vendor illustration calls the resulting partitions port-based VLANs, but this unmanaged switch has no documented per-port 802.1Q configuration interface. Do not treat Extend as a configurable multi-VLAN trunk or enable it on the AP path without testing. |
 | Passive PoE | Manufacturer listing says passive 24 V PoE is not supported |
 
@@ -56,10 +57,11 @@ evidence of VLAN behavior in the installed topology.
 ## Powering The Replacement AP
 
 The owner has a MokerLink POE-G083GS in the downstream rack path. The
-Grandstream GWN7665 advertises IEEE 802.3af/at and maximum 22.5 W consumption;
-it can be connected directly to one of the MokerLink's PoE ports if the switch's
-available shared budget is sufficient. No separate injector is needed in that
-arrangement. Do not insert a 24 V passive injector. The MokerLink watchdog may
+received Grandstream GWN7660E advertises IEEE 802.3af/at and maximum 12.95 W
+consumption. It is connected directly to PoE port 4, with `NET/POE` connected
+confirmed in its native status menu on 2026-10-27. The shared PoE load has not
+been measured. No separate injector is used in this arrangement. Do not insert
+a 24 V passive injector. The MokerLink watchdog may
 power-cycle a PoE endpoint when its undocumented detection logic considers it
 offline; sustained AP uptime should be checked after connection.
 
@@ -67,19 +69,23 @@ offline; sustained AP uptime should be checked after connection.
 
 ```mermaid
 flowchart LR
-    Core[MikroTik CSS326\nmanaged VLAN owner] -->|uplink port not recorded| Rack[MokerLink POE-G083GS\nunmanaged downstream switch]
-    Rack -->|PoE ports 1-8\nendpoints/AP; exact map unknown| Endpoints[Rack endpoints]
-    Rack -->|RJ45 9-10 or SFP 11\nselected port unknown| Other[Other rack/network path]
+    Core[MikroTik CSS326\nmanaged VLAN owner] -->|CSS326 port 22 to MokerLink uplink 10| Rack[MokerLink POE-G083GS\nunmanaged downstream switch]
+    Rack -->|PoE port 4| AP[Grandstream replacement AP\nconnected; acceptance pending]
+    Rack -->|Other endpoint ports not recorded| Endpoints[Rack endpoints]
 ```
 
-The owner confirms the MokerLink is installed inline between the network cabinet
-and rack. These details still need a physical port trace; they are deliberately
-not inferred:
+On 2026-10-27, the owner confirmed the installed path: CSS326 port 22 connects
+to MokerLink uplink port 10, and the newly arrived Grandstream AP connects to
+MokerLink PoE port 4. These are owner-reported physical connections, not an
+end-to-end tagged-VLAN acceptance test. Preserve port 22's existing native
+management path; this record does not authorize changing its VLAN settings.
 
-- Which CSS326 switch port connects to the MokerLink.
-- Whether MokerLink uplink 9, 10, or SFP 11 is used.
-- Which devices use each PoE port and the total live PoE load.
-- Current Default/Extend DIP position.
+The owner also confirmed Extend mode and reuse of the established SSID names
+on the Grandstream. Neither establishes SSID configuration or VLAN acceptance.
+
+These details remain unverified:
+
+- Which devices use the other PoE ports and the total live PoE load.
 - The precise PoE-watchdog trigger, scope and whether it can be disabled.
 - Whether the required native management and tagged client VLANs currently
   traverse this installed path end to end.

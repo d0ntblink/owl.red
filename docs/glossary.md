@@ -335,12 +335,13 @@ the Technitium LXC. **Inventory** = hosts/groups ([`ansible/inventory/hosts.yml`
 (`--check`) = dry-run. **Drift** = live state diverging from declared state (e.g. a
 manual UI edit Fleet/Technitium then overwrites).
 
-### OPNsense / SwOS / OpenWrt
+### VyOS / SwOS / Grandstream
 Appliance OSes: **OPNsense** = the retired router/firewall implementation;
 **VyOS** = the current router/firewall (`edge.owl.red`);
 **SwOS** = the MikroTik CSS326 switch OS, configured from
 [`ansible/switch_configs/css326.yml`](../ansible/switch_configs/css326.yml);
-**OpenWrt** = the D-Link WAP (`ap.owl.red`).
+**Grandstream GWN** = the GWN7660E AP with a local embedded controller;
+configuration/IaC and VLAN acceptance remain pending.
 
 ### NixOS
 The declarative Linux distro running the Technitium LXC — its whole config (Technitium
@@ -364,6 +365,6 @@ A short doc capturing a decision, its context, and trade-offs. All in
 | `pdm.owl.red` | `10.0.10.201` (ingress) → LXC `10.0.10.31` | Proxmox Datacenter Manager |
 | `nas.owl.red` | `10.0.10.5` | Unraid storage / Plex |
 | `switch.owl.red` | `10.0.10.2` | MikroTik CSS326 |
-| `ap.owl.red` | `10.0.10.40` | OpenWrt WAP |
+| Grandstream AP bootstrap | `10.0.10.107` | GWN7660E; no permanent DNS/IP allocation yet |
 
 See the [device inventory](device-inventory.md) for hardware, interfaces and placement.

@@ -155,7 +155,7 @@ if mode in ['dualstack','dns-policy']:
  raise SystemExit(0)
 if mode=='technitium':
  assert socket.gethostbyname('rancher.owl.red')=='10.0.10.201'
- assert socket.gethostbyname('ap.owl.red')=='10.0.10.40'
+ assert socket.gethostbyname('switch.owl.red')=='10.0.10.2'
  assert ipaddress.ip_address(socket.gethostbyname('example.com')).is_global
  dns=f'10.0.{vlan}.30'
  connection=socket.create_connection((dns,53),timeout=3);connection.close()
@@ -170,12 +170,12 @@ if mode=='services':
  assert socket.gethostbyname('dns.owl.red')=='10.0.10.201'
  status=subprocess.check_output(['curl','-4','--fail','--silent','--show-error','--connect-timeout','4','--max-time','15','--resolve','dns.owl.red:443:10.0.10.201','--output','/dev/null','--write-out','%{http_code}','https://dns.owl.red/'],text=True)
  assert status in ['200','301','302','303','307','308']
- for address,port in [('10.0.10.40',443),('10.0.10.3',8006),('10.0.10.5',443)]:
+ for address,port in [('10.0.10.2',80),('10.0.10.3',8006),('10.0.10.5',443)]:
   try:connection=socket.create_connection((address,port),timeout=2)
   except TimeoutError:continue
   else:
    connection.close();raise AssertionError('Direct appliance/hypervisor administration became reachable')
- print(json.dumps({'success':True,'vlan':20,'ingressHTTPS':True,'TLSVerified':True,'directAPProxmoxNASAdminBlocked':True,'DHCPChanged':False,'IPv6Tested':False}))
+ print(json.dumps({'success':True,'vlan':20,'ingressHTTPS':True,'TLSVerified':True,'directSwitchProxmoxNASAdminBlocked':True,'DHCPChanged':False,'IPv6Tested':False}))
  raise SystemExit(0)
 assert socket.gethostbyname('nas.owl.red')=='10.0.10.5'
 public=socket.gethostbyname('example.com');assert ipaddress.ip_address(public).is_global

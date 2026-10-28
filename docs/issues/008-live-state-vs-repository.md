@@ -113,8 +113,6 @@ state, and this alone does not prove that state is absent on other controllers.
 - VLANs 10, 20, 30, 40 and 50 each list only port 5 as a member. Port 5 is
   disabled/unpatched; management is connected on port 24. The same stale
   membership exists in [css326.yml](../../ansible/switch_configs/css326.yml).
-- Port 18 (`ap.owl.red`) is enabled but has no link. HTTP/SSH to `10.0.10.40`
-  failed, including HTTP from edge.pve; its ARP entry remained incomplete.
 - Do not report slow links from this library's labels: it returned 100M for
   host links whose own ethtool reports 1000 Mb/s, and 1G for the NAS link whose
   own ethtool reports 10000 Mb/s. This is a collection/decoding discrepancy.
@@ -516,7 +514,6 @@ changed, and no Terraform plan/apply was run.
 | Active operator | `.174/16`, gateway `.1`, DNS `.30` | USB Ethernet MAC `84:3a:5b:87:91:dd`. Owner identifies switch port 22 (`cab-trunk`); Windows route to `.3` is on-link. WSL has a separate `172.19.28.120/20` NAT interface. |
 | Operator Wi-Fi | Retained `.180/16`, disconnected | MAC `5c:87:9c:fa:10:f4`; do not treat a cached address as a second active management path. |
 | Storage management / power strip | `.6` / `.9`, masks and gateways unverified | BMC means the storage server's management port; PDU means the managed power strip. Their web ports respond, but network-settings reads are incomplete. |
-| AP-labelled path | Switch port 18 linked; device identity unverified | Recorded `.40:22` SSH probe fails. Link and label do not establish OpenWrt access, current mask or cabling. |
 
 All switch ports currently have PVID 1, VLAN mode Optional and receive Any.
 Switch management allows VLAN 1 and all ports; address acquisition is DHCP with

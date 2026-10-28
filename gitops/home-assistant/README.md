@@ -107,7 +107,7 @@ Assistant instance against the same config volume or recorder database.
 ## Device Integrations
 
 [devices.json](devices.json) declares the qualified Canon IPP, two Thingino ONVIF,
-Ecobee HomeKit, Bambu A1 LAN and built-in OpenWrt LuCI setup inputs. Use the repository-root runner:
+Ecobee HomeKit, Bambu A1 LAN and Android TV setup inputs. Use the repository-root runner:
 
 ```bash
 node scripts/home-assistant-devices.mjs inspect
@@ -117,7 +117,6 @@ node scripts/home-assistant-devices.mjs apply camera_foyer
 node scripts/home-assistant-devices.mjs apply camera_office
 node scripts/home-assistant-devices.mjs apply ecobee
 node scripts/home-assistant-devices.mjs apply bambu_a1
-node scripts/home-assistant-devices.mjs apply openwrt
 ```
 
 The API token is read from Secrets Manager's existing
@@ -142,50 +141,6 @@ credentials, which are different from their SSH/web login. Do not rotate the
 camera password merely to make these accounts match. Snapshot retrieval does
 not qualify PTZ, audio, every advertised switch or continuous recording.
 Canon's IPP sensors do not replace an actual printing test.
-
-### Built-In OpenWrt
-
-OpenWrt uses HA's built-in **OpenWrt (LuCI)** integration (`luci`) over
-`https://ap.owl.red`, with both SSL and certificate verification enabled. It
-provides client-presence trackers, not AP CPU/RAM graphs or Wi-Fi controls.
-It uses the existing AP administrator item in Bitwarden Password Manager;
-HA stores that credential in its protected configuration. This is admin access,
-not a read-only monitoring account. No custom HA integration or SSH sensor is used.
-
-Provision its approved AP prerequisites from the controller:
-
-```bash
-node scripts/openwrt-luci-run.mjs plan
-node scripts/openwrt-luci-run.mjs apply
-node scripts/home-assistant-devices.mjs plan openwrt
-node scripts/home-assistant-devices.mjs apply openwrt
-```
-
-The prerequisite runner installs official `luci-mod-rpc`, uses Technitium
-`10.0.10.30` for the AP's own DNS and deploys the `openwrt-luci-tls` Secret to
-owned AP TLS paths. It reloads only uhttpd when the certificate changes; it
-does not reload networking or Wi-Fi. The AP-only finish task also maintains a
-direct resolver, because stopping local dnsmasq otherwise leaves localhost
-nameservers that cannot answer package/ACME queries.
-
-The HA manifest declares Certificate `openwrt-luci` for `ap.owl.red` through
-the existing DNS-01 issuer. Certificate/Secret resources must exist before
-running the prerequisite command. cert-manager renews the Kubernetes Secret,
-but there is **no automatic AP certificate-copy job**: rerun the prerequisite
-plan/apply after renewal and before the AP certificate expires. The runner
-verifies the certificate/key and updates the existing controller TLS pin only
-after HA successfully validates the new HTTPS service. Keep its private
-controller/AP recovery records outside Git; never dump Secret contents.
-
-LuCI tracker entities are disabled by default. Enable only the clients you want
-under **Settings > Devices & services > OpenWrt (LuCI) > Entities**. Device
-coverage depends on what this bridged AP reports; DHCP on Technitium means it
-is not a complete network-wide DHCP/presence inventory.
-
-The LuCI integration creates tracker entities, not an AP device with a room.
-An `area` value on its registry entry is retained as placement metadata and
-reported as not applied. It is never propagated to all tracked clients.
-Assign client areas individually where supported.
 
 ### Ecobee Local HomeKit
 

@@ -162,15 +162,6 @@
         },
 
         {
-          "hardwareAddress": "10-BE-F5-D9-1E-37",
-          "ipAddress": "10.0.10.40",
-          "hostName": "ap.owl.red",
-          "comments": "D-Link DIR-885L running OpenWrt — WAP management",
-          "macSource": "switch port SW17",
-          "status": "confirmed"
-        },
-
-        {
           "hardwareAddress": "BC-24-11-D4-5B-7B",
           "ipAddress": "10.0.10.30",
           "hostName": "ns1.owl.red",

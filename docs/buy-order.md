@@ -1,15 +1,16 @@
 # WAP Buy Order
 
-Research date: 2026-10-23. Status: Grandstream GWN7660E selected as the
-replacement. Prior GWN7665 order cancellation/refund is not confirmed. The
-GWN7660E order, delivery, local IaC qualification and deployment acceptance are
-not confirmed. Other models remain a comparison shortlist.
+Research date: 2026-10-23. Updated 2026-10-27: Grandstream GWN7660E received
+and connected; model confirmed by read-only SSH status. Local IaC qualification
+and deployment acceptance remain pending. Prior GWN7665 cancellation/refund is
+not confirmed. Other models remain historical comparison candidates.
 
 ## Selected Purchase
 
-- **Selected:** Grandstream GWN7660E. The owner showed an Amazon listing at
-  C$69.96; that is the shown price, not a confirmed completed purchase, seller
-  warranty, or delivery.
+- **Received:** Grandstream GWN7660E, connected on 2026-10-27. The earlier
+  Amazon listing showed C$69.96; final paid price and warranty are not verified.
+  Current discovery/access details are in the
+  [Wi-Fi guide](guides/wifi-architecture.md#bootstrap-discovery-and-access).
 - **Previous order:** GWN7665 had been reported ordered at C$156.26. The owner
   subsequently chose the GWN7660E instead. Whether the earlier order was
   cancelled or refunded is unknown; verify it with Amazon.
@@ -19,16 +20,18 @@ not confirmed. Other models remain a comparison shortlist.
   maximum consumption, and the GWN7660E supports 802.3af/at with advertised
   12.95 W maximum consumption. **No separate injector is needed** in this topology.
 - The CSS326 remains the core managed switch; the MokerLink stays downstream
-  between the network cabinet and rack. Do not change its DIP to Extend as part
-  of AP installation. The exact port/VLAN path remains to be recorded and
-  tested.
+  between the network cabinet and rack. Its DIP is already in Extend, confirmed
+  by the owner on 2026-10-27; leave it unchanged pending a controlled test.
+  The owner confirms CSS326 port 22 to MokerLink uplink 10,
+  with the AP on PoE port 4. Tagged-VLAN transport remains untested.
 - Do not cut over or re-enable guest Wi-Fi until the local configuration/IaC
   path, all required VLANs, backup/recovery and real-client acceptance pass.
 
 ### Intended SSID/RF Layout After Qualification
 
-This is the selected target, not current live state. The old AP remains under
-the recovery hold until the replacement is delivered and accepted.
+This is the selected target, not current live state. Reuse the established SSID
+names and credentials after qualification; no SSID activation is implied by
+the hardware connection.
 
 | Band | Intended SSIDs | VLANs |
 |------|----------------|-------|
@@ -38,8 +41,8 @@ the recovery hold until the replacement is delivered and accepted.
 That is four BSSIDs on 2.4 GHz, two on 5 GHz, six total. The GWN7660E vendor
 specification lists 16 SSIDs per radio. Reuse the same SSID name on both bands
 only when both BSSes map to that same VLAN/security policy. Keep the two IoT
-networks on 2.4 GHz unless separately qualified. Guest remains disabled on the
-old AP until the new VLAN 30/openNDS path passes end-to-end acceptance.
+networks on 2.4 GHz unless separately qualified. Guest remains paused until the
+new VLAN 30/openNDS path passes end-to-end acceptance.
 
 ## Requirements
 
@@ -79,15 +82,22 @@ still need checking for the actual configuration.
 
 ## Buying Priority
 
-1. Omada EAP610 around C$60-90 used, or UniFi U6 Pro around C$100-150 used:
-   first candidates when local-controller IaC can be qualified without bespoke
-   automation. Compare total cost, including controller operation and power.
-2. EAP670 around C$100-140 used if its better 5 GHz radio is worth the premium.
-3. Aruba AP-505/AP-515 or Ruckus R550/R650 only with the correct local firmware
+1. **UniFi U6 Lite:** add to the low-cost shortlist. It advertises 8 BSSIDs per
+  radio, 2x2 Wi-Fi 6 and a GbE uplink, which matches the planned six-BSS layout
+  and current 1 GbE path. Check the local used price; do not pay U6 Pro pricing.
+2. **Omada EAP650:** a Calgary marketplace listing shown at C$75, marked new.
+  The product-box label identifies EAP650. Verify exact hardware revision,
+  included power adapter/condition and seller before purchase. Eight SSIDs per
+  band and the local Omada Terraform route fit the requirements well.
+3. Omada EAP610 around C$60-90 used, or UniFi U6 Pro around C$100-150 used:
+  compare if price, radio margin or controller/IaC fit justifies the premium.
+  Include the local controller and power in total cost.
+4. EAP670 around C$100-140 used if its better 5 GHz radio is worth the premium.
+5. Aruba AP-505/AP-515 or Ruckus R550/R650 only with the correct local firmware
    demonstrated and an acceptable native-CLI automation plan.
-4. Grandstream or Zyxel if hardware value is compelling, but do not waive the
+6. Grandstream or Zyxel if hardware value is compelling, but do not waive the
    IaC gate merely because standalone management is available.
-5. Buy tri-band only at a reasonable premium; current documented clients are
+7. Buy tri-band only at a reasonable premium; current documented clients are
    not confirmed to need 6 GHz.
 
 ## Dual-Band Candidates
@@ -97,7 +107,9 @@ All entries in this table are 2.4 + 5 GHz Wi-Fi 6, not tri-band.
 | Model | CAD buying target | Advertised SSID/BSSID capacity evidence | Local management and IaC assessment |
 |-------|-------------------|-----------------------------------------|-------------------------------------|
 | UniFi U6 Pro | C$100-150 used | 8 BSSIDs per radio in official tech specs | Local self-hosted UniFi; community Terraform provider; qualify/pin versions |
+| UniFi U6 Lite | Check local listing; budget option | 8 BSSIDs per radio in official tech specs | Wi-Fi 6, 2x2 on both bands, GbE, 12 W; local self-hosted UniFi and same community Terraform qualification |
 | Omada EAP610 | C$60-90 used | 16 SSIDs total, explicitly 8 per band in official specifications | Local Omada software controller; community Terraform; qualify required resource coverage |
+| Omada EAP650 | C$75 shown in Calgary marketplace listing, condition marked new | 16 SSIDs total, explicitly 8 per band in official specifications | 2x2 Wi-Fi 6, 1 GbE, 802.3at; local controller and community Terraform provider; verify seller/revision |
 | Omada EAP670 | C$100-140 used | 16 SSIDs advertised; HOLD exact per-radio split against hardware revision/datasheet | Same controller lane as EAP610; 2.5 GbE uplink |
 | Aruba AP-505 with Instant firmware | C$50-100 used | HOLD exact per-radio and virtual-controller limits for the selected Instant release | Embedded local virtual controller; native CLI automation needs qualification |
 | Aruba AP-515 with Instant firmware | C$50-100 used | HOLD exact per-radio and virtual-controller limits for the selected Instant release | Same Instant caveat; do not assume every campus/AOS-10 listing is ready |
@@ -190,7 +202,8 @@ does not itself establish 6 GHz support or better coverage through walls.
 
 ## Evidence And References
 
-- [UniFi U6 Pro](https://techspecs.ui.com/unifi/wifi/u6-pro),
+- [UniFi U6 Lite](https://techspecs.ui.com/unifi/wifi/u6-lite),
+  [U6 Pro](https://techspecs.ui.com/unifi/wifi/u6-pro),
   [U6 Enterprise](https://techspecs.ui.com/unifi/wifi/u6-enterprise),
   [U7 Pro](https://techspecs.ui.com/unifi/wifi/u7-pro): explicit BSSIDs per radio.
 - [Omada EAP610 specifications](https://www.omadanetworks.com/ca/business-networking/omada-wifi-ceiling-mount/eap610/#specifications)

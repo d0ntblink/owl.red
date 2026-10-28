@@ -65,14 +65,12 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Network Follow-Ups
 
-Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/guides/wifi-architecture.md).
+Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/guides/wifi-architecture.md).
 
-- [ ] Restore stable AP/client connectivity before further network changes.
-  Guest Wi-Fi is intentionally paused until WAP replacement; keep the gateway
-  infrastructure but do not re-enable the SSID during further troubleshooting.
-  Unexpected whole-device restarts continued after the approved 25.12.6 to
-  25.12.2 rollback. Separate physical power/hardware from shared driver faults;
-  require real-client internet and sustained uptime, not just visible SSIDs.
+- [ ] Establish stable client connectivity through the Grandstream AP using the
+  existing SSID names, credentials and VLAN policies. Require real-client
+  internet and sustained uptime, not just visible SSIDs. Keep guest paused
+  until the AP path and retained gateway/portal pass acceptance.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):
   target-SSID tablet identity, remaining client placement, RF coverage,
   static-appliance addressing and protected recovery/access ports.
@@ -84,9 +82,10 @@ Reference: [current Wi-Fi architecture, SSIDs, rules and clean AP refresh](docs/
 - [ ] Qualify a truthful client-specific CAPPORT endpoint before advertising
   DHCP option 114; keep it absent until the endpoint is proven.
 - [ ] Replace the constrained WAP with maintained hardware/driver support for the
-  required simultaneous VLAN-backed BSSes. Grandstream GWN7660E was selected
-  2026-10-23; purchase/delivery, local IaC qualification, recovery and VLAN-path
-  acceptance remain pending. Confirm cancellation/refund of the previously
+  required simultaneous VLAN-backed BSSes. The GWN7660E is received and connected;
+  qualify local IaC, backup/recovery and the CSS326-22 / MokerLink-10 / PoE-4
+  VLAN path, establish permanent management addressing and replace the temporary
+  credential through the established secret store. Confirm cancellation/refund of the previously
   ordered GWN7665. Target private and guest on 2.4/5 GHz, IoT on 2.4 GHz; keep
   guest paused until all checks pass. See the [WAP buy order](docs/buy-order.md).
 - [ ] Extend the existing Tailscale setup with reviewed management routing,

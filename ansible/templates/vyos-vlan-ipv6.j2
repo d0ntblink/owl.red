@@ -8,7 +8,7 @@ set firewall {{ family }} forward filter rule 90 destination port 53,853 &&
 set firewall {{ family }} forward filter rule 90 action drop &&
 set firewall {{ family }} forward filter rule 90 log &&
 {% endfor %}
-set interfaces ethernet eth1 address {{ openwrt_ipv6_plan.vlans[0].router }}/64 &&
+set interfaces ethernet eth1 address {{ wifi_ipv6_plan.vlans[0].router }}/64 &&
 set firewall ipv4 forward filter rule 110 description OWL-VLAN-NATIVE-ADMIN &&
 set firewall ipv4 forward filter rule 110 inbound-interface name eth1 &&
 set firewall ipv4 forward filter rule 110 source address 10.0.10.0/24 &&
@@ -18,7 +18,7 @@ set firewall ipv6 forward filter rule 110 description OWL-VLAN-NATIVE-ADMIN &&
 set firewall ipv6 forward filter rule 110 inbound-interface name eth1 &&
 set firewall ipv6 forward filter rule 110 outbound-interface group OWL-VLAN-CLIENTS &&
 set firewall ipv6 forward filter rule 110 action accept &&
-{% for network in openwrt_ipv6_plan.vlans if network.id != 10 %}
+{% for network in wifi_ipv6_plan.vlans if network.id != 10 %}
 {% set interface = 'eth1.' ~ network.id %}
 set interfaces ethernet eth1 vif {{ network.id }} address {{ network.router }}/64 &&
 set firewall group network-group OWL-VLAN-CLIENTS network 10.0.{{ network.id }}.0/24 &&
@@ -36,7 +36,7 @@ set firewall ipv4 input filter rule 5230 destination address 10.0.30.1 &&
 set firewall ipv4 input filter rule 5230 protocol icmp &&
 set firewall ipv4 input filter rule 5230 action accept &&
 {% endif %}
-{% if openwrt_ipv6_delegate | bool %}
+{% if wifi_ipv6_delegate | bool %}
 set interfaces ethernet eth0 dhcpv6-options pd 0 interface {{ interface }} address 1 &&
 set interfaces ethernet eth0 dhcpv6-options pd 0 interface {{ interface }} sla-id {{ network.delegationSlaId }} &&
 {% endif %}
