@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gwn-manager
+spec:
+  ports:
+    - {name: https, port: 8443, targetPort: 8443, protocol: TCP}
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: gwn-manager
+subsets:
+  - addresses:
+      - ip: 10.0.10.32
+    ports:
+      - {name: https, port: 8443, protocol: TCP}
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: gwn-manager
+spec:
+  serverName: 10.0.10.32
+  insecureSkipVerify: false
+  rootCAsSecrets: [gwn-backend-ca]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: gwn-administration
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gwn-manager
+spec:
+  secretName: gwn-manager-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: [gwn.owl.red]
+  privateKey:
+    rotationPolicy: Always
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gwn-manager
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`gwn.owl.red`)
+      kind: Rule
+      middlewares:
+        - name: gwn-administration
+      services:
+        - name: gwn-manager
+          port: 8443
+          scheme: https
+          serversTransport: gwn-manager
+  tls:
+    secretName: gwn-manager-tls

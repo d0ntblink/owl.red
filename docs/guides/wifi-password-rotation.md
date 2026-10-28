@@ -2,8 +2,9 @@
 
 Bitwarden Password Manager is the Wi-Fi password authority. The Grandstream
 must reuse the established SSID names and credentials. Editing Bitwarden alone
-does not change the AP. A repeatable local AP apply/recovery workflow is not
-yet qualified; do not treat a vault edit as a successful rotation.
+does not change the AP. The production API runner syncs the vault, reconciles
+declared profiles and verifies read-back. Do not treat a vault edit alone as a
+successful rotation or a proof that clients have reconnected.
 
 Keep passwords out of Git, command arguments, temporary scripts and chat.
 
@@ -11,23 +12,32 @@ Keep passwords out of Git, command arguments, temporary scripts and chat.
 
 | Wi-Fi network | Bitwarden item | Effect |
 |---------------|----------------|--------|
-| `owl.red` | `owl-red-wifi-private` | Private Wi-Fi, VLAN 20; target 2.4 / 5 GHz |
-| `owl.red-iot-local` | `owl-red-wifi-iot-local` | Local-only IoT, VLAN 40 |
-| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50, 2.4 GHz only |
-| `silence of the lans` | `owl-red-wifi-guest` | Guest Wi-Fi, VLAN 30; paused; target 2.4 / 5 GHz; portal consent remains separate |
+| `owl.red` | `owl-red-wifi-private` | Private Wi-Fi, VLAN 20; 2.4 / 5 GHz |
+| `owl.red-iot-local` | `owl-red-wifi-iot-local` | Local-only IoT, VLAN 40; 2.4 / 5 GHz |
+| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50; 2.4 / 5 GHz |
+| `silence of the lans` | `owl-red-wifi-guest` | Guest Wi-Fi, VLAN 30; 2.4 / 5 GHz; portal consent remains separate |
 
 Change the item's **Password** field, not its name, username or notes. Save it
 and let the Bitwarden application sync only as part of a reviewed rotation.
 Prefer a generated printable-ASCII passphrase of 20 or more characters within
 the AP/security mode's supported limits. Keep local/cloud IoT keys distinct.
 
-## Rotation Gate
+## Production Apply
 
-Before changing a key, qualify one local Grandstream configuration owner with
-private credential lookup, a native backup, an exact password-only comparison,
-wired management and a tested recovery procedure. No repository command currently
-implements that complete flow. See [Wi-Fi architecture](wifi-architecture.md)
-and [controller requirements](controller-setup.md#grandstream-ap-scope-and-power).
+Review [Wi-Fi policy](../../ansible/vars/wifi-networks.yml) first: the runner
+reconciles all owned fields, not just passwords. Keep policy unchanged for a
+key-only rotation, retain wired management and private preimages, and use the
+[controller requirements](controller-setup.md#grandstream-ap-scope-and-power).
+
+```bash
+node scripts/gwn-manager-run.mjs inspect-production
+GWN_MANAGER_APPLY_ALLOWED=true node scripts/gwn-manager-run.mjs apply-production
+```
+
+The runner verifies Personal/WPA2/AES, exact private PSK equality, VLAN, bands,
+enablement and isolation. Values are not printed. Native backup/restore testing
+is a separate outstanding recovery task; do not assume an automatic timed AP
+rollback exists.
 
 After the reviewed AP change, verify the intended SSID/VLAN and reconnect one
 affected client before proceeding with the rest. AP read-back alone does not

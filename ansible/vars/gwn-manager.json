@@ -1,0 +1,35 @@
+{
+  "version": "1.1.39.8",
+  "management": {
+    "fqdn": "gwn.owl.red",
+    "url": "https://gwn.owl.red",
+    "contact_email": "admin@owl.red",
+    "credential_item": "128d335d-9427-49a6-b1ba-b4f10011e090"
+  },
+  "access_point": {
+    "mac": "ec:74:d7:b3:3e:ba",
+    "model": "GWN7660E",
+    "name": "ap"
+  },
+  "source": {
+    "url": "https://firmware.grandstream.com/GWN_Manager-1.1.39.8-Ubuntu.tar.gz",
+    "sha256": "37cd47703c1e2d91c4f35568e6c580a01af8713af55aabd6cbd79c68ac865de1"
+  },
+  "container": {
+    "node": "edge",
+    "id": 201,
+    "hostname": "gwn",
+    "address": "10.0.10.32/24",
+    "gateway": "10.0.10.1",
+    "dns": "10.0.10.30",
+    "mac": "02:6f:77:10:02:01",
+    "cores": 2,
+    "memory_mib": 6144,
+    "disk_gib": 24,
+    "unprivileged": true
+  },
+  "qualification": {
+    "nixos_runtime": true,
+    "ap_adoption_allowed": true
+  }
+}

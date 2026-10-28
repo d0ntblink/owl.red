@@ -23,7 +23,7 @@
           - (inventory_hostname == 'edge_lab' and vm_id | int == 102) or (inventory_hostname == 'edge_router' and vm_id | int == 103)
           - wifi_gateway_phase in ['trial', 'confirm']
           - wifi_gateway_scope in ['wifi', 'ipv6', 'handoff']
-          - wifi_networks.guest.enabled is sameas false
+          - wifi_networks.guest.gateway_owner == 'opennds'
           - wifi_networks.private.vlan | int == 20
           - wifi_networks.iot_local.vlan | int == 40
           - wifi_networks.iot_cloud.vlan | int == 50
@@ -37,7 +37,7 @@
         if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810; then
           [[ $(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 description) == OWL-WIFI-PRIVATE-INGRESS ]] || builtin exit 1
         fi
-        {% for name, network in wifi_networks.items() if network.enabled %}
+        {% for name, network in wifi_networks.items() if network.enabled and (network.gateway_owner | default('vyos')) == 'vyos' %}
         {% if network.vlan != 20 %}
         if /bin/cli-shell-api existsActive interfaces ethernet eth1 vif {{ network.vlan }}; then
           [[ $(/bin/cli-shell-api returnActiveValue interfaces ethernet eth1 vif {{ network.vlan }} description) == OWL-WIFI-{{ network.vlan }} ]] || builtin exit 1

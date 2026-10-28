@@ -19,8 +19,9 @@ def desired_table(table, declared):
     local_iot = {**attached, 40: [18, 24, 25]}
     active_iot = {**local_iot, 50: [18, 24, 25]}
     guest = {**active_iot, 30: [18, 24, 25]}
+    rack = {20: [2, 18, 22, 24, 25], 30: [18, 22, 24, 25], 40: [18, 22, 24, 25], 50: [18, 22, 24, 25]}
     allowed = {int(key): value for key, value in declared.items()}
-    if allowed not in (base, attached, local_iot, active_iot, guest):
+    if allowed not in (base, attached, local_iot, active_iot, guest, rack):
         raise ValueError("Only the reviewed AP, DNS trunk and retained cp1 membership is allowed")
     result = copy.deepcopy(table)
     for vlan, members in allowed.items():
@@ -28,11 +29,11 @@ def desired_table(table, declared):
         if len(matches) != 1:
             raise ValueError("Missing or duplicate target switch VLAN")
         if vlan == 20:
-            prior = ([2, 25], base[20], attached[20])
+            prior = ([2, 25], base[20], attached[20], rack[20])
         elif vlan == 30:
-            prior = ([5], guest[30])
+            prior = ([5], guest[30], rack[30])
         else:
-            prior = ([5], base[vlan], active_iot[vlan])
+            prior = ([5], base[vlan], active_iot[vlan], rack[vlan])
         if sorted(matches[0]["member_ports"]) not in prior:
             raise ValueError("Unexpected AP VLAN membership; refusing overwrite")
         matches[0]["member_ports"] = members
@@ -112,7 +113,7 @@ def main():
             pass
         if snapshot() != target:
             raise ValueError("Switch apply/rollback outcome is not verified")
-        module.exit_json(changed=True, verified=True, operator_port_22_unchanged=True)
+        module.exit_json(changed=True, verified=True, operator_port_22_native_unchanged=True)
     except (ValueError, KeyError, OSError, requests.RequestException):
         module.fail_json(msg="Scoped AP switch operation failed; values suppressed, inspect private preimage")
 

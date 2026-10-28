@@ -49,6 +49,10 @@ data:
             href: https://pdm.owl.red
             description: Proxmox Datacenter Manager
             icon: proxmox
+        - GWN Manager:
+            href: https://gwn.owl.red
+            description: Wireless networks and access point
+            icon: mdi-access-point-network
         - Unraid:
             href: http://nas.owl.red
             description: Storage and media backbone

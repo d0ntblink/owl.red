@@ -31,13 +31,14 @@ Secrets and authentication material are excluded.
 | [worker1-pve](#worker1-pve) | Compute host 4 | physical-host | Proxmox VE | `worker1.pve.owl.red` / `10.0.10.14` |
 | [switch-core](#switch-core) | Core switch | network-appliance | SwOS | `switch.owl.red` / `10.0.10.2` |
 | [switch-rack-poe](#switch-rack-poe) | Rack PoE access switch | network-appliance | MokerLink unmanaged Ethernet switch | No management address |
-| [ap-main](#ap-main) | Wireless access point | network-appliance | Grandstream GWN firmware | Bootstrap access documented in the Wi-Fi guide; no permanent allocation yet |
+| [ap-main](#ap-main) | Wireless access point | network-appliance | Grandstream GWN firmware | `ap.owl.red` / `10.0.10.107` |
 | [pdu-rack](#pdu-rack) | Rack power distribution | power-appliance | APC appliance firmware | `pdu.owl.red` / `10.0.10.9` |
 | [ups-rack](#ups-rack) | Rack UPS | power-appliance | USB HID UPS | USB on storage host |
 | [router-edge](#router-edge) | Production router | virtual-machine | VyOS | `edge.owl.red` / `10.0.10.1` |
 | [router-lab](#router-lab) | Isolated router lab | virtual-machine | VyOS | No production allocation |
 | [nas](#nas) | Central NAS | virtual-machine | Unraid | `nas.owl.red` / `10.0.10.5` |
 | [dns](#dns) | DNS and DHCP | container | NixOS | `ns1.owl.red` / `10.0.10.30` |
+| [gwn-manager](#gwn-manager) | Wireless controller | container | NixOS / Grandstream GWN Manager | `https://gwn.owl.red`; native `10.0.10.32` |
 | [pdm](#pdm) | Datacenter manager | container | Debian / Proxmox Datacenter Manager | `pdm.owl.red` / `10.0.10.31` |
 | [cp1-k8s](#cp1-k8s) | Kubernetes control plane 1 | virtual-machine | Talos Linux | `cp1.k8s.owl.red` / `10.0.10.21` |
 | [cp2-k8s](#cp2-k8s) | Kubernetes control plane 2 | virtual-machine | Talos Linux | `cp2.k8s.owl.red` / `10.0.10.22` |
@@ -73,7 +74,7 @@ Secrets and authentication material are excluded.
 | memory | 32 GiB DDR4; four 8 GiB DIMMs |
 | boot_storage | Samsung SSD 860 EVO M.2 250 GB; serial `S413NS0R510123L` |
 | expansion | Intel X710 dual-port SFP+ and Intel I226-V; assigned to router guest |
-| guest_ids | `102`, `103`, `200` |
+| guest_ids | `102`, `103`, `104`, `200`, `201` |
 | configuration | [Ansible inventory](../ansible/inventory/hosts.yml), [router VM definition](../terraform/proxmox/vyos-vm/main.tf) |
 
 | Interface | MAC | Address | Connection |
@@ -256,7 +257,7 @@ MAC rather than its permanent address.
 | poe_budget | 120 W total advertised; up to 30 W per PoE port |
 | port_features | Advertised QoS priority on PoE ports 1-2; PoE watchdog/AI restart advertised but trigger, scope and disable control are not verified |
 | dip_switch | Extend, owner-confirmed 2026-10-27; left unchanged. Advertised to isolate PoE ports 1-8 from each other while allowing uplink communication; tagged-VLAN transport and actual link speed remain unverified. It is not configurable 802.1Q VLAN management. |
-| topology_notes | Owner-confirmed path: CSS326 port 22 to MokerLink uplink 10; MokerLink PoE port 4 to `ap-main`. Other endpoint ports and end-to-end VLAN transparency remain unverified. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
+| topology_notes | CSS326 port 22 to MokerLink uplink 10; PoE port 4 to `ap-main`. Native management plus tagged client VLANs 20/30/40/50. Other endpoint ports are not documented. See [decision 023](decisions/023-mokerlink-poe-rack-switch.md). |
 | specification | [Manufacturer POE-G083GS product page](https://www.mokerlink.com/index.php?route=product/product&product_id=377) |
 
 | Interface | MAC | Address | Connection |
@@ -272,15 +273,16 @@ MAC rather than its permanent address.
 | kind | network-appliance |
 | model | Grandstream GWN7660E |
 | platform | Grandstream GWN embedded-controller firmware |
-| role | Replacement wireless AP; not yet accepted for production SSID/VLAN cutover |
+| role | Controller-managed VLAN-aware Layer-2 wireless access point |
 | parent | `switch-rack-poe` |
 | part_number | `9640011012C` |
-| management | Local embedded controller; SSH `admin` exposes an interactive menu, not a general shell |
-| configuration | [Wi-Fi architecture and acceptance](guides/wifi-architecture.md#replacement-ap-target-not-yet-deployed); local configuration/IaC remains to be qualified |
+| management | GWN Manager local controller; native SSH menu is a bootstrap/recovery interface, not a general shell |
+| networks | Private 20, guest 30, local IoT 40 and cloud IoT 50; each SSID on 2.4 and 5 GHz |
+| configuration | [Controller manifest](../ansible/vars/gwn-manager.json), [Wi-Fi policy](../ansible/vars/wifi-networks.yml), [operations](guides/wifi-architecture.md) |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| NET/POE / device MAC | `ec:74:d7:b3:3e:ba` | No permanent allocation; see bootstrap address in Wi-Fi guide | MokerLink PoE port 4; upstream port 10 to CSS326 SW22 |
+| NET/POE / device MAC | `ec:74:d7:b3:3e:ba` | `ap.owl.red` / `10.0.10.107` | MokerLink PoE port 4; upstream port 10 to CSS326 SW22 |
 
 ### pdu-rack
 
@@ -426,6 +428,29 @@ MAC rather than its permanent address.
 | `eth2` | `bc:24:11:fb:8f:c6` | `10.0.40.30`; `fde4:cabf:d798:40::30` | VLAN 40 on `vmbr0` |
 | `eth3` | `bc:24:11:1f:41:73` | `10.0.50.30`; `fde4:cabf:d798:50::30` | VLAN 50 on `vmbr0` |
 | `eth4` | `bc:24:11:9f:ec:68` | `10.0.30.30`; `fde4:cabf:d798:30::30` | VLAN 30 on `vmbr0` |
+
+### gwn-manager
+
+| Field | Value |
+|-------|-------|
+| id | `gwn-manager` |
+| kind | container |
+| model | Proxmox LXC |
+| platform | NixOS / Grandstream GWN Manager |
+| role | Local wireless configuration controller; no client routing or DHCP |
+| parent | `edge-pve` |
+| hostname | `gwn.owl.red`; container hostname `gwn` |
+| guest_id | `201` |
+| cpu | 2 vCPU |
+| memory | 6 GiB |
+| storage | 24 GiB local root filesystem |
+| isolation | Unprivileged; native management interface only |
+| access | `https://gwn.owl.red` through trusted management ingress; direct AP control TCP `10014` |
+| configuration | [Lifecycle and operations](../terraform/proxmox/gwn-manager/README.md), [NixOS service](../nix/hosts/gwn-manager/configuration.nix), [ingress](../gitops/gwn-manager/) |
+
+| Interface | MAC | Address | Connection |
+|-----------|-----|---------|------------|
+| `eth0` | `02:6f:77:10:02:01` | `10.0.10.32` | Native management on edge `vmbr0`; `gwn-direct.owl.red` |
 
 ### pdm
 
@@ -741,7 +766,7 @@ passive cable paths, not separately discoverable network devices.
 | SW14 | PP31 | `storage-bmc` |
 | SW16 | PP32 | `pdu-rack` |
 | SW18 | PP33 | Unassigned; existing switch port/VLAN state retained pending separate review |
-| SW22 | PP35; cabinet-to-rack path | `switch-rack-poe` uplink 10; native-management path retained; client VLAN transport not yet accepted |
+| SW22 | PP35; cabinet-to-rack path | `switch-rack-poe` uplink 10; native management plus tagged VLANs 20/30/40/50 |
 | MokerLink PoE 4 | AP Ethernet cable | `ap-main` NET/POE; owner-confirmed connection |
 | SW24 | PP36 | `edge-pve` management |
 | SFP+1 | PP16 to PP37 | `router-edge` LAN passthrough |

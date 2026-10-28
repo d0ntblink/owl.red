@@ -20,8 +20,8 @@ Technitium retains DHCP authority on every VLAN; the gateway only reads lease
 facts.
 
 HTTPS deployment and the production DHCP/consent/native Authmon enforcement path
-are accepted on the retained gateway path. Guest Wi-Fi is paused while the
-Grandstream SSID/VLAN path is qualified. A real handset/RF walk remains an
+are accepted on the retained gateway path. Grandstream guest Wi-Fi is active
+on both bands and a phone consent flow passed. A broader handset/RF walk remains an
 onsite follow-up. Publishing an app image alone never activates networking.
 
 The migration preserved a private recovery archive outside this Git repository,

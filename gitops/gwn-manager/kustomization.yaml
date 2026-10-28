@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: infra-services
+resources:
+  - controller.yaml
+secretGenerator:
+  - name: gwn-backend-ca
+    files:
+      - ca.crt=backend-ca.pem
+generatorOptions:
+  disableNameSuffixHash: true
+commonAnnotations:
+  meta.helm.sh/release-name: owl-red-gitops-gwn-manager
+  meta.helm.sh/release-namespace: infra-services
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: Helm
+    includeSelectors: false

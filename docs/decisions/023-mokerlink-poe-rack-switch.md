@@ -70,7 +70,7 @@ offline; sustained AP uptime should be checked after connection.
 ```mermaid
 flowchart LR
     Core[MikroTik CSS326\nmanaged VLAN owner] -->|CSS326 port 22 to MokerLink uplink 10| Rack[MokerLink POE-G083GS\nunmanaged downstream switch]
-    Rack -->|PoE port 4| AP[Grandstream replacement AP\nconnected; acceptance pending]
+    Rack -->|PoE port 4| AP[Grandstream GWN7660E\ncontroller-managed AP]
     Rack -->|Other endpoint ports not recorded| Endpoints[Rack endpoints]
 ```
 

@@ -4,13 +4,17 @@ wifi_networks:
   private:
     vlan: 20
     ssid: owl.red
+    credential_item: 44bcc98e-5388-4208-a1d5-b4e70030bac7
+    bands: ["2.4", "5"]
     enabled: true
     isolate: false
     internet: true
   guest:
     vlan: 30
     ssid: silence of the lans
-    enabled: false
+    credential_item: 8da35900-49aa-4e4c-8a3d-b4e70030c554
+    bands: ["2.4", "5"]
+    enabled: true
     isolate: true
     internet: false
     gateway_owner: opennds
@@ -18,12 +22,16 @@ wifi_networks:
   iot_local:
     vlan: 40
     ssid: owl.red-iot-local
+    credential_item: 9a8a2769-6c84-48a7-bf9e-b4e70030d1af
+    bands: ["2.4", "5"]
     enabled: true
     isolate: true
     internet: false
   iot_cloud:
     vlan: 50
     ssid: owl.red-iot-cloud
+    credential_item: 073a4a3c-c07d-4563-bbc1-b4e70030dc02
+    bands: ["2.4", "5"]
     enabled: true
     isolate: true
     internet: true
