@@ -17,154 +17,203 @@ data:
     - Core Platform:
         - Rancher:
             href: https://rancher.owl.red
+            siteMonitor: http://rancher.cattle-system.svc.cluster.local/ping
             description: Kubernetes operations and lifecycle
             icon: rancher
         - Home Assistant:
             href: https://ha.owl.red
+            siteMonitor: http://home-assistant.home-assistant.svc.cluster.local:8123/
             description: Home automation
             icon: home-assistant
         - Technitium DNS:
             href: https://dns.owl.red
+            siteMonitor: http://technitium.technitium.svc.cluster.local:5380/
             description: Authoritative DNS management UI
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
         - Open WebUI:
             href: https://ai.owl.red
+            siteMonitor: https://nas.owl.red:11436/health
             description: Local AI workspace
             icon: open-webui
+        - Gatus:
+            href: https://gatus.owl.red
+            siteMonitor: http://gatus.gatus.svc.cluster.local/health
+            description: Scheduled health checks and history
+            icon: gatus
         - Traefik:
             href: https://traefik.owl.red/dashboard/
+            namespace: traefik
+            app: traefik
+            podSelector: app.kubernetes.io/name=traefik,app.kubernetes.io/instance=traefik-traefik
             description: Ingress routes and services
             icon: traefik
 
     - Infrastructure:
         - VyOS Console:
             href: https://edge.pve.owl.red:8006/#v1:0:=qemu%2F103
+            ping: edge.owl.red
             description: Edge gateway VM 103 on Proxmox
             icon: mdi-router-network
         - MikroTik Switch:
             href: http://switch.owl.red
+            ping: switch.owl.red
             description: CSS326 switching fabric management
             icon: mikrotik
         - PDM:
             href: https://pdm.owl.red
+            ping: 10.0.10.31
             description: Proxmox Datacenter Manager
             icon: proxmox
         - GWN Manager:
             href: https://gwn.owl.red
+            ping: gwn-direct.owl.red
             description: Wireless networks and access point
             icon: mdi-access-point-network
         - Unraid:
             href: http://nas.owl.red
+            ping: nas.owl.red
             description: Storage and media backbone
             icon: unraid
         - edge Proxmox:
             href: https://edge.pve.owl.red:8006
+            ping: edge.pve.owl.red
             description: Router and DNS host
             icon: proxmox
         - storage Proxmox:
             href: https://storage.pve.owl.red:8006
+            ping: storage.pve.owl.red
             description: NAS host
             icon: proxmox
         - cp1 Proxmox:
             href: https://cp1.pve.owl.red:8006
+            ping: cp1.pve.owl.red
             description: Control plane host 1
             icon: proxmox
         - cp2 Proxmox:
             href: https://cp2.pve.owl.red:8006
+            ping: cp2.pve.owl.red
             description: Control plane host 2
             icon: proxmox
         - cp3 Proxmox:
             href: https://cp3.pve.owl.red:8006
+            ping: cp3.pve.owl.red
             description: Control plane host 3
             icon: proxmox
         - worker1 Proxmox:
             href: https://worker1.pve.owl.red:8006
+            ping: worker1.pve.owl.red
             description: Worker host
             icon: proxmox
         - Storage IPMI:
             href: https://ipmi.storage.owl.red
+            ping: ipmi.storage.owl.red
             description: Independent storage-host management
             icon: mdi-server-security
         - Rack PDU:
             href: http://pdu.owl.red
+            ping: pdu.owl.red
             description: APC rack power management
             icon: mdi-power-socket
 
     - Media:
         - Plex:
             href: http://nas.owl.red:32400/web
+            siteMonitor: http://nas.owl.red:32400/identity
             description: Media library
             icon: plex
         - Seerr:
             href: https://seerr.owl.red
+            siteMonitor: http://seerr.seerr.svc.cluster.local:5055/api/v1/status
             description: Media requests
             icon: overseerr
         - Sonarr HD:
             href: https://sonarr.owl.red
+            namespace: arr
+            app: sonarr-fhd
             description: HD television
             icon: sonarr
         - Sonarr 4K:
             href: https://sonarr-uhd.owl.red
+            namespace: arr
+            app: sonarr-uhd
             description: UHD television
             icon: sonarr
         - Radarr HD:
             href: https://radarr.owl.red
+            namespace: arr
+            app: radarr-fhd
             description: HD movies
             icon: radarr
         - Radarr 4K:
             href: https://radarr-uhd.owl.red
+            namespace: arr
+            app: radarr-uhd
             description: UHD movies
             icon: radarr
         - Lidarr:
             href: https://lidarr.owl.red
+            namespace: arr
+            app: lidarr
             description: Music library
             icon: lidarr
         - Bazarr:
             href: https://bazarr.owl.red
+            siteMonitor: http://bazarr.arr.svc.cluster.local:6767/
             description: Subtitles
             icon: bazarr
         - Prowlarr:
             href: https://prowlarr.owl.red
+            namespace: arr
+            app: prowlarr
             description: Indexers through Gluetun
             icon: prowlarr
         - qBittorrent:
             href: https://qbittorrent.owl.red
+            siteMonitor: http://qbittorrent.qbittorrent.svc.cluster.local:8080/
             description: VPN-backed downloads
             icon: qbittorrent
         - Tautulli:
             href: https://tautulli.owl.red
+            siteMonitor: http://tautulli.media-apps.svc.cluster.local:8181/
             description: Plex activity and analytics
             icon: tautulli
         - Reclaimerr:
             href: https://reclaimerr.owl.red
+            siteMonitor: http://reclaimerr.media-apps.svc.cluster.local:8000/
             description: Media retention
             icon: mdi-broom
 
     - Transfers:
         - slskd:
             href: https://slskd.owl.red
+            siteMonitor: http://slskd.qbittorrent.svc.cluster.local:5030/
             description: Soulseek transfers
             icon: slskd
         - Soularr:
             href: https://soularr.owl.red
+            siteMonitor: http://soularr.qbittorrent.svc.cluster.local:8265/
             description: Lidarr and Soulseek integration
             icon: mdi-music-box
 
     - Home And Cameras:
         - Frigate:
             href: https://nvr.owl.red
+            siteMonitor: https://nas.owl.red:8971/
             description: Camera live view and recordings
             icon: frigate
         - Foyer Camera:
             href: http://wuuk-ptz-foyer.owl.red
+            ping: wuuk-ptz-foyer.owl.red
             description: Thingino camera management
             icon: mdi-cctv
         - Office Camera:
             href: http://wuuk-ptz-office.owl.red
+            ping: wuuk-ptz-office.owl.red
             description: Thingino camera management
             icon: mdi-cctv
         - Canon Printer:
             href: http://printer.owl.red
+            ping: printer.owl.red
             description: Printer management
             icon: mdi-printer
 
@@ -181,32 +230,39 @@ data:
             icon: librespeed
         - Guest Portal:
             href: https://guest.owl.red
-            description: Guest consent service; guest Wi-Fi paused
+            siteMonitor: https://guest.owl.red/
+            description: Guest consent service
             icon: mdi-wifi-lock
         - DiskSpeed:
             href: http://nas.owl.red:18888
+            siteMonitor: http://nas.owl.red:18888/
             description: NAS disk diagnostics
             icon: mdi-harddisk
 
     - Direct And Recovery:
         - Technitium Direct:
             href: http://ns1.owl.red:5380
+            siteMonitor: http://ns1.owl.red:5380/
             description: Native management network only
             icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
         - PDM Direct:
             href: https://pdm-direct.owl.red:8443
+            ping: 10.0.10.31
             description: Direct manager endpoint
             icon: proxmox
         - qBittorrent Direct:
             href: http://qbittorrent-direct.owl.red:8080
-            description: Restricted direct download UI
+            siteMonitor: http://qbittorrent.qbittorrent.svc.cluster.local:8080/
+            description: Restricted direct download UI; backend status
             icon: qbittorrent
         - FlareSolverr Status:
             href: http://flaresolverr.owl.red:8191
-            description: NAS-restricted solver API
+            siteMonitor: http://flaresolverr.flaresolverr.svc.cluster.local:8191/
+            description: NAS-restricted solver API; backend status
             icon: mdi-cloud-check
         - Open WebUI Direct:
-            href: http://nas.owl.red:11436
+            href: https://nas.owl.red:11436
+            siteMonitor: https://nas.owl.red:11436/health
             description: Direct NAS backend
             icon: open-webui
   bookmarks.yaml: |
@@ -229,6 +285,10 @@ data:
         - Unraid:
             - abbr: NAS
               href: http://nas.owl.red
+  kubernetes.yaml: |
+    mode: cluster
+    ingress: false
+    traefik: false
   widgets.yaml: |
     ---
     - search:
@@ -272,6 +332,60 @@ data:
       color: var(--cp-peach) !important;
     }
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: homepage-status
+  namespace: dashboards
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: homepage-status
+  namespace: traefik
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: homepage-status
+  namespace: traefik
+subjects:
+  - kind: ServiceAccount
+    name: homepage-status
+    namespace: dashboards
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: homepage-status
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: homepage-status
+  namespace: arr
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: homepage-status
+  namespace: arr
+subjects:
+  - kind: ServiceAccount
+    name: homepage-status
+    namespace: dashboards
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: homepage-status
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -281,7 +395,7 @@ metadata:
     app.kubernetes.io/name: homepage
     app.kubernetes.io/part-of: dashboards
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: homepage
@@ -291,6 +405,7 @@ spec:
         app.kubernetes.io/name: homepage
         app.kubernetes.io/part-of: dashboards
     spec:
+      serviceAccountName: homepage-status
       tolerations:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
@@ -344,6 +459,10 @@ spec:
               cpu: 300m
               memory: 512Mi
           volumeMounts:
+            - name: config
+              mountPath: /app/config/kubernetes.yaml
+              subPath: kubernetes.yaml
+              readOnly: true
             - name: config
               mountPath: /app/config/settings.yaml
               subPath: settings.yaml

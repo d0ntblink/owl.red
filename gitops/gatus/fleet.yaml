@@ -1,0 +1,105 @@
+defaultNamespace: gatus
+namespaceLabels:
+  pod-security.kubernetes.io/enforce: restricted
+  pod-security.kubernetes.io/enforce-version: v1.31
+dependsOn:
+  - name: owl-red-gitops-longhorn-config
+helm:
+  releaseName: gatus
+  disablePreProcess: true
+  chart: gatus
+  repo: https://twin.github.io/helm-charts
+  version: 1.5.0
+  values:
+    deployment:
+      strategy: Recreate
+      revisionHistoryLimit: 3
+    image:
+      tag: v5.34.0
+    serviceAccount:
+      create: false
+      autoMount: false
+    podSecurityContext:
+      fsGroup: 65534
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClassName: longhorn-appdata
+      mountPath: /data
+      accessModes: [ReadWriteOnce]
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}
+    tolerations:
+      - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+    config:
+      web:
+        address: 0.0.0.0
+        port: 8080
+      storage:
+        type: sqlite
+        path: /data/gatus.db
+        maximum-number-of-results: 1000
+        maximum-number-of-events: 100
+      metrics: true
+      endpoints:
+        - name: Homepage
+          group: Client Paths
+          url: https://home.owl.red/
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[STATUS] >= 200", "[STATUS] < 400", "[CERTIFICATE_EXPIRATION] > 168h"]
+        - name: LibreSpeed
+          group: Backend HTTP
+          url: http://librespeed.librespeed.svc.cluster.local/
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[STATUS] == 200"]
+        - name: Speedtest Tracker
+          group: Backend HTTP
+          url: http://speedtest.speedtest.svc.cluster.local/admin/login
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[STATUS] == 200"]
+        - name: Seerr
+          group: Backend HTTP
+          url: http://seerr.seerr.svc.cluster.local:5055/api/v1/status
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[STATUS] == 200"]
+        - name: Guest Portal
+          group: Client Paths
+          url: https://guest.owl.red/
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[STATUS] == 200", "[CERTIFICATE_EXPIRATION] > 168h"]
+        - name: Internal DNS
+          group: Infrastructure
+          url: 10.0.10.30
+          dns: {query-name: home.owl.red, query-type: A}
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[DNS_RCODE] == NOERROR", "[BODY] == 10.0.10.201"]
+        - name: NAS SMB Listener
+          group: Infrastructure
+          url: tcp://10.0.10.5:445
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[CONNECTED] == true"]
+        - name: NAS PostgreSQL Listener
+          group: Infrastructure
+          url: tcp://10.0.10.5:15432
+          interval: 60s
+          client: {timeout: 5s}
+          conditions: ["[CONNECTED] == true"]
