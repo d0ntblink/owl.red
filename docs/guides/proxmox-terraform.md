@@ -112,8 +112,14 @@ as boilerplate.
    and review the plan; do not infer "never starts/stops/recreates" from those flags.
 5. **Passthrough ownership is guest-specific:** VyOS hardware is declared in Terraform. NAS assignments above remain a protected historical/manual floor; do not move them or add a second writer during network work.
 6. **Talos management uses `/24` IPs** after the completed prefix migration. That does not activate tagged VLANs or authorize an unrelated root apply.
-7. **Talos source/ISO pin is not the live version:** 1.7.5 is recorded in `main.tf`
-   and `04-prep-talos-iso.yml`, while the October audit found 1.8.1 running. Reconcile
-   boot media, machine configuration, state and live versions before an explicit
-   upgrade plan; do not silently upgrade or downgrade during network work.
+7. **Talos generation matches the live version:** the 2026-10-30 read-only check
+   confirmed all four nodes run 1.8.1 / Kubernetes 1.31.1. Machine-configuration
+   generation and future ISO preparation now use 1.8.1. Existing VMs still have
+   1.7.5 recovery ISOs attached and boot from `scsi0` first; those references are
+   deliberately preserved until verified replacement media and a media-only
+   plan are reviewed. No guest reboot or machine-configuration apply was performed.
+   The private plan proposes only four machine-configuration updates, but comparison
+   with live configuration found additional HostDNS/label differences and the
+   worker's cluster-name difference. Resolve these deliberately before applying;
+   valid Terraform and matching version pins do not prove no configuration drift.
 8. **K8s control-plane VIP `10.0.10.20`** (`cluster_endpoint`) is real and now documented in the README service-VIP table.

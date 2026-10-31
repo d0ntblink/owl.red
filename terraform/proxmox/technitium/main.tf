@@ -42,7 +42,7 @@ provider "proxmox" {}
 locals {
   cluster_name     = "owl-k8s"
   cluster_endpoint = "https://10.0.10.20:6443" # Control Plane VIP
-  talos_version    = "v1.7.5"
+  talos_version    = "v1.8.1"
   gateway          = "10.0.10.1"
   nameservers      = ["10.0.10.30"]
 

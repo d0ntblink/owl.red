@@ -3,7 +3,7 @@
   hosts: proxmox_hosts
   gather_facts: false
   vars:
-    talos_version: "v1.7.5"
+    talos_version: "v1.8.1"
     talos_iso_url: "https://github.com/siderolabs/talos/releases/download/{{ talos_version }}/metal-amd64.iso"
     dest_iso_name: "talos-{{ talos_version }}-metal-amd64.iso"
     proxmox_iso_dir: "/var/lib/vz/template/iso"

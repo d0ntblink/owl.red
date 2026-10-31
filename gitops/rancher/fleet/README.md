@@ -61,19 +61,16 @@ kubectl get bundle -A | rg owl-red
 kubectl get bundledeployment -A | rg owl-red
 ```
 
-Fleet should begin reconciling:
+The complete desired path list is in the matching GitRepo manifest above.
+Compare it with the live `.spec.paths` before applying; an omitted existing
+path can remove a working bundle from GitOps management and trigger pruning.
+Do not use an old abbreviated list to replace the active path set.
 
-- `gitops/technitium-ingress`
-- `gitops/metallb`
-- `gitops/cert-manager-controller`
-- `gitops/cert-manager`
-- `gitops/traefik`
-- `gitops/dashboards`
-- `gitops/bitwarden-operator`
-- `gitops/bitwarden-secrets`
-- `gitops/csi-smb`
-- `gitops/pdm`
-- `gitops/platform-resilience`
+The 2026-10-30 read-only check confirmed that the live GitRepo already includes
+`gitops/guest-portal`, whose deployment is Ready. Both source templates retain
+that path. `gitops/gwn-manager` is declared in source but remains absent from the
+live path list; adopt it only through the reviewed publication/update procedure.
+Adding the portal to source does not require recreating its deployment or secrets.
 
 ## Local Agent Scheduling
 

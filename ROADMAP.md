@@ -50,6 +50,10 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
   Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
+- [ ] When the cameras are powered on, verify each camera's current Grandstream
+  2.4 GHz BSSID and update the Thingino association guard. Then verify Wi-Fi,
+  DHCP, ONVIF and Frigate streams; do not reuse the retired AP's BSSID or reset
+  the cameras to bypass the guard. Camera work is deferred while they are off.
 - [ ] Verify Frigate retention cleanup and native UI exports for footage kept
   longer without changing production media or adding a custom camera-SD pipeline.
 - [ ] Activate the Open WebUI Fleet bundle and internal DNS, complete owner/API
@@ -136,8 +140,13 @@ Reference: [Mailgun configuration](terraform/mailgun/README.md).
 
 - [ ] Complete protected import/no-op reconciliation for existing NAS/PDM
   workloads where required; do not recreate guests or alter passthrough to adopt them.
-- [ ] Align Talos source/image pins with the selected running baseline and
-  document bootstrap, configuration, upgrades and health checks without regenerating PKI.
+- [ ] Replace the attached Talos 1.7.5 recovery ISOs with verified 1.8.1 media
+  through a reviewed media-only plan. Preserve disk-first boot and existing PKI;
+  machine-configuration generation and future ISO preparation use 1.8.1.
+- [ ] Reconcile the Talos Terraform plan with the live machine configurations
+  before any apply: resolve HostDNS forwarding, legacy Longhorn/load-balancer
+  labels and the worker's cluster-name difference. Document bootstrap, upgrades
+  and health checks without regenerating PKI or treating valid source as convergence.
 - [ ] Complete reusable VyOS deployment, drift/removal and recovery procedures;
   keep Terraform as VM-lifecycle control and Ansible/native configuration as the router lane.
 - [ ] Resolve the guest gateway provider's boot-flag discrepancy without a blind
