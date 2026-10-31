@@ -23,6 +23,23 @@ spec:
   volumeName: speedtest-config-nas
   resources: {requests: {storage: 2Gi}}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: speedtest-health, namespace: speedtest}
+data:
+  owl-health.conf: |
+    server {
+      listen 8081;
+      server_name _;
+      access_log off;
+      error_log /dev/stderr warn;
+      location = /healthz {
+        default_type text/plain;
+        return 200 "ok\n";
+      }
+      location / { return 404; }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: speedtest, namespace: speedtest}
@@ -72,18 +89,33 @@ spec:
             - {name: SPEEDTEST_SCHEDULE, value: "0 */6 * * *"}
             - {name: PRUNE_RESULTS_OLDER_THAN, value: "0"}
             - {name: PUBLIC_DASHBOARD, value: "false"}
-          ports: [{name: http, containerPort: 80}]
+          ports:
+            - {name: http, containerPort: 80}
+            - {name: health, containerPort: 8081}
           startupProbe:
             httpGet: {path: /admin/login, port: http}
             periodSeconds: 5
             failureThreshold: 60
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: {path: /admin/login, port: http}
             periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
           volumeMounts:
             - {name: config, mountPath: /config}
+            - {name: logs, mountPath: /config/log}
+            - {name: tmp, mountPath: /tmp}
+            - {name: health, mountPath: /etc/nginx/http.d/owl-health.conf, subPath: owl-health.conf, readOnly: true}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: config}}
+        - {name: logs, emptyDir: {sizeLimit: 128Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 128Mi}}
+        - {name: health, configMap: {name: speedtest-health}}
 ---
 apiVersion: v1
 kind: Service

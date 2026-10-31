@@ -45,6 +45,10 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Home Assistant And Applications
 
+- [ ] Deploy the selected Gatus health monitor after defining its independent
+  placement, history storage and notification channel. Define backend versus
+  client-path checks and monitoring placement for cluster/NAS outages.
+  Homepage's deployed HTTP indicators do not provide background alerts.
 - [ ] Complete owner onboarding at `https://ha.owl.red` and review the intended
   client access policy before expanding beyond administration sources.
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
@@ -82,6 +86,11 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   static-appliance addressing and protected recovery/access ports.
 - [ ] Add narrowly scoped device-specific and multicast policies where required;
   verify required media, printing and discovery flows without broad management access.
+- [ ] Implement and qualify guest casting to the Shield only, for internet and
+  local media after portal consent. Restrict discovery and verified control/media
+  flows through openNDS and VyOS; deny unrelated Shield services and every other
+  private destination. Keep the TV offline. No application-name restriction is
+  required; Cast playback controls remain part of the permitted protocol.
 - [ ] Complete an RF/coverage walk and broader handset captive-browser checks.
   The owner-confirmed browser login and automated guest acceptance already passed;
   these do not establish coverage, roaming or universal handset compatibility.

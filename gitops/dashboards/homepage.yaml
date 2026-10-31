@@ -171,10 +171,12 @@ data:
     - Network Tools:
         - Speedtest Tracker:
             href: https://speedtest.owl.red
+            siteMonitor: http://speedtest.speedtest.svc.cluster.local/admin/login
             description: Scheduled WAN measurements
             icon: speedtest-tracker
         - LibreSpeed:
             href: https://librespeed.owl.red
+            siteMonitor: http://librespeed.librespeed.svc.cluster.local/
             description: Browser speed test
             icon: librespeed
         - Guest Portal:

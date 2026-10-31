@@ -519,6 +519,49 @@ into the new service. Private legacy-definition/template preimages are under
 Plex, Frigate, Open WebUI/Ollama, shared PostgreSQL, DiskSpeed and DDNS stay on
 the NAS; the remaining selected applications now run on Kubernetes.
 
+### LibreSpeed Runtime Isolation And Health
+
+The workload source keeps persistent `/config` on the existing NAS claim and
+PostgreSQL unchanged, but overlays `/config/log` and `/tmp` with separate
+128 MiB node-local `emptyDir` volumes. Logs and temporary files are disposable;
+they do not survive pod replacement and are not copied over retained NAS files.
+The kubelet monitors these size limits; they are not NAS quotas or backups.
+Existing image log rotation remains responsible for bounded file-log growth.
+
+A Git-managed nginx snippet outside `/config` serves `/healthz` on pod port
+8081 without reading NAS files or contacting PostgreSQL. The Service exposes
+only the normal port 80. Startup and readiness still check the actual page;
+liveness attempts a restart after six consecutive checks, 20 seconds apart,
+with a three-second timeout. This distinguishes a web-server hang from a
+temporary dependency outage, but cannot guarantee termination of kernel-blocked
+processes or repair a broken SMB client.
+
+The pinned image passed an isolated empty-config test and recovered from a
+simulated stopped nginx process with shortened liveness timing. That fixture
+mounted no production PVC or credentials and was removed after acceptance.
+It is not a qualification of SMB-disconnect recovery.
+
+The runtime changes are deployed for LibreSpeed and Speedtest Tracker following
+worker recovery on 2026-10-30. Normal termination initially failed, and Talos's
+reboot sequence reported a Reclaimerr stop timeout. Subsequent inspection through
+Proxmox and Talos confirmed a changed guest boot identity, absent old application
+pods and detached Longhorn volumes before any writer was restored. This
+restoration issued no additional reset or NAS/Proxmox-host reboot.
+
+All fifteen paused application Deployments were restored to one Ready replica,
+including LibreSpeed, whose earlier paused state was replaced by its approved
+runtime configuration. Native LibreSpeed and Speedtest PostgreSQL checks passed,
+and all ten Longhorn volumes reattached healthy. Persistent NAS config and
+database references were preserved; no database was reset. A restart and these
+checks establish recovery, not the original cause of the CIFS hang or proof of
+every application's data integrity. Retained private recovery records are under
+`~/.local/state/owl-red/worker-recovery-rf3y1n2q/`.
+
+Homepage displays internal HTTP indicators, not background notifications.
+Reviewed source publication is still required to preserve the deployed health
+changes through future Fleet reconciliation. Never restore replicas or retry a
+power operation after an unknown result without checking actual state first.
+
 ## Fresh Speedtest Tracker
 
 The owner requested a clean replacement for the broken legacy tracker rather
