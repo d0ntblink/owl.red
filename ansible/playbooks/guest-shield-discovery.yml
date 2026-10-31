@@ -1,0 +1,112 @@
+---
+- name: Apply only the approved guest Shield discovery and control additions
+  hosts: guest_portal_stage
+  become: true
+  gather_facts: false
+  vars:
+    shield_cast_sources: "{{ playbook_dir }}/../files/guest-casting"
+  tasks:
+    - name: Require the approved retained gateway
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 104
+          - ansible_host == '127.0.0.1'
+          - ansible_port | int == 22104
+          - shield_cast_allowed | default(false) | bool
+
+    - name: Read existing kernel guard without changing it
+      ansible.builtin.command:
+        argv: [nft, -j, list, table, inet, owl_portal_guard]
+      register: shield_guard_before
+      changed_when: false
+
+    - name: Refuse duplicate or unknown prior casting additions
+      ansible.builtin.assert:
+        that:
+          - >-
+            (shield_guard_before.stdout | from_json).nftables
+            | selectattr('rule', 'defined') | map(attribute='rule')
+            | selectattr('comment', 'defined')
+            | selectattr('comment', 'match', '^owl-shield-') | list | length == 0
+
+    - name: Validate only the proposed additions against the current kernel
+      ansible.builtin.command:
+        argv: [nft, -c, -f, '-']
+        stdin: "{{ lookup('ansible.builtin.file', shield_cast_sources + '/control.nft') }}"
+      changed_when: false
+
+    - name: Install the maintained discovery daemon without automatic service starts
+      ansible.builtin.apt:
+        name: [avahi-daemon, python3-dnspython]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        install_recommends: false
+        policy_rc_d: 101
+
+    - name: Find existing static advertisements
+      ansible.builtin.find:
+        paths: /etc/avahi/services
+        patterns: '*.service'
+        file_type: file
+      register: shield_service_files
+
+    - name: Refuse unrelated discovery advertisements
+      ansible.builtin.assert:
+        that:
+          - shield_service_files.files | map(attribute='path') | difference(['/etc/avahi/services/shield.service']) | length == 0
+
+    - name: Configure guest-only publication without reflection
+      ansible.builtin.copy:
+        src: "{{ shield_cast_sources }}/avahi-daemon.conf"
+        dest: /etc/avahi/avahi-daemon.conf
+        mode: '0644'
+        backup: true
+
+    - name: Configure only the observed Shield host mapping
+      ansible.builtin.copy:
+        src: "{{ shield_cast_sources }}/hosts"
+        dest: /etc/avahi/hosts
+        mode: '0644'
+        backup: true
+
+    - name: Publish only the observed Shield service
+      ansible.builtin.copy:
+        src: "{{ shield_cast_sources }}/shield.service"
+        dest: /etc/avahi/services/shield.service
+        mode: '0644'
+
+    - name: Preserve discovery input across the existing closed boot guard
+      ansible.builtin.blockinfile:
+        path: /etc/owl-guest-portal/guard.nft
+        marker: '# {mark} OWL-SHIELD-DISCOVERY'
+        insertafter: EOF
+        block: "{{ lookup('ansible.builtin.file', shield_cast_sources + '/control.nft').splitlines()[0] }}"
+
+    - name: Preserve control additions after native forwarding activation
+      ansible.builtin.blockinfile:
+        path: /etc/owl-guest-portal/enable-forward.nft
+        marker: '# {mark} OWL-SHIELD-CONTROL'
+        insertafter: EOF
+        block: "{{ lookup('ansible.builtin.file', shield_cast_sources + '/control.nft').splitlines()[1:3] | join('\n') }}"
+
+    - name: Persist only the supported native local discovery port
+      ansible.builtin.blockinfile:
+        path: /etc/opennds/opennds.conf
+        marker: '# {mark} OWL-SHIELD-NATIVE-MDNS'
+        insertafter: '^\s*FirewallRule allow udp port 67\s*$'
+        block: '    FirewallRule allow udp port 5353'
+        mode: '0600'
+        backup: true
+      no_log: true
+
+    - name: Atomically bootstrap the validated rules without restarting native sessions
+      ansible.builtin.command:
+        argv: [nft, -f, '-']
+        stdin: "{{ lookup('ansible.builtin.file', shield_cast_sources + '/control.nft') }}"
+
+    - name: Start only the new guest discovery daemon
+      ansible.builtin.systemd_service:
+        name: avahi-daemon
+        enabled: true
+        state: started

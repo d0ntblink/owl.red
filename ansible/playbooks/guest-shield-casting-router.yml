@@ -1,0 +1,116 @@
+---
+- name: Qualify the bounded Shield control exception under native confirmed commits
+  hosts: edge_router
+  gather_facts: false
+  vars:
+    shield_cast_phase: plan
+  tasks:
+    - name: Require the approved router and exact phase
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 103
+          - ansible_host == '10.0.10.1'
+          - shield_cast_allowed | default(false) | bool
+          - shield_cast_phase in ['plan', 'prepare', 'confirm', 'remove', 'confirm-removal']
+          - shield_cast_phase != 'confirm' or shield_cast_acceptance_passed | default(false) | bool
+          - shield_cast_phase != 'confirm-removal' or shield_cast_rollback_passed | default(false) | bool
+
+    - name: Verify native rollback reloads configuration without rebooting
+      ansible.builtin.raw: >-
+        test "$(/bin/cli-shell-api returnActiveValue system config-management commit-confirm action)" = reload
+      changed_when: false
+
+    - name: Require the unused rule slot for a new trial
+      ansible.builtin.raw: >-
+        /bin/vbash -c 'if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 6115; then builtin exit 1; fi'
+      changed_when: false
+      when: shield_cast_phase in ['plan', 'prepare']
+
+    - name: Require exact owned control policy before confirmation or removal
+      ansible.builtin.raw: |
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 description)" = OWL-GUEST-SHIELD-CAST &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 action)" = accept &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 inbound-interface name)" = eth3 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 outbound-interface name)" = eth1.20 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 source address)" = 10.0.30.0/24 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 destination address)" = 10.0.20.100 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 destination port)" = 8009 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 6115 protocol)" = tcp
+      changed_when: false
+      when: shield_cast_phase in ['confirm', 'remove']
+
+    - name: Plan or temporarily commit only the observed Cast control path
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        output=$(
+        set firewall ipv4 forward filter rule 6115 description OWL-GUEST-SHIELD-CAST
+        set firewall ipv4 forward filter rule 6115 action accept
+        set firewall ipv4 forward filter rule 6115 inbound-interface name eth3
+        set firewall ipv4 forward filter rule 6115 outbound-interface name eth1.20
+        set firewall ipv4 forward filter rule 6115 source address 10.0.30.0/24
+        set firewall ipv4 forward filter rule 6115 destination address 10.0.20.100
+        set firewall ipv4 forward filter rule 6115 destination port 8009
+        set firewall ipv4 forward filter rule 6115 protocol tcp
+        )
+        if [[ "$output" == *"Set failed"* ]]; then discard; builtin exit 1; fi
+        compare
+        {% if shield_cast_phase == 'plan' %}
+        discard
+        {% else %}
+        confirmation=$(commit-confirm 5 no-prompt)
+        printf "%s\n" "$confirmation"
+        if [[ "$confirmation" != *"Initialized commit-confirm;"* ]]; then discard; builtin exit 1; fi
+        {% endif %}
+        exit
+        '
+      changed_when: shield_cast_phase == 'prepare'
+      when: shield_cast_phase in ['plan', 'prepare']
+
+    - name: Confirm only verified control and isolation acceptance
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        confirm || builtin exit 1
+        save || builtin exit 1
+        exit
+        '
+      when: shield_cast_phase == 'confirm'
+
+    - name: Remove only the exact owned Shield rule
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        output=$(delete firewall ipv4 forward filter rule 6115)
+        if [[ "$output" == *"Delete failed"* ]]; then discard; builtin exit 1; fi
+        compare
+        confirmation=$(commit-confirm 5 no-prompt)
+        printf "%s\n" "$confirmation"
+        if [[ "$confirmation" != *"Initialized commit-confirm;"* ]]; then discard; builtin exit 1; fi
+        exit
+        '
+      when: shield_cast_phase == 'remove'
+
+    - name: Require independently verified active rule absence before saving removal
+      ansible.builtin.raw: >-
+        /bin/vbash -c 'if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 6115; then builtin exit 1; fi'
+      changed_when: false
+      when: shield_cast_phase == 'confirm-removal'
+
+    - name: Confirm only the verified native removal
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        confirm || builtin exit 1
+        save || builtin exit 1
+        exit
+        '
+      when: shield_cast_phase == 'confirm-removal'

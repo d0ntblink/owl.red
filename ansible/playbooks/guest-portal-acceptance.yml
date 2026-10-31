@@ -20,6 +20,8 @@
 
     - name: Exercise genuine production DHCP and native HTTPS consent
       ansible.builtin.command: python3 /usr/local/libexec/guest-portal-acceptance.py
+      environment:
+        OWL_SHIELD_CAST_EXPECTED: "{{ shield_cast_expected | default(false) | bool | ternary('1', '0') }}"
       register: portal_acceptance
       changed_when: true
 
