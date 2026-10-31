@@ -28,7 +28,7 @@ Homepage is the chosen dashboard and is wired with:
 
 ## Service Health Indicators
 
-All 45 existing services have deployed status indicators: 21 HTTP checks,
+All 46 services have deployed status indicators: 22 HTTP checks,
 17 host pings and 7 Kubernetes pod-readiness indicators. HTTP checks use native
 backend routes where authentication or ingress restrictions would otherwise
 misrepresent availability. Pod readiness covers Traefik and authenticated Arr
@@ -37,8 +37,7 @@ to pods in `traefik` and `arr` only. No Secrets access or write permissions are
 granted. Ping indicates host reachability, not application health; Unraid stays
 ping-only until its certificate is repaired.
 
-The prepared Gatus entry adds a 22nd HTTP check, bringing source coverage to
-46 services; it is not live until the Gatus and Homepage changes are published.
+The Gatus entry uses its native `/health` route and was verified in the live UI.
 Browser links remain their normal hostnames; no administration allowlist is
 weakened to permit monitoring. A failed monitor
 can display 500 for a connection timeout; this does not mean the application
@@ -47,11 +46,13 @@ itself returned HTTP 500.
 These checks show backend HTTP availability from the Homepage pod, not complete
 client DNS/TLS/ingress or authenticated application functionality. They do not
 send background alerts or replace Kubernetes liveness. The selected Gatus
-monitor is prepared as separate Fleet bundles with retained Longhorn SQLite
+monitor is deployed as separate Fleet bundles with retained Longhorn SQLite
 history and notifications disabled. Its in-cluster placement cannot report a
 total cluster outage. See [Gatus](../gatus/README.md).
 
 ConfigMap changes need one controlled rollout because files use `subPath`.
 Preserve all other live ConfigMap data and the existing replica count. The
-health-indicator change was applied locally; reviewed Git publication remains
-required to retain it through future Fleet reconciliation.
+health-indicator changes are published. The earlier imperative service-list
+update caused an SSA conflict; its full guarded ConfigMap is now owned by
+`fleetagent` again. Do not introduce another imperative field owner when
+updating the service list. A correct live mount is not proof of Fleet convergence.

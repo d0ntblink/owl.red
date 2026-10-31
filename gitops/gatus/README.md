@@ -1,6 +1,6 @@
 # Gatus
 
-Prepared Fleet deployment for `https://gatus.owl.red`; not yet deployed.
+Fleet deployment for `https://gatus.owl.red`, accepted on 2026-10-31.
 The owner selected Kubernetes placement and dashboard/history only.
 
 ## Deployment
@@ -40,18 +40,28 @@ Gatus can record NAS service outages while Kubernetes and Longhorn are working.
 It cannot observe or send an alert during a total Kubernetes/Longhorn outage.
 Three storage replicas are neither an independent monitor nor a backup.
 
-## Publication And Acceptance
+## Operations And Acceptance
 
-Publish only the reviewed Gatus, ingress, Fleet-path, DNS and Homepage changes.
+Publish only reviewed Gatus, ingress, Fleet-path, DNS and Homepage changes.
 Do not install a competing Helm release or overwrite the live GitRepo's paths
 with an unchecked template. Source publication also triggers Technitium's
 existing full synchronization and DHCP quiescence behavior.
 
 Acceptance requires Fleet ownership and a ready single replica, a bound retained
 claim, native health HTTP 200, persisted SQLite history, trusted HTTPS through
-the administration allowlist and a rendered Homepage entry. An unauthorised
-source must remain denied. API-token absence and security settings are checked
-in the rendered upstream chart; production acceptance remains pending.
+the administration allowlist and a rendered Homepage entry. These passed for
+the deployed monitor: all eight initial checks were healthy, historical result
+timestamps survived a controlled `Recreate`, and an unapproved in-cluster HTTPS
+source received 403. The volume is healthy with three replicas and both Gatus
+Fleet bundles have matching desired/applied deployment IDs. No API token is
+mounted, and the restricted security settings were checked live.
+
+Homepage's earlier imperative service-list update blocked Fleet with an SSA
+ownership conflict. The complete guarded ConfigMap was transferred back to the
+actual `fleetagent` manager, preserving all unrelated data. A controlled mount
+refresh then exposed the healthy Gatus entry while keeping Homepage at one
+replica. Fleet convergence for the dashboard bundle must be checked separately
+from an HTTP success or a correct mounted file.
 
 Rollback stops the new writer and removes only the new route/monitor resources.
 Keep the retained claim and its volume unless deletion is separately approved.
