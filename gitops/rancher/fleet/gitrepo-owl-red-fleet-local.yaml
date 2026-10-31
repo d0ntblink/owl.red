@@ -28,6 +28,7 @@ spec:
     - gitops/speedtest
     - gitops/librespeed
     - gitops/arr
+    - gitops/guest-portal
     - gitops/pdm
     - gitops/gwn-manager
     - gitops/platform-resilience
