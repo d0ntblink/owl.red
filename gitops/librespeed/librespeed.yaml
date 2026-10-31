@@ -36,6 +36,23 @@ subsets:
   - addresses: [{ip: 10.0.10.5}]
     ports: [{name: postgres, port: 15432, protocol: TCP}]
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: librespeed-health, namespace: librespeed}
+data:
+  owl-health.conf: |
+    server {
+      listen 8081;
+      server_name _;
+      access_log off;
+      error_log /dev/stderr warn;
+      location = /healthz {
+        default_type text/plain;
+        return 200 "ok\n";
+      }
+      location / { return 404; }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: librespeed, namespace: librespeed}
@@ -75,18 +92,33 @@ spec:
             - {name: DB_NAME, value: librespeed}
             - {name: DB_USERNAME, value: librespeed}
             - {name: CUSTOM_RESULTS, value: "true"}
-          ports: [{name: http, containerPort: 80}]
+          ports:
+            - {name: http, containerPort: 80}
+            - {name: health, containerPort: 8081}
           startupProbe:
             httpGet: {path: /, port: http}
             periodSeconds: 5
             failureThreshold: 36
+            timeoutSeconds: 3
           readinessProbe:
             httpGet: {path: /, port: http}
             periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
           volumeMounts:
             - {name: config, mountPath: /config}
+            - {name: logs, mountPath: /config/log}
+            - {name: tmp, mountPath: /tmp}
+            - {name: health, mountPath: /etc/nginx/http.d/owl-health.conf, subPath: owl-health.conf, readOnly: true}
       volumes:
         - {name: config, persistentVolumeClaim: {claimName: config}}
+        - {name: logs, emptyDir: {sizeLimit: 128Mi}}
+        - {name: tmp, emptyDir: {sizeLimit: 128Mi}}
+        - {name: health, configMap: {name: librespeed-health}}
 ---
 apiVersion: v1
 kind: Service
