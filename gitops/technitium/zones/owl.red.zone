@@ -1,7 +1,7 @@
 $ORIGIN owl.red.
 $TTL 300
 @ IN SOA ns1.owl.red. hostmaster.owl.red. (
-  2026102703 ; serial (update on every record change)
+  2026103101 ; serial (update on every record change)
   3600       ; refresh
   600        ; retry
   1209600    ; expire
@@ -13,6 +13,7 @@ ns1             IN A 10.0.10.30
 dns             IN A 10.0.10.201
 rancher         IN A 10.0.10.201
 home            IN A 10.0.10.201
+gatus           IN A 10.0.10.201
 gwn             IN A 10.0.10.201
 gwn-direct      IN A 10.0.10.32
 ap              IN A 10.0.10.107

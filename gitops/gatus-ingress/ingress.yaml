@@ -1,0 +1,37 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: gatus-administration
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gatus
+spec:
+  secretName: gatus-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames: [gatus.owl.red]
+  privateKey:
+    rotationPolicy: Always
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gatus
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`gatus.owl.red`)
+      kind: Rule
+      middlewares:
+        - name: gatus-administration
+      services:
+        - name: gatus
+          port: 80
+  tls:
+    secretName: gatus-tls

@@ -1,0 +1,5 @@
+defaultNamespace: gatus
+dependsOn:
+  - name: owl-red-gitops-gatus
+  - name: owl-red-gitops-cert-manager
+  - name: owl-red-gitops-traefik
