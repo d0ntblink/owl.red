@@ -31,6 +31,14 @@ def require(arguments):
     return result.stdout
 
 
+def tcp_reachable(address, port):
+    try:
+        with socket.create_connection((address, port), timeout=2):
+            return True
+    except OSError:
+        return False
+
+
 def wait_for_native_auth(client_mac, started, deadline):
     observer = subprocess.Popen(['inotifywait', '-m', '-e', 'modify,create,moved_to', '--format', '%f', '/tmp/ndslog'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     selector = selectors.DefaultSelector()
@@ -55,6 +63,23 @@ def wait_for_native_auth(client_mac, started, deadline):
 def client_acceptance(directory):
     address = (directory / 'lease').read_text().splitlines()[0]
     ipaddress.IPv4Address(address)
+    shield_cast_expected = os.environ.get('OWL_SHIELD_CAST_EXPECTED') == '1'
+    if shield_cast_expected:
+        import dns.resolver
+
+        mdns = dns.resolver.Resolver(configure=False)
+        mdns.nameservers = ['10.0.30.1']
+        mdns.port = 5353
+        mdns.timeout = 2
+        mdns.lifetime = 2
+        instance = 'SHIELD-Android-TV-48ca569af8f5ca9a97a5cac5a1dd6b35._googlecast._tcp.local.'
+        host = '48ca569a-f8f5-ca9a-97a5-cac5a1dd6b35.local.'
+        assert [record.target.canonicalize().to_text() for record in mdns.resolve('_services._dns-sd._udp.local.', 'PTR')] == ['_googlecast._tcp.local.'], 'Unexpected guest discovery services'
+        assert [record.target.canonicalize().to_text() for record in mdns.resolve('_googlecast._tcp.local.', 'PTR')] == [instance.lower()], 'Unexpected Cast receiver inventory'
+        service = mdns.resolve(instance, 'SRV')
+        assert len(service) == 1 and service[0].priority == 0 and service[0].weight == 0 and service[0].port == 8009 and service[0].target.canonicalize().to_text() == host, 'Unexpected Shield control endpoint'
+        assert [record.address for record in mdns.resolve(host, 'A')] == ['10.0.20.100'], 'Unexpected Shield address'
+        assert not tcp_reachable('10.0.20.100', 8009), 'Unauthenticated Shield control is open'
     answer = require(['dig', '+short', '+time=3', '+tries=1', '@10.0.30.30', 'example.com', 'A'])
     server = next(line for line in answer.splitlines() if line and line[0].isdigit())
     ipaddress.IPv4Address(server)
@@ -64,7 +89,7 @@ def client_acceptance(directory):
     location = next(line.split(':', 1)[1].strip() for line in discovery.splitlines() if line.lower().startswith('location:'))
     target = urllib.parse.urlsplit(location)
     assert target.scheme == 'https' and target.hostname == 'guest.owl.red' and target.port in (None, 443)
-    journal = require(['journalctl', '-u', 'opennds', '-o', 'json', '-n', '200', '--no-pager'])
+    journal = require(['journalctl', '-u', 'opennds', '-b', '-g', 'nat_traversal_poll_interval', '-o', 'json', '--no-pager'])
     entered = int(require(['systemctl', 'show', 'opennds', '-p', 'ActiveEnterTimestampMonotonic', '--value']).strip())
     assert any(int(event.get('__MONOTONIC_TIMESTAMP', '0')) >= entered and 'nat_traversal_poll_interval' in event.get('MESSAGE', '') for event in map(json.loads, journal.splitlines())), 'Authmon startup clearing is not complete'
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -85,6 +110,10 @@ def client_acceptance(directory):
         assert response.status == 200
     wait_for_native_auth(CLIENT_MAC, started, time.monotonic() + 25)
     assert run(request).returncode == 0, 'Consented production client has no internet access'
+    if shield_cast_expected:
+        assert tcp_reachable('10.0.20.100', 8009), 'Consented client cannot reach Shield control'
+        for port in [22, 5555, 8008]:
+            assert not tcp_reachable('10.0.20.100', port), 'Unapproved Shield service is reachable'
     for destination in ['10.0.10.1', '10.0.20.1', '10.0.40.1', '10.0.50.1']:
         assert run(['curl', '--noproxy', '*', '-ksS', '--connect-timeout', '1', '--max-time', '2', 'https://' + destination + '/', '-o', '/dev/null']).returncode != 0, 'Guest reached a private gateway'
     administration = run(['curl', '--noproxy', '*', '-sS', '--max-time', '5', '--resolve', 'dns.owl.red:443:10.0.10.201', '-o', '/dev/null', '-w', '%{http_code}', 'https://dns.owl.red/'])
@@ -99,6 +128,7 @@ def client_acceptance(directory):
             response.begin()
             assert response.status == 200 and not response.will_close
             response.read()
+            (directory / 'deauth-issued').touch(exist_ok=False)
             deauth = require(['ndsctl', 'deauth', address])
             assert 'deauthenticated.' in deauth
             try:
@@ -108,11 +138,15 @@ def client_acceptance(directory):
                 leaked = False
             assert not leaked, 'Revoked production TLS connection still passes application data'
     assert run(request).returncode != 0, 'Revoked production client regained internet access'
+    if shield_cast_expected:
+        assert not tcp_reachable('10.0.20.100', 8009), 'Revoked client retained Shield control access'
     require(['ip', '-6', 'address', 'add', 'fdca:30::2/64', 'dev', 'owl-accept-nic', 'nodad'])
     require(['ip', '-6', 'route', 'add', 'default', 'via', 'fdca:30::1'])
     require(['ip', '-6', 'neigh', 'replace', 'fdca:30::1', 'lladdr', '02:6f:77:30:03:04', 'nud', 'permanent', 'dev', 'owl-accept-nic'])
     assert run(['ping', '-6', '-c', '1', '-W', '2', '2606:4700:4700::1111']).returncode != 0
     print('PRODUCTION_GUEST_DHCP_HTTPS_CONSENT_REVOKE_PRIVATE_IPV6_PASS')
+    if shield_cast_expected:
+        print('PRODUCTION_GUEST_SHIELD_DISCOVERY_CONSENT_REVOKE_ISOLATION_PASS')
 
 
 def main():
@@ -164,6 +198,9 @@ def main():
         assert result.returncode == 0, 'Production client acceptance failed; private diagnostics: ' + str(directory)
         print(result.stdout.strip())
     finally:
+        if (directory / 'lease').exists() and not (directory / 'deauth-issued').exists():
+            (directory / 'deauth-issued').touch(exist_ok=False)
+            run(['ndsctl', 'deauth', (directory / 'lease').read_text().strip()])
         if dhcp is not None:
             dhcp.terminate()
             dhcp.communicate(timeout=5)

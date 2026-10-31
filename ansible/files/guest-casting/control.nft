@@ -1,0 +1,4 @@
+insert rule inet owl_portal_guard input iifname "br-guest" ip saddr @technitium_leases ip daddr { 10.0.30.1, 224.0.0.251 } udp dport 5353 counter accept comment "owl-shield-discovery"
+insert rule inet owl_portal_guard forward iifname "br-guest" oifname "portal-transit" ip saddr 10.0.30.0/24 ip daddr 10.0.20.100 tcp dport 8009 ct state { new, established } meta mark & 0x30000 == 0x30000 counter accept comment "owl-shield-control-out"
+insert rule inet owl_portal_guard forward iifname "portal-transit" oifname "br-guest" ip saddr 10.0.20.100 ip daddr 10.0.30.0/24 tcp sport 8009 ct state established meta mark & 0x30000 == 0x30000 counter accept comment "owl-shield-control-in"
+insert rule ip nds_filter ndsRTR iifname "br-guest" ip saddr 10.0.30.0/24 ip daddr { 10.0.30.1, 224.0.0.251 } udp dport 5353 counter accept comment "owl-shield-nds-input"

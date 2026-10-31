@@ -1,0 +1,84 @@
+---
+- name: Remove only the approved guest Shield trial additions
+  hosts: guest_portal_stage
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require the approved retained gateway rollback
+      ansible.builtin.assert:
+        that:
+          - vm_id | int == 104
+          - ansible_host == '127.0.0.1'
+          - shield_cast_rollback_allowed | default(false) | bool
+
+    - name: Stop and disable only newly introduced discovery activation
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: false
+        state: stopped
+      loop: [avahi-daemon.service, avahi-daemon.socket]
+
+    - name: Read the current gateway rule handles
+      ansible.builtin.command:
+        argv: [nft, -j, list, table, inet, owl_portal_guard]
+      register: shield_rollback_guard
+      changed_when: false
+
+    - name: Read only the native local-input table for the bootstrap rule
+      ansible.builtin.command:
+        argv: [nft, -j, list, table, ip, nds_filter]
+      register: shield_native_rollback_guard
+      changed_when: false
+
+    - name: Select the owned native local-input bootstrap rule
+      ansible.builtin.set_fact:
+        shield_native_rollback_rules: >-
+          {{ (shield_native_rollback_guard.stdout | from_json).nftables
+             | selectattr('rule', 'defined') | map(attribute='rule')
+             | selectattr('comment', 'defined')
+             | selectattr('comment', 'equalto', 'owl-shield-nds-input') | list }}
+
+    - name: Select only the three owned trial rules
+      ansible.builtin.set_fact:
+        shield_rollback_rules: >-
+          {{ (shield_rollback_guard.stdout | from_json).nftables
+             | selectattr('rule', 'defined') | map(attribute='rule')
+             | selectattr('comment', 'defined')
+             | selectattr('comment', 'in', ['owl-shield-discovery', 'owl-shield-control-out', 'owl-shield-control-in'])
+             | list }}
+
+    - name: Refuse an incomplete or changed rollback boundary
+      ansible.builtin.assert:
+        that:
+          - shield_rollback_rules | length == 3
+          - shield_rollback_rules | map(attribute='chain') | difference(['input', 'forward']) | length == 0
+          - shield_native_rollback_rules | length == 1
+          - shield_native_rollback_rules[0].chain == 'ndsRTR'
+
+    - name: Atomically remove only the identified trial rules
+      ansible.builtin.command:
+        argv: [nft, -f, '-']
+        stdin: |
+          {% for rule in shield_rollback_rules %}
+          delete rule inet owl_portal_guard {{ rule.chain }} handle {{ rule.handle }}
+          {% endfor %}
+          delete rule ip nds_filter ndsRTR handle {{ shield_native_rollback_rules[0].handle }}
+
+    - name: Remove only the owned native local-port configuration addition
+      ansible.builtin.blockinfile:
+        path: /etc/opennds/opennds.conf
+        marker: '# {mark} OWL-SHIELD-NATIVE-MDNS'
+        state: absent
+      no_log: true
+
+    - name: Remove only discovery persistence markers
+      ansible.builtin.blockinfile:
+        path: /etc/owl-guest-portal/guard.nft
+        marker: '# {mark} OWL-SHIELD-DISCOVERY'
+        state: absent
+
+    - name: Remove only control persistence markers
+      ansible.builtin.blockinfile:
+        path: /etc/owl-guest-portal/enable-forward.nft
+        marker: '# {mark} OWL-SHIELD-CONTROL'
+        state: absent
