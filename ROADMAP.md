@@ -45,11 +45,6 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 
 ## Home Assistant And Applications
 
-- [ ] Publish and deploy the prepared Gatus Fleet bundles, DNS record and
-  Homepage entry. The owner selected in-cluster placement, retained Longhorn
-  SQLite history and dashboard/history only, with notifications disabled.
-  Qualify client-path checks versus backend checks; this placement cannot
-  report a total cluster outage. Homepage indicators do not send alerts.
 - [ ] Complete owner onboarding at `https://ha.owl.red` and review the intended
   client access policy before expanding beyond administration sources.
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
