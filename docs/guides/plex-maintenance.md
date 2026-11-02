@@ -1,7 +1,10 @@
 # Plex Collections, Artwork And Image Cleanup
 
-Status: preparation only. Neither Kometa nor ImageMaid has been deployed or run.
-Plex, Jellyfin, their databases and media have not been changed by this work.
+Status: the suspended Fleet job and NAS-local ImageMaid report container are
+deployed. The first UHD artwork trial was stopped during global ribbon-list
+gathering; its journal records zero exports and all 13 local posters match their
+preimage hashes. Daily artwork scheduling remains suspended. No ImageMaid
+deletion has been enabled.
 
 ## Placement
 
@@ -66,10 +69,14 @@ The operator confirmed the exact visual target, retaining Posterizarr for the
 styled/textless base posters and Kometa for the overlay layout. The community
 revision is `10e76ccedd228a9da20e1856c2dcad2c2fe3fdbe`.
 
-The pending movie overlays use the community badge sequence and positions:
+The movie overlays adapt the community badge sequence and positions:
 aspect ratio, audio, language flags/count, US content rating, studio, versions,
-video format, streaming indicators, award ribbons and the right-side three-rating
-strip. TV overlays remain a reduced baseline pending their own adaptation.
+video format and the right-side three-rating strip. The operator approved
+deferring award ribbons and streaming indicators because their native defaults
+perform global discovery and IMDb-to-TMDb conversion for non-library titles,
+which cannot be bounded by a small Plex library. This is intentionally a partial
+style match until those sources have a quota-safe approach. TV overlays remain
+a reduced baseline pending their own adaptation.
 Badges must describe actual media and available ratings; do not stamp screenshot
 values on every title. Visual acceptance remains part of the bounded trial.
 
@@ -101,6 +108,22 @@ Kometa overlays only. Broad collection builders and the main Movies library are
 not part of this first run. Automatic job retries are disabled. Check available
 provider usage before and after the trial; count credential preflight calls too.
 Quota exhaustion is a stop condition, not a reason to retry or rotate keys.
+
+After the stopped first trial, MDBList reported 10/1,000 requests used. Do not
+infer TMDb's usage from that separate provider's counter. Keep both the manual
+trial and daily CronJob suspended while reviewing an uncertain run, and do not
+overlap the replacement trial with ImageMaid reporting or removal.
+
+The guarded NAS-local report phase is:
+
+```bash
+node scripts/plex-maintenance-run.mjs imagemaid-report
+```
+
+It refuses an active artwork job or an existing ImageMaid container requiring
+inspection. The headless Unraid template has a real upstream icon, no fake WebUI,
+restart policy `no`, a read-only Plex profile and a private report config. It does
+not schedule cleanup or enable transcoder, trash, bundle or optimize operations.
 
 Caching and a small trial are not a hard daily request limiter, and longer cache
 retention makes ratings less current. Keep automatic scheduling suspended until

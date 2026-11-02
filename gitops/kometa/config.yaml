@@ -69,14 +69,6 @@ data:
               rating3_font_size: 70
               horizontal_position: right
           - default: resolution
-          - default: ribbon
-            template_variables:
-              style: red
-          - default: streaming
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 757
           - default: studio
             template_variables:
               horizontal_align: left

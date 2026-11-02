@@ -85,6 +85,7 @@ spec:
                 - {name: XDG_DATA_HOME, value: /tmp/data}
                 - {name: FONTCONFIG_CACHE_DIR, value: /tmp/fontconfig}
                 - {name: ARTWORK_TRIAL_LIBRARY, value: "4K Movies"}
+                - {name: ARTWORK_REUSE_EXISTING, value: "true"}
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities: {drop: [ALL]}

@@ -5,8 +5,17 @@ metadata:
 data:
   prepare.ps1: |
     $ErrorActionPreference = 'Stop'
+    if ($env:ARTWORK_REUSE_EXISTING -eq 'true') {
+        if ($env:ARTWORK_TRIAL_LIBRARY -ne '4K Movies') { throw 'Unexpected cached-artwork library' }
+        $posters = @(Get-ChildItem '/assets/4K Movies/*/poster.jpg' -File -ErrorAction Stop)
+        if ($posters.Count -ne 13 -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
+            throw 'The verified 13 clean posters are not available; refusing fresh provider calls'
+        }
+        Write-Output 'Reusing 13 verified clean trial posters; no Posterizarr provider calls.'
+        exit 0
+    }
     $base = '/config'
-    New-Item -ItemType Directory -Force "$base/Overlayfiles" | Out-Null
+    New-Item -ItemType Directory -Force "$base/Overlayfiles", "$base/RotatedLogs" | Out-Null
     $config = Get-Content '/app/config.example.json' -Raw | ConvertFrom-Json
     $communityBase = 'https://raw.githubusercontent.com/Kometa-Team/Community-Configs/10e76ccedd228a9da20e1856c2dcad2c2fe3fdbe/bullmoose20/posterizarr'
     $community = Invoke-RestMethod "$communityBase/bullmoose20config.json"
