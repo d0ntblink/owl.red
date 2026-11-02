@@ -22,7 +22,8 @@ data:
       cache_expiration: 60
     libraries:
       Movies: &movies
-        asset_directory: /assets/Movies
+        settings:
+          asset_directory: /assets/Movies
         collection_files:
           - default: basic
           - default: imdb
@@ -77,7 +78,8 @@ data:
           - default: versions
           - default: video_format
       Shows: &shows
-        asset_directory: /assets/Shows
+        settings:
+          asset_directory: /assets/Shows
         collection_files:
           - default: basic
           - default: imdb
@@ -108,10 +110,12 @@ data:
           - default: status
       4K Movies:
         <<: *movies
-        asset_directory: /assets/4K Movies
+        settings:
+          asset_directory: /assets/4K Movies
       4K Shows:
         <<: *shows
-        asset_directory: /assets/4K Shows
+        settings:
+          asset_directory: /assets/4K Shows
     settings:
       run_order:
         - collections
@@ -146,6 +150,7 @@ data:
       from PIL import Image
       from plexapi.server import PlexServer
       import requests
+      from ruamel.yaml import YAML
 
       LIBRARY = "4K Movies"
       MEDIA_ROOT = Path("/media/Movies-uhd")
@@ -197,6 +202,9 @@ data:
       def main():
         if "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
           raise RuntimeError("Only the bounded overlay trial is enabled")
+        configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
+        if configuration["libraries"][LIBRARY].get("settings", {}).get("asset_directory") != str(ASSET_ROOT):
+          raise RuntimeError("Native library clean-asset mapping is missing")
         server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=60)
         library = server.library.section(LIBRARY)
         planned = plan(library.all())
