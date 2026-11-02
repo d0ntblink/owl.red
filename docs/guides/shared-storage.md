@@ -388,20 +388,32 @@ ordinary node rescheduling is allowed.
 
 ### Memory Budget And Restart Diagnosis
 
-qBittorrent requests `1Gi` memory and has a `2Gi` container limit; sidecar
-budgets are separate. The previous `1Gi` limit produced confirmed
+qBittorrent requests `1Gi` memory and has no container memory limit, by owner
+request; its two-CPU limit and all sidecar budgets remain unchanged. The
+previous `1Gi` limit produced confirmed
 `OOMKilled` / exit 137 restarts under active downloads. Its saved checking
 buffer setting was 1024 MiB, equal to that entire old container budget, although
 that setting alone does not establish which allocation triggered the kill.
-The bounded correction changes only qBittorrent's resource request and limit,
-not torrent configuration, data, credentials or VPN policy.
+An initial increase to `2Gi` passed a five-minute native health observation,
+but the owner subsequently reported interruptions at 5-10 MB/s. Kubernetes
+showed zero container restarts at that follow-up, so another OOM kill was not
+established. The owner requested removing the cap rather than increasing it
+again. The effective cgroup `memory.max` was verified as `max`, with native API
+health and `wg0` binding intact. Torrent configuration, data, credentials and
+VPN policy were not changed.
+
+Uncapped memory is not unlimited physical RAM or proof of a performance fix.
+The scheduler reserves only the request; qBittorrent can compete with other
+workloads for the worker's remaining memory and cause node pressure or a
+node-level OOM. Successful startup does not qualify sustained download speed.
 
 Container memory includes filesystem cache and socket/kernel allocations, not
 just process RSS. During recovery, roughly 400 MiB process RSS coexisted with
 about 1.6 GiB file cache. A cgroup close to its limit is not by itself evidence
 of a leak: inspect `memory.stat` and `memory.events` (`oom` / `oom_kill`) together
-with restart counts. Sustained dirty cache or further OOM kills require another
-workload/storage review rather than repeatedly raising the limit.
+with restart counts and worker `MemAvailable`. Sustained dirty cache, stalls or
+further OOM kills require another workload/storage review rather than assuming
+that the container budget alone explains the problem.
 
 The deployment uses `Recreate`: changing pod resources also briefly interrupts
 slskd, Soularr and Gluetun. Preserve the single writer and original claims, save
