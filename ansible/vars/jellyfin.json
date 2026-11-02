@@ -1,0 +1,15 @@
+{
+  "image": "jellyfin/jellyfin@sha256:7da5184caa38c553f219f6772476540081f392a68049e2b68c923f6daf877f8e",
+  "version": "12.4",
+  "gpu": "GPU-c94e5971-7089-c23b-b3ab-361af1a1583c",
+  "config": "/mnt/cache/appdata/jellyfin/config",
+  "cache": "/mnt/cache/appdata/jellyfin/cache",
+  "webui": "https://jellyfin.owl.red",
+  "icon": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jellyfin.png",
+  "port": 8096,
+  "uid": 99,
+  "gid": 100,
+  "cpus": 4,
+  "memory_mib": 2048,
+  "libraries": []
+}

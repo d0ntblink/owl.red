@@ -1,0 +1,4 @@
+defaultNamespace: jellyfin
+dependsOn:
+  - name: owl-red-gitops-traefik
+  - name: owl-red-gitops-cert-manager

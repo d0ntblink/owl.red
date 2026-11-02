@@ -28,7 +28,7 @@ Homepage is the chosen dashboard and is wired with:
 
 ## Service Health Indicators
 
-All 46 services have deployed status indicators: 22 HTTP checks,
+All 47 services have deployed status indicators: 23 HTTP checks,
 17 host pings and 7 Kubernetes pod-readiness indicators. HTTP checks use native
 backend routes where authentication or ingress restrictions would otherwise
 misrepresent availability. Pod readiness covers Traefik and authenticated Arr
@@ -38,6 +38,8 @@ granted. Ping indicates host reachability, not application health; Unraid stays
 ping-only until its certificate is repaired.
 
 The Gatus entry uses its native `/health` route and was verified in the live UI.
+Jellyfin uses its native NAS `/health` endpoint; its browser link is the
+restricted HTTPS hostname, not an unrestricted NAS port link.
 Browser links remain their normal hostnames; no administration allowlist is
 weakened to permit monitoring. A failed monitor
 can display 500 for a connection timeout; this does not mean the application

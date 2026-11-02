@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata: {name: jellyfin}
+spec:
+  ports: [{name: http, port: 8096, targetPort: 8096}]
+---
+apiVersion: v1
+kind: Endpoints
+metadata: {name: jellyfin}
+subsets:
+  - addresses: [{ip: 10.0.10.5}]
+    ports: [{name: http, port: 8096}]
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata: {name: jellyfin-administration}
+spec:
+  ipAllowList:
+    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: jellyfin}
+spec:
+  secretName: jellyfin-tls
+  issuerRef: {name: letsencrypt-prod, kind: ClusterIssuer}
+  dnsNames: [jellyfin.owl.red]
+  privateKey: {rotationPolicy: Always}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata: {name: jellyfin}
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`jellyfin.owl.red`)
+      kind: Rule
+      middlewares: [{name: jellyfin-administration}]
+      services: [{name: jellyfin, port: 8096}]
+  tls: {secretName: jellyfin-tls}

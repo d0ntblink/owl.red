@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>jellyfin</Name>
+  <Repository>jellyfin/jellyfin@sha256:7da5184caa38c553f219f6772476540081f392a68049e2b68c923f6daf877f8e</Repository>
+  <Registry>https://hub.docker.com/r/jellyfin/jellyfin/</Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://jellyfin.org/docs/</Support>
+  <Project>https://jellyfin.org/</Project>
+  <WebUI>https://jellyfin.owl.red</WebUI>
+  <Icon>https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jellyfin.png</Icon>
+  <ExtraParams>--runtime=nvidia --gpus device=GPU-c94e5971-7089-c23b-b3ab-361af1a1583c --user=99:100 --cpus=4 --memory=2048m --security-opt=no-new-privileges:true --cap-drop=ALL --restart=unless-stopped --log-opt=max-size=10m --log-opt=max-file=3 --publish=10.0.10.5:8096:8096</ExtraParams>
+  <Config Name="Configuration" Target="/config" Default="" Mode="rw" Description="Separate SSD-backed Jellyfin profile" Type="Path" Display="always" Required="true" Mask="false">/mnt/cache/appdata/jellyfin/config</Config>
+  <Config Name="Cache" Target="/cache" Default="" Mode="rw" Description="SSD-backed cache and transcodes" Type="Path" Display="always" Required="true" Mask="false">/mnt/cache/appdata/jellyfin/cache</Config>
+  <Config Name="NVIDIA GPU" Target="NVIDIA_VISIBLE_DEVICES" Default="" Mode="" Description="Same physical GPU as Plex" Type="Variable" Display="always" Required="true" Mask="false">GPU-c94e5971-7089-c23b-b3ab-361af1a1583c</Config>
+  <Config Name="NVIDIA Capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,video,utility" Mode="" Description="Hardware video acceleration" Type="Variable" Display="advanced" Required="true" Mask="false">compute,video,utility</Config>
+  <Config Name="Published URL" Target="JELLYFIN_PublishedServerUrl" Default="" Mode="" Description="Intended browser address" Type="Variable" Display="advanced" Required="true" Mask="false">https://jellyfin.owl.red</Config>
+  <Config Name="Timezone" Target="TZ" Default="America/Edmonton" Mode="" Description="Timezone" Type="Variable" Display="advanced" Required="true" Mask="false">America/Edmonton</Config>
+</Container>

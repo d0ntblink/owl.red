@@ -30,6 +30,7 @@ spec:
     - gitops/speedtest
     - gitops/librespeed
     - gitops/arr
+    - gitops/jellyfin
     - gitops/guest-portal
     - gitops/pdm
     - gitops/gwn-manager

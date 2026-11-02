@@ -121,6 +121,11 @@ data:
             siteMonitor: http://nas.owl.red:32400/identity
             description: Media library
             icon: plex
+        - Jellyfin:
+            href: https://jellyfin.owl.red
+            siteMonitor: http://nas.owl.red:8096/health
+            description: Media streaming with shared GPU transcoding
+            icon: jellyfin
         - Seerr:
             href: https://seerr.owl.red
             siteMonitor: http://seerr.seerr.svc.cluster.local:5055/api/v1/status
