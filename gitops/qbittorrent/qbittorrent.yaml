@@ -179,7 +179,7 @@ spec:
             - {name: HTTP_CONTROL_SERVER_ADDRESS, value: "127.0.0.1:8000"}
             - {name: HTTP_CONTROL_SERVER_AUTH_CONFIG_FILEPATH, value: /gluetun/control.toml}
             - {name: FIREWALL_INPUT_PORTS, value: "8080,5030,8265,8888"}
-            - {name: FIREWALL_OUTBOUND_SUBNETS, value: "10.244.0.0/16,10.96.0.0/12,10.0.10.0/24,10.0.20.10/32"}
+            - {name: FIREWALL_OUTBOUND_SUBNETS, value: "10.244.0.0/16,10.96.0.0/12,10.0.10.0/24,10.0.20.0/24"}
             - {name: HTTPPROXY, value: "on"}
             - {name: HTTPPROXY_LISTENING_ADDRESS, value: ":8888"}
             - {name: SHADOWSOCKS, value: "off"}
@@ -325,7 +325,7 @@ metadata:
     metallb.io/loadBalancerIPs: 10.0.10.203
 spec:
   type: LoadBalancer
-  loadBalancerSourceRanges: [10.0.10.0/24, 10.0.20.10/32]
+  loadBalancerSourceRanges: [10.0.10.0/24, 10.0.20.0/24]
   selector: {app.kubernetes.io/name: qbittorrent}
   ports:
     - {name: http, port: 8080, targetPort: http}
@@ -348,7 +348,7 @@ metadata:
   namespace: qbittorrent
 spec:
   ipAllowList:
-    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+    sourceRange: [10.0.10.0/24, 10.0.20.0/24]
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

@@ -301,6 +301,25 @@ truthful, client-specific CAPPORT endpoint; normal captive detection is used.
 
 ## Configuration Owners
 
+### Trusted Private LAN
+
+The owner-only `owl.red` SSID is private VLAN 20, `10.0.20.0/24`, with client
+isolation disabled. Wired and wireless devices on that private VLAN have the
+same trust level; application allowlists must not single out the laptop's
+`10.0.20.10/32` address. The approved application policy admits native management
+`10.0.10.0/24` and the whole private `10.0.20.0/24`, while retaining normal
+application authentication. No extra SSID, VLAN or per-phone exception is needed.
+
+Guest VLAN 30 and IoT VLANs 40/50 remain untrusted. Their existing isolation,
+portal/lease enforcement and narrowly scoped service exceptions are unchanged.
+This is not permission to bridge VLANs or allow guest/IoT administration.
+
+Application allowlists and routed infrastructure access are separate layers.
+The application source policy is updated; broader private-to-infrastructure
+router access still requires a separately verified native rule change through
+the existing management/recovery lane. Do not apply the full Wi-Fi gateway
+playbook just to change this access policy.
+
 | Surface | Source |
 |---------|--------|
 | AP hardware and cabling | [Device inventory](../device-inventory.md#ap-main), [MokerLink decision](../decisions/023-mokerlink-poe-rack-switch.md) |

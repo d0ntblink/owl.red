@@ -16,7 +16,7 @@ The owner selected Kubernetes placement and dashboard/history only.
 - Notifications are intentionally disabled. No new alert secret is needed.
 
 The separate `gatus-ingress` bundle owns the certificate and Traefik route.
-It permits only native management `10.0.10.0/24` and owner `10.0.20.10/32`.
+It permits only native management `10.0.10.0/24` and trusted private `10.0.20.0/24`.
 This is a network allowlist, not user authentication. Flannel does not provide
 enforced application NetworkPolicy isolation in this cluster.
 

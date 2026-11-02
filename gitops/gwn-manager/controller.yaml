@@ -31,7 +31,7 @@ metadata:
   name: gwn-administration
 spec:
   ipAllowList:
-    sourceRange: [10.0.10.0/24, 10.0.20.10/32]
+    sourceRange: [10.0.10.0/24, 10.0.20.0/24]
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

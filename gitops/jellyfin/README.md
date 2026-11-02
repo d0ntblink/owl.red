@@ -15,7 +15,7 @@ its restricted HTTPS ingress, not the container or its data. Intended WebUI:
 - No media libraries or media mounts are configured. Downloads and Plex/media
   libraries are not mounted or added.
 - Native HTTP backend binds `10.0.10.5:8096`. Traefik terminates HTTPS and
-  permits only `10.0.10.0/24` and owner `10.0.20.10/32`. Backend HTTP remains
+  permits only management `10.0.10.0/24` and trusted private `10.0.20.0/24`. Backend HTTP remains
   unencrypted on the existing management network; this is not public ingress.
 - Owner credentials are in the private Bitwarden item **Jellyfin Access**.
   Jellyfin has its own owner account, independent of Plex and Arr credentials.

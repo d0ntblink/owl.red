@@ -103,7 +103,7 @@ extraObjects:
       ipAllowList:
         sourceRange:
           - 10.0.10.0/24
-          - 10.0.20.10/32
+          - 10.0.20.0/24
   - apiVersion: traefik.io/v1alpha1
     kind: Middleware
     metadata:
