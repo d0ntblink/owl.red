@@ -386,6 +386,28 @@ deployment. It uses `Recreate`, one replica, and a native Gluetun sidecar starte
 before the non-root qBittorrent process. Initial placement is `worker1-talos`;
 ordinary node rescheduling is allowed.
 
+### Memory Budget And Restart Diagnosis
+
+qBittorrent requests `1Gi` memory and has a `2Gi` container limit; sidecar
+budgets are separate. The previous `1Gi` limit produced confirmed
+`OOMKilled` / exit 137 restarts under active downloads. Its saved checking
+buffer setting was 1024 MiB, equal to that entire old container budget, although
+that setting alone does not establish which allocation triggered the kill.
+The bounded correction changes only qBittorrent's resource request and limit,
+not torrent configuration, data, credentials or VPN policy.
+
+Container memory includes filesystem cache and socket/kernel allocations, not
+just process RSS. During recovery, roughly 400 MiB process RSS coexisted with
+about 1.6 GiB file cache. A cgroup close to its limit is not by itself evidence
+of a leak: inspect `memory.stat` and `memory.events` (`oom` / `oom_kill`) together
+with restart counts. Sustained dirty cache or further OOM kills require another
+workload/storage review rather than repeatedly raising the limit.
+
+The deployment uses `Recreate`: changing pod resources also briefly interrupts
+slskd, Soularr and Gluetun. Preserve the single writer and original claims, save
+the live Deployment and exact inverse, and verify native API health, `wg0`
+binding, sidecar readiness and stability beyond the observed crash interval.
+
 The browser endpoint is `https://qbittorrent.owl.red`, with a verified
 Let's Encrypt certificate and the administration allowlist. Download clients
 use `http://qbittorrent-direct.owl.red:8080` at `10.0.10.203`, restricted to the

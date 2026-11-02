@@ -225,8 +225,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: "2", memory: 1Gi}
+            requests: {cpu: 100m, memory: 1Gi}
+            limits: {cpu: "2", memory: 2Gi}
           ports:
             - {name: http, containerPort: 8080}
           startupProbe:
