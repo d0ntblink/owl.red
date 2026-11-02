@@ -71,7 +71,6 @@ if($request['phase']==='template'){
  $encoding=api('/System/Configuration/encoding','GET',null,$token);$encoding['HardwareAccelerationType']='nvenc';$encoding['EnableHardwareEncoding']=true;$encoding['HardwareDecodingCodecs']=['h264','hevc','mpeg2video','vc1'];$encoding['EnableEnhancedNvdecDecoder']=true;$encoding['EnableHevcEncoding']=false;$encoding['EnableAv1Encoding']=false;$encoding['TranscodingTempPath']='/cache/transcodes';
  api('/System/Configuration/encoding','POST',$encoding,$token);
  $network=api('/System/Configuration/network','GET',null,$token);$network['EnableUPnP']=false;api('/System/Configuration/network','POST',$network,$token);
- check(count(api('/Library/VirtualFolders','GET',null,$token))===0,'Unexpected existing libraries');
  $libraries=api('/Library/VirtualFolders','GET',null,$token);check(count($libraries)===0,'Unexpected existing libraries');
  $saved=api('/System/Configuration/encoding','GET',null,$token);check($saved['HardwareAccelerationType']==='nvenc'&&$saved['EnableHardwareEncoding'],'NVENC setting not saved');
  $after=inspect('plex');check($after['Id']===$plex['Id']&&$after['State']['StartedAt']===$plex['State']['StartedAt'],'Plex continuity changed');
@@ -80,6 +79,7 @@ if($request['phase']==='template'){
 }elseif($request['phase']==='deploy'){
  check($existing==='','Existing Jellyfin container; inspect instead of replacing');
  check(!file_exists(dirname($config['config'])),'New SSD profile already exists');
+ check($config['libraries']===[],'Unexpected media library configuration');
  $private='/root/.local/state/owl-red/jellyfin-'.gmdate('YmdTHis').'-'.bin2hex(random_bytes(3));check(mkdir($private,0700,true),'Private preimage directory failed');
  $template='/boot/config/plugins/dockerMan/templates-user/my-jellyfin.xml';
  if(file_exists($template)){check(copy($template,$private.'/template-before.xml'),'Template preimage failed');chmod($private.'/template-before.xml',0600);}
@@ -91,13 +91,14 @@ if($request['phase']==='template'){
  run(['docker','run','-d','--name','jellyfin','--restart','unless-stopped','--stop-timeout','60','--runtime','nvidia','--gpus','device='.$config['gpu'],'--user',$config['uid'].':'.$config['gid'],'--cpus',(string)$config['cpus'],'--memory',$config['memory_mib'].'m','--cap-drop','ALL','--security-opt','no-new-privileges:true','--log-opt','max-size=10m','--log-opt','max-file=3','--label','owl.red.component=jellyfin','--label','net.unraid.docker.webui='.$config['webui'],'--label','net.unraid.docker.icon='.$config['icon'],'-e','NVIDIA_VISIBLE_DEVICES='.$config['gpu'],'-e','NVIDIA_DRIVER_CAPABILITIES=compute,video,utility','-e','JELLYFIN_PublishedServerUrl='.$config['webui'],'-e','TZ=America/Edmonton','-v',$config['config'].':/config','-v',$config['cache'].':/cache','-p','10.0.10.5:'.$config['port'].':8096',$config['image']]);
  $live=inspect('jellyfin');$after=inspect('plex');check($after['Id']===$plex['Id']&&$after['State']['StartedAt']===$plex['State']['StartedAt'],'Plex continuity changed');
  check($live['HostConfig']['Runtime']==='nvidia','NVIDIA runtime missing');
+ $media=array_values(array_filter($live['Mounts'],fn($mount)=>str_starts_with($mount['Destination'],'/media')));check(count($media)===0,'Unexpected media mount');
  echo json_encode(['running'=>$live['State']['Running'],'image'=>$config['image'],'mediaMounts'=>[],'gpu'=>$config['gpu'],'plexUnchanged'=>true,'remotePreimage'=>$private]);
 }else{
  check($existing!=='','Jellyfin is not deployed');$live=inspect('jellyfin');check($live['State']['Running'],'Jellyfin is not running');
  run(['docker','exec','jellyfin','nvidia-smi','--query-gpu=uuid','--format=csv,noheader']);
  run(['docker','exec','jellyfin','/usr/lib/jellyfin-ffmpeg/ffmpeg','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=1280x720:rate=30','-t','1','-c:v','h264_nvenc','-f','null','-']);
  $after=inspect('plex');check($after['Id']===$plex['Id']&&$after['State']['StartedAt']===$plex['State']['StartedAt'],'Plex changed during qualification');
- echo json_encode(['nvencSyntheticTest'=>true,'plexUnchanged'=>true,'mediaReadOnly'=>true]);
+ echo json_encode(['nvencSyntheticTest'=>true,'plexUnchanged'=>true]);
 }
 `.replace('REQUEST', Buffer.from(JSON.stringify(request)).toString('base64'));
 const result = spawnSync('ssh', ['-T', '-i', path.join(os.homedir(), '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'php'], { input: code, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
