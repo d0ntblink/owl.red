@@ -4,7 +4,13 @@
   "gpu": "GPU-c94e5971-7089-c23b-b3ab-361af1a1583c",
   "config": "/mnt/cache/appdata/jellyfin/config",
   "cache": "/mnt/cache/appdata/jellyfin/cache",
-  "libraries": [],
+  "libraries": [
+    {"name": "Movies", "type": "movies", "paths": ["/media/Movies"]},
+    {"name": "Shows", "type": "tvshows", "paths": ["/media/Shows"]},
+    {"name": "Music", "type": "music", "paths": ["/media/Music"]},
+    {"name": "4K Movies", "type": "movies", "paths": ["/media/Movies-uhd"]},
+    {"name": "4K Shows", "type": "tvshows", "paths": ["/media/Shows-uhd"]}
+  ],
   "webui": "https://jellyfin.owl.red",
   "icon": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jellyfin.png",
   "port": 8096,

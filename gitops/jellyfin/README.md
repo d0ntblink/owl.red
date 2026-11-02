@@ -12,8 +12,9 @@ its restricted HTTPS ingress, not the container or its data. Intended WebUI:
   no privilege escalation, rotating Docker logs and `unless-stopped` restart.
 - Config: `/mnt/cache/appdata/jellyfin/config` to `/config`.
 - Cache and transcodes: `/mnt/cache/appdata/jellyfin/cache` to `/cache`.
-- No media libraries or media mounts are configured. Downloads and Plex/media
-  libraries are not mounted or added.
+- The five configured Plex library roots are mounted individually, read-only,
+  and registered as matching Jellyfin libraries. Plex configuration, downloads
+  and transcode directories are not mounted.
 - Native HTTP backend binds `10.0.10.5:8096`. Traefik terminates HTTPS and
   permits only management `10.0.10.0/24` and trusted private `10.0.20.0/24`. Backend HTTP remains
   unencrypted on the existing management network; this is not public ingress.
@@ -27,6 +28,30 @@ The saved Unraid template has a real icon and the DNS HTTPS WebUI button:
 Binhex template was backed up privately before replacement. Any old
 `appdata/binhex-jellyfin` data is left untouched; official and Binhex profile
 layouts are not treated as interchangeable.
+
+### Media Sources
+
+| Library | Jellyfin Type | NAS Source | Container Path |
+|---------|---------------|------------|----------------|
+| Movies | movies | `/mnt/user/media/Movies` | `/media/Movies` |
+| Shows | tvshows | `/mnt/user/media/Shows` | `/media/Shows` |
+| Music | music | `/mnt/user/media/Music` | `/media/Music` |
+| 4K Movies | movies | `/mnt/user/media/Movies-uhd` | `/media/Movies-uhd` |
+| 4K Shows | tvshows | `/mnt/user/media/Shows-uhd` | `/media/Shows-uhd` |
+
+These roots and names were inspected from Plex's actual database using
+`SQLITE3_OPEN_READONLY` at
+`/mnt/user/appdata/plex/Plug-in Support/Databases/com.plexapp.plugins.library.db`.
+Only section/location records were read; Plex's database and configuration
+were not modified. This Hotio Plex profile is directly under `/config`, not
+an assumed nested `Plex Media Server` directory.
+
+Jellyfin's native API verifies all five names/types/paths, and its process
+identity has read/traversal access to the mounted roots. Read-only bind mounts
+prevent it from changing original media. `SaveLocalMetadata=false` keeps
+metadata in Jellyfin's profile rather than beside the media files.
+Library addition uses `refreshLibrary=false`; adding sources does not certify
+that a full scan, item indexing or playback has finished.
 
 ## Shared GPU
 
@@ -55,7 +80,7 @@ Other phases require `JELLYFIN_DEPLOY_ALLOWED=true`:
 
 - `deploy`: refuses an existing container/profile, saves private preimages,
   creates only the new SSD directories/template/container and verifies Plex
-  continuity and absence of unexpected media mounts.
+  continuity and the declared read-only media mounts.
 - `configure`: first-time setup only; creates/reuses the private vault item,
   refuses an initialized server and configures the owner and NVENC.
 - `finish`: guarded continuation for completed owner onboarding with remaining
@@ -63,12 +88,27 @@ Other phases require `JELLYFIN_DEPLOY_ALLOWED=true`:
   and refuses unexpected existing libraries. Do not retry an unknown outcome.
 - `template`: backs up and refreshes the owned Unraid template only after
   verifying its image/WebUI and the running NAS-only backend binding.
+- `media-plan`: authenticates with the existing owner credential and reports
+  missing libraries and required read-only mount changes without changing
+  media configuration. It refuses conflicting same-name libraries or mounts.
+- `media-apply`: saves private container/library preimages. If mounts are
+  missing, it recreates only Jellyfin and returns `librarySetupPending=true`;
+  verify health and actual mounts before a second guarded pass creates missing
+  library records. Existing matching libraries are preserved, not duplicated.
+- `media-verify`: checks all declared library names/types/paths, read-only binds,
+  process read/traversal permissions and unchanged Plex identity/start time.
 - `qualify`: runs the generated NVENC test and checks Plex continuity. It is
   a bounded GPU workload, not a read-only health check.
 
 Session tokens use Jellyfin's native `Authorization: MediaBrowser ... Token`
 header; legacy token-header transport was rejected by the installed version.
 No password, owner session token or request body is printed or committed.
+
+The media change preserves Jellyfin's existing profile, owner account, cache,
+NVENC configuration and HTTPS settings. Do not rerun first-time `configure` to
+add libraries. A media-only rollback restores the exact archived container
+mount definition and removes only newly created library records after checking
+their identities; it does not remove source files or alter Plex.
 
 ## Recovery
 
