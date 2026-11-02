@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: posterizarr-config
+data:
+  prepare.ps1: |
+    $ErrorActionPreference = 'Stop'
+    $base = '/config'
+    New-Item -ItemType Directory -Force "$base/Overlayfiles" | Out-Null
+    $config = Get-Content '/app/config.example.json' -Raw | ConvertFrom-Json
+    $communityBase = 'https://raw.githubusercontent.com/Kometa-Team/Community-Configs/10e76ccedd228a9da20e1856c2dcad2c2fe3fdbe/bullmoose20/posterizarr'
+    $community = Invoke-RestMethod "$communityBase/bullmoose20config.json"
+    foreach ($section in @('PosterOverlayPart','BackgroundOverlayPart','SeasonPosterOverlayPart','ShowTitleOnSeasonPosterPart','CollectionTitlePosterPart','CollectionPosterOverlayPart','TitleCardOverlayPart','TitleCardTitleTextPart','TitleCardEPTextPart')) {
+        foreach ($property in $community.$section.PSObject.Properties) {
+            if ($config.$section.PSObject.Properties.Name -contains $property.Name) {
+                $config.$section.($property.Name) = $property.Value
+            }
+        }
+    }
+    foreach ($asset in @('Comfortaa-Medium.ttf','bottom-up-fade.png','bottom-up-fade-background.png')) {
+        if (-not (Test-Path "$base/Overlayfiles/$asset")) {
+            Invoke-WebRequest "$communityBase/$asset" -OutFile "$base/Overlayfiles/$asset"
+        }
+    }
+    $config.ApiPart.tmdbtoken = $env:TMDB_READ_TOKEN
+    $config.ApiPart.PlexToken = $env:PLEX_TOKEN
+    $config.ApiPart.FavProvider = 'tmdb'
+    $config.ApiPart.ProviderPriorityMode = 'global'
+    $config.ApiPart.ProviderOrder = @('tmdb')
+    $config.ApiPart.PreferredLanguageOrder = @('xx','en')
+    $config.ApiPart.PreferredSeasonLanguageOrder = @('xx','en')
+    $config.ApiPart.PreferredBackgroundLanguageOrder = @('xx','en')
+    $config.ApiPart.LogoLanguageOrder = @('en')
+    $config.PlexPart.PlexUrl = 'http://10.0.10.5:32400'
+    $config.PlexPart.UsePlex = 'true'
+    $config.PlexPart.UploadExistingAssets = 'false'
+    $config.PlexPart.LibstoExclude = @('Music','Photos','Other Videos','Playlists')
+    if ($env:ARTWORK_TRIAL_LIBRARY) {
+        $config.PlexPart.LibstoExclude += @('Movies','Shows','4K Movies','4K Shows') | Where-Object { $_ -ne $env:ARTWORK_TRIAL_LIBRARY }
+    }
+    $config.JellyfinPart.UseJellyfin = 'false'
+    $config.EmbyPart.UseEmby = 'false'
+    $config.Notification.SendNotification = 'false'
+    $config.Notification.UseUptimeKuma = 'false'
+    $config.Notification.AgregarrTriggerEnabled = 'false'
+    $config.PrerequisitePart.AssetPath = '/assets'
+    $config.PrerequisitePart.BackupPath = '/assetsbackup'
+    $config.PrerequisitePart.ManualAssetPath = '/manualassets'
+    $config.PrerequisitePart.LibraryFolders = 'true'
+    $config.PrerequisitePart.PlexUpload = 'false'
+    $config.PrerequisitePart.AssetCleanup = 'false'
+    $config.PrerequisitePart.AutoUpdatePosterizarr = 'false'
+    $config.PrerequisitePart.AutoUpdateIM = 'false'
+    $config.PrerequisitePart.telemetry = 'false'
+    $config.PrerequisitePart.ForceRunningDeletion = 'false'
+    $config.PrerequisitePart.FollowSymlink = 'false'
+    $config.PrerequisitePart.ParallelJobs = 2
+    $config.PrerequisitePart.logLevel = '1'
+    $config.PrerequisitePart.font = 'Comfortaa-Medium.ttf'
+    $config.PrerequisitePart.backgroundfont = 'Comfortaa-Medium.ttf'
+    $config.PrerequisitePart.titlecardfont = 'Comfortaa-Medium.ttf'
+    $config.PrerequisitePart.collectionfont = 'Comfortaa-Medium.ttf'
+    $config.PrerequisitePart.overlayfile = 'bottom-up-fade.png'
+    $config.PrerequisitePart.seasonoverlayfile = 'bottom-up-fade.png'
+    $config.PrerequisitePart.backgroundoverlayfile = 'bottom-up-fade-background.png'
+    $config.PrerequisitePart.titlecardoverlayfile = 'bottom-up-fade-background.png'
+    $config | ConvertTo-Json -Depth 20 | Set-Content "$base/config.json"
+    if ($env:ARTWORK_VALIDATE_ONLY -eq 'true') {
+        Write-Output 'Posterizarr native configuration renderer validated; automation not started.'
+        exit 0
+    }
+    & /app/Start.ps1 -Run
+    exit $LASTEXITCODE

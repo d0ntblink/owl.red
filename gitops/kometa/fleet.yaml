@@ -1,0 +1,7 @@
+defaultNamespace: media-maintenance
+dependsOn:
+  - name: owl-red-gitops-csi-smb
+  - name: owl-red-gitops-longhorn-config
+  - name: owl-red-gitops-bitwarden-secrets
+helm:
+  disablePreProcess: true

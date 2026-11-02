@@ -47,6 +47,25 @@ Terraform provider locks, Nixpkgs inputs and chart versions are different layers
 Adding a dependency requires updating this guide and the owning automation or
 dependency declaration, not relying on an undocumented local installation.
 
+## Media Artwork Maintenance
+
+The [maintenance helper](../../scripts/plex-maintenance-run.mjs) needs Node.js
+20.12+ with `util.parseEnv`, `kubectl` access to the existing Tautulli pod, and the
+existing captured-child Bitwarden Node SDK installation under
+`~/.local/share/owl-red/tools/bitwarden-sdk`. It reads `BWS_ACCESS_TOKEN` from
+the private repository environment file. Do not source that file or print SDK
+responses. `preflight` is read-only apart from its private controller report;
+`prepare-secrets` can create only the named Plex maintenance credential when
+absent and refuses an unequal existing value.
+
+Kometa/Posterizarr use their pinned official images. Pillow, PlexAPI and requests
+are provided by that Kometa image; PowerShell and ImageMagick are provided by
+Posterizarr. No controller Docker daemon is required: isolated runtime tests and
+NAS-local ImageMaid use the existing Unraid Docker daemon over pinned SSH.
+Controller YAML checks use the existing project Python/PyYAML environment.
+Follow the [maintenance runbook](plex-maintenance.md) for daily API budgets,
+Fleet ownership, bounded poster replacement and cleanup gates.
+
 ## VyOS Image And Offline Preparation
 
 Use [the release manifest](../../vyos/image.json) for the exact dated rolling

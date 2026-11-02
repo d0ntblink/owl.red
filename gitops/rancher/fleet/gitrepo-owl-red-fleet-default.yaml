@@ -31,6 +31,7 @@ spec:
     - gitops/librespeed
     - gitops/arr
     - gitops/jellyfin
+    - gitops/kometa
     - gitops/guest-portal
     - gitops/pdm
     - gitops/gwn-manager

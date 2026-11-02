@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: artwork-workspace
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-appdata
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: artwork-assets
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nas-appdata-smb
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: plex-artwork
+spec:
+  schedule: "0 6 * * *"
+  timeZone: America/Edmonton
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels: {app.kubernetes.io/name: plex-artwork}
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 43200
+      template:
+        metadata:
+          labels: {app.kubernetes.io/name: plex-artwork}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 100
+            fsGroup: 100
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile: {type: RuntimeDefault}
+          initContainers:
+            - name: prepare-workspace
+              image: ghcr.io/fscorrupt/posterizarr@sha256:34b7be6e380dbd68811fbd594807883ffe74d440f73dc6259fb95e06b323d9d7
+              command: [/bin/sh, -ec]
+              args:
+                - mkdir -p /workspace/kometa /workspace/posterizarr /artwork/assets /artwork/manualassets /artwork/assetsbackup; cp /templates/config.yml /workspace/kometa/config.yml
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: "1", memory: 128Mi}
+              volumeMounts:
+                - {name: workspace, mountPath: /workspace}
+                - {name: artwork, mountPath: /artwork}
+                - {name: kometa-config, mountPath: /templates, readOnly: true}
+            - name: posterizarr
+              image: ghcr.io/fscorrupt/posterizarr@sha256:34b7be6e380dbd68811fbd594807883ffe74d440f73dc6259fb95e06b323d9d7
+              command: [pwsh, -NoProfile, -File, /templates/prepare.ps1]
+              envFrom:
+                - secretRef: {name: plex-maintenance-runtime}
+              env:
+                - {name: TZ, value: America/Edmonton}
+                - {name: DISABLE_UI, value: "true"}
+                - {name: RUN_TIME, value: disabled}
+                - {name: APP_ROOT, value: /app}
+                - {name: APP_DATA, value: /config}
+                - {name: HOME, value: /config}
+                - {name: XDG_CACHE_HOME, value: /tmp/cache}
+                - {name: XDG_DATA_HOME, value: /tmp/data}
+                - {name: FONTCONFIG_CACHE_DIR, value: /tmp/fontconfig}
+                - {name: ARTWORK_TRIAL_LIBRARY, value: "4K Movies"}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 250m, memory: 512Mi}
+                limits: {cpu: "2", memory: 4Gi}
+              volumeMounts:
+                - {name: workspace, mountPath: /config, subPath: posterizarr}
+                - {name: artwork, mountPath: /assets, subPath: assets}
+                - {name: artwork, mountPath: /manualassets, subPath: manualassets}
+                - {name: artwork, mountPath: /assetsbackup, subPath: assetsbackup}
+                - {name: posterizarr-config, mountPath: /templates, readOnly: true}
+                - {name: temporary, mountPath: /tmp}
+          containers:
+            - name: kometa
+              image: kometateam/kometa@sha256:e3f509c3044ac011e1938dae2f7e80ea3cfe9663720a9f98683d1ea28c127e64
+              command: [python3, /scripts/run.py]
+              args: [--run, --read-only-config, --no-missing, --timings, --libraries, "4K Movies", --overlays-only]
+              env:
+                - {name: TZ, value: America/Edmonton}
+                - {name: HOME, value: /config}
+                - name: KOMETA_PLEXTOKEN
+                  valueFrom:
+                    secretKeyRef: {name: plex-maintenance-runtime, key: PLEX_TOKEN}
+                - name: KOMETA_TMDBKEY
+                  valueFrom:
+                    secretKeyRef: {name: plex-maintenance-runtime, key: TMDB_API_KEY}
+                - name: KOMETA_MDBLISTKEY
+                  valueFrom:
+                    secretKeyRef: {name: plex-maintenance-runtime, key: MDBLIST_API_KEY}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 250m, memory: 512Mi}
+                limits: {cpu: "2", memory: 4Gi}
+              volumeMounts:
+                - {name: workspace, mountPath: /config, subPath: kometa}
+                - {name: artwork, mountPath: /assets, subPath: assets}
+                - {name: artwork, mountPath: /assetsbackup, subPath: assetsbackup}
+                - {name: kometa-config, mountPath: /scripts, readOnly: true}
+                - {name: trial-media, mountPath: /media/Movies-uhd}
+                - {name: temporary, mountPath: /tmp}
+          volumes:
+            - name: workspace
+              persistentVolumeClaim: {claimName: artwork-workspace}
+            - name: artwork
+              persistentVolumeClaim: {claimName: artwork-assets}
+            - name: kometa-config
+              configMap: {name: kometa-config}
+            - name: posterizarr-config
+              configMap: {name: posterizarr-config}
+            - name: temporary
+              emptyDir: {}
+            - name: trial-media
+              persistentVolumeClaim: {claimName: trial-movie-posters}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: plex-artwork-uhd-movies}
+spec:
+  capacity: {storage: 10Ti}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=1001, gid=100, dir_mode=0775, file_mode=0664]
+  claimRef: {namespace: media-maintenance, name: trial-movie-posters}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/media#Movies-uhd#plex-artwork-trial#retain
+    volumeAttributes: {source: //nas.owl.red/media, subDir: Movies-uhd}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trial-movie-posters
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: plex-artwork-uhd-movies
+  resources: {requests: {storage: 10Ti}}

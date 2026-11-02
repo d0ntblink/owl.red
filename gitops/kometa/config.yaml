@@ -1,0 +1,254 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kometa-config
+data:
+  config.yml: |
+    plex:
+      url: http://10.0.10.5:32400
+      token: <<plextoken>>
+      timeout: 60
+      clean_bundles: false
+      empty_trash: false
+      optimize: false
+      verify_ssl: true
+    tmdb:
+      apikey: <<tmdbkey>>
+      language: en
+      region: CA
+      cache_expiration: 60
+    mdblist:
+      apikey: <<mdblistkey>>
+      cache_expiration: 60
+    libraries:
+      Movies: &movies
+        asset_directory: /assets/Movies
+        collection_files:
+          - default: basic
+          - default: imdb
+          - default: tmdb
+          - default: genre
+          - default: decade
+          - default: franchise
+          - default: studio
+          - default: oscars
+          - default: seasonal
+        overlay_files:
+          - default: aspect
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 517
+          - default: audio_codec
+          - default: language_count
+          - default: content_rating_us_movie
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 637
+          - default: languages
+          - default: languages
+            template_variables:
+              back_color: "#FFFFFF00"
+              font_color: "#FFFFFF00"
+              use_subtitles: true
+          - default: mediastinger
+          - default: ratings
+            template_variables:
+              rating1: mdb_tomatoes
+              rating1_image: rt_tomato
+              rating1_font: fonts/Arimo-Bold.ttf
+              rating1_font_size: 63
+              rating2: imdb
+              rating2_image: imdb
+              rating2_font: fonts/LibreFranklin-Black.ttf
+              rating2_font_size: 70
+              rating3: tmdb
+              rating3_image: tmdb
+              rating3_font: fonts/Figtree-Black.ttf
+              rating3_font_size: 70
+              horizontal_position: right
+          - default: resolution
+          - default: ribbon
+            template_variables:
+              style: red
+          - default: streaming
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 757
+          - default: studio
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 877
+          - default: versions
+          - default: video_format
+      Shows: &shows
+        asset_directory: /assets/Shows
+        collection_files:
+          - default: basic
+          - default: imdb
+          - default: tmdb
+          - default: genre
+          - default: decade
+          - default: network
+          - default: franchise
+        overlay_files:
+          - default: resolution
+            template_variables:
+              use_edition: false
+          - default: ratings
+            template_variables:
+              rating1: mdb_tomatoes
+              rating1_image: rt_tomato
+              rating1_font: fonts/Arimo-Bold.ttf
+              rating1_font_size: 63
+              rating2: imdb
+              rating2_image: imdb
+              rating2_font: fonts/LibreFranklin-Black.ttf
+              rating2_font_size: 70
+              rating3: tmdb
+              rating3_image: tmdb
+              rating3_font: fonts/Figtree-Black.ttf
+              rating3_font_size: 70
+              horizontal_position: right
+          - default: status
+      4K Movies:
+        <<: *movies
+        asset_directory: /assets/4K Movies
+      4K Shows:
+        <<: *shows
+        asset_directory: /assets/4K Shows
+    settings:
+      run_order:
+        - collections
+        - overlays
+      cache: true
+      cache_expiration: 60
+      asset_folders: true
+      create_asset_folders: false
+      prioritize_assets: true
+      download_url_assets: false
+      sync_mode: append
+      minimum_items: 2
+      delete_below_minimum: false
+      delete_not_scheduled: false
+      show_missing: false
+      save_report: true
+      verify_ssl: true
+      overlay_artwork_filetype: jpg
+      overlay_artwork_quality: 90
+  run.py: |
+      import hashlib
+      import io
+      import json
+      import os
+      from pathlib import Path
+      import shutil
+      import subprocess
+      import sys
+      import tempfile
+      import uuid
+
+      from PIL import Image
+      from plexapi.server import PlexServer
+      import requests
+
+      LIBRARY = "4K Movies"
+      MEDIA_ROOT = Path("/media/Movies-uhd")
+      ASSET_ROOT = Path("/assets") / LIBRARY
+
+      def digest(filename):
+        return hashlib.sha256(filename.read_bytes()).hexdigest()
+
+      def plan(items, media_root=MEDIA_ROOT):
+        root = media_root.resolve(strict=True)
+        if not 0 < len(items) <= 40:
+          raise RuntimeError("Movie count outside bounded trial")
+        result = []
+        directories = set()
+        for item in items:
+          files = [Path(part.file) for media in item.media for part in media.parts]
+          if len(files) != 1:
+            raise RuntimeError("Multiple media files require separate review")
+          movie = files[0].resolve(strict=True)
+          if root not in movie.parents or movie.parent == root:
+            raise RuntimeError("Movie is outside an individual trial folder")
+          poster = movie.parent / "poster.jpg"
+          if poster.is_symlink() or not poster.is_file():
+            raise RuntimeError("Expected regular local poster missing")
+          if movie.parent in directories:
+            raise RuntimeError("Movies share a poster directory")
+          directories.add(movie.parent)
+          result.append({"key": str(item.ratingKey), "poster": poster, "before": digest(poster)})
+        return result
+
+      def replace_poster(target, source, expected):
+        if target.is_symlink() or digest(target) != expected:
+          raise RuntimeError("Local artwork changed since preflight")
+        temporary = None
+        try:
+          with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".poster-", suffix=".jpg", delete=False) as output:
+            temporary = Path(output.name)
+            output.write(source.read_bytes())
+            output.flush()
+            os.fsync(output.fileno())
+          temporary.chmod(0o664)
+          if target.is_symlink() or digest(target) != expected:
+            raise RuntimeError("Local artwork changed during export")
+          os.replace(temporary, target)
+        finally:
+          if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+      def main():
+        if "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
+          raise RuntimeError("Only the bounded overlay trial is enabled")
+        server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=60)
+        library = server.library.section(LIBRARY)
+        planned = plan(library.all())
+        for item in planned:
+          clean = ASSET_ROOT / item["poster"].parent.name / "poster.jpg"
+          if not clean.is_file() or clean.is_symlink():
+            raise RuntimeError("Matched clean Posterizarr asset missing; refusing overlay stacking")
+        run = Path("/assetsbackup/local-posters") / uuid.uuid4().hex
+        run.mkdir(parents=True, mode=0o700)
+        journal = {"library": LIBRARY, "items": [], "exported": []}
+        for item in planned:
+          shutil.copyfile(item["poster"], run / (item["key"] + ".before.jpg"))
+          journal["items"].append({"key": item["key"], "poster": str(item["poster"]), "before": item["before"]})
+        manifest = run / "manifest.json"
+        manifest.write_text(json.dumps(journal, indent=2))
+        subprocess.run([sys.executable, "/kometa.py", *sys.argv[1:]], check=True)
+        current = {str(item.ratingKey): item for item in library.all()}
+        if set(current) != {item["key"] for item in planned}:
+          raise RuntimeError("Library membership changed during trial")
+        for item in planned:
+          refreshed = server.fetchItem(int(item["key"]))
+          if not any(label.tag.lower() == "overlay" for label in refreshed.labels):
+            raise RuntimeError("Kometa overlay label missing; export stopped")
+          if not refreshed.thumb or not refreshed.thumb.startswith("/library/metadata/"):
+            raise RuntimeError("Unexpected selected artwork path")
+          response = requests.get(server._baseurl + refreshed.thumb, headers={"X-Plex-Token": os.environ["KOMETA_PLEXTOKEN"]}, timeout=60)
+          response.raise_for_status()
+          with Image.open(io.BytesIO(response.content)) as image:
+            if image.format != "JPEG" or image.width < 300 or image.height < 450:
+              raise RuntimeError("Selected finished artwork is not a valid poster JPEG")
+            image.verify()
+          (run / (item["key"] + ".finished.jpg")).write_bytes(response.content)
+        for item in planned:
+          if digest(item["poster"]) != item["before"]:
+            raise RuntimeError("Local artwork drift detected before export")
+        for item in planned:
+          replace_poster(item["poster"], run / (item["key"] + ".finished.jpg"), item["before"])
+          journal["exported"].append(item["key"])
+          manifest.write_text(json.dumps(journal, indent=2))
+        print(json.dumps({"library": LIBRARY, "finishedLocalPosters": len(planned), "manifest": str(manifest)}))
+
+      if __name__ == "__main__":
+        try:
+          main()
+        except Exception:
+          print("Artwork trial/export stopped. Inspect the private run manifest; do not retry an unknown partial run.", file=sys.stderr)
+          sys.exit(1)
