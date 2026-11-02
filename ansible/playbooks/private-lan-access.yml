@@ -1,0 +1,78 @@
+---
+- name: Align owner-private IPv4 infrastructure access under native confirmed commits
+  hosts: edge_router
+  gather_facts: false
+  vars:
+    private_lan_phase: plan
+  tasks:
+    - name: Require the exact approved router and bounded phase
+      ansible.builtin.assert:
+        that:
+          - private_lan_allowed | default(false) | bool
+          - vm_id | int == 103
+          - ansible_host == '10.0.10.1'
+          - private_lan_phase in ['plan', 'trial', 'confirm']
+          - private_lan_phase != 'confirm' or private_lan_verified | default(false) | bool
+
+    - name: Verify the unchanged private-only rule boundary and reload recovery
+      ansible.builtin.raw: |
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 description)" = OWL-WIFI-PRIVATE-INGRESS &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 action)" = accept &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 inbound-interface name)" = eth1.20 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 outbound-interface name)" = eth1 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 source address)" = 10.0.20.0/24 &&
+        test "$(/bin/cli-shell-api returnActiveValue system config-management commit-confirm action)" = reload
+      changed_when: false
+
+    - name: Require the exact old access fields before a new candidate
+      ansible.builtin.raw: |
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 destination address)" = 10.0.10.201 &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 protocol)" = tcp &&
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 destination port)" = 443
+      changed_when: false
+      when: private_lan_phase in ['plan', 'trial']
+
+    - name: Review or trial only the owner-private management destination expansion
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        output=$(
+        set firewall ipv4 forward filter rule 2810 destination address 10.0.10.0/24
+        delete firewall ipv4 forward filter rule 2810 protocol
+        delete firewall ipv4 forward filter rule 2810 destination port
+        )
+        if [[ "$output" == *"Set failed"* || "$output" == *"Delete failed"* ]]; then discard; builtin exit 1; fi
+        compare
+        {% if private_lan_phase == 'plan' %}
+        discard
+        {% else %}
+        confirmation=$(commit-confirm 5 no-prompt)
+        printf "%s\n" "$confirmation"
+        if [[ "$confirmation" != *"Initialized commit-confirm;"* ]]; then discard; builtin exit 1; fi
+        {% endif %}
+        exit
+        '
+      changed_when: private_lan_phase == 'trial'
+      when: private_lan_phase in ['plan', 'trial']
+
+    - name: Require the independently verified intended active rule before confirmation
+      ansible.builtin.raw: |
+        test "$(/bin/cli-shell-api returnActiveValue firewall ipv4 forward filter rule 2810 destination address)" = 10.0.10.0/24 &&
+        ! /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810 protocol &&
+        ! /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810 destination port
+      changed_when: false
+      when: private_lan_phase == 'confirm'
+
+    - name: Confirm and save only the verified native access rule
+      ansible.builtin.raw: |
+        /bin/vbash -c '
+        source /opt/vyatta/etc/functions/script-template
+        configure
+        if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
+        confirm || builtin exit 1
+        save || builtin exit 1
+        exit
+        '
+      when: private_lan_phase == 'confirm'

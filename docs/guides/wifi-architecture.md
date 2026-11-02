@@ -315,10 +315,23 @@ portal/lease enforcement and narrowly scoped service exceptions are unchanged.
 This is not permission to bridge VLANs or allow guest/IoT administration.
 
 Application allowlists and routed infrastructure access are separate layers.
-The application source policy is updated; broader private-to-infrastructure
-router access still requires a separately verified native rule change through
-the existing management/recovery lane. Do not apply the full Wi-Fi gateway
-playbook just to change this access policy.
+Both are configured for this IPv4 trust model. Native VyOS rule 2810 accepts
+`eth1.20` / source `10.0.20.0/24` toward `eth1` / native management
+`10.0.10.0/24`, without the former ingress-host/TCP-443-only restriction.
+Existing client DNS-egress restrictions and all guest/IoT rules remain in place;
+this does not add general access from private devices to every other VLAN.
+
+The exact three-field rule change was reviewed under native commit-confirm,
+verified with retained management/API/service access, then confirmed and saved.
+The dedicated [access playbook](../../ansible/playbooks/private-lan-access.yml)
+uses guarded `plan`, `trial` and `confirm` phases and requires reload, not
+reboot, rollback. It refuses an unexpected rule or candidate; it is not a
+routine health check. Do not apply the full Wi-Fi gateway playbook just to
+change this access policy. IPv6 rules were not broadened by this IPv4 change.
+
+Application verification included a trusted-TLS Jellyfin request sourced from
+private `10.0.20.1` returning 200 and an in-cluster source outside both trusted
+subnets returning 403. That is a policy test, not a physical phone/RF test.
 
 | Surface | Source |
 |---------|--------|
