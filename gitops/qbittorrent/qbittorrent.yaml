@@ -192,10 +192,12 @@ spec:
           startupProbe:
             exec: {command: [/gluetun-entrypoint, healthcheck]}
             periodSeconds: 3
+            timeoutSeconds: 5
             failureThreshold: 40
           readinessProbe:
             exec: {command: [/gluetun-entrypoint, healthcheck]}
             periodSeconds: 10
+            timeoutSeconds: 5
           volumeMounts:
             - {name: gateway, mountPath: /gluetun}
         - name: wait-for-gateway
@@ -232,10 +234,12 @@ spec:
           startupProbe:
             httpGet: {path: /, port: http}
             periodSeconds: 5
+            timeoutSeconds: 5
             failureThreshold: 36
           readinessProbe:
             httpGet: {path: /, port: http}
             periodSeconds: 10
+            timeoutSeconds: 5
           volumeMounts:
             - {name: config, mountPath: /config}
             - {name: media, mountPath: /media}
