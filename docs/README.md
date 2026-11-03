@@ -14,6 +14,7 @@ retired implementations. They are not instructions to replay migrations.
 | Find hardware, addresses and interfaces | [Device inventory](device-inventory.md) |
 | Understand terminology | [Glossary](glossary.md) |
 | Handle credentials and disclosures | [Security policy](../SECURITY.md) |
+| Choose visual references and themes | [Design and theming](guides/design-and-theming.md) |
 
 ## Network Operations
 
