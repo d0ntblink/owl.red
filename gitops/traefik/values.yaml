@@ -22,9 +22,8 @@ providers:
   kubernetesIngress:
     enabled: true
 
-logs:
-  general:
-    level: INFO
+log:
+  level: INFO
 
 additionalArguments:
   - "--serversTransport.insecureSkipVerify=false"
