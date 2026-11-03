@@ -32,6 +32,7 @@ spec:
     - gitops/arr
     - gitops/jellyfin
     - gitops/kometa
+    - gitops/cloudflare-ddns
     - gitops/guest-portal
     - gitops/pdm
     - gitops/gwn-manager
