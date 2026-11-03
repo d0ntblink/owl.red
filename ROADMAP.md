@@ -108,15 +108,53 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
 - [ ] Standardize client NTP configuration on the router through each system's
   configuration lane and verify synchronization.
 
+## Identity And Observability
+
+- [ ] Evaluate authentik for internal SSO, MFA/passkeys and application access:
+  prefer supported native OIDC/SAML integrations, use Traefik forward authentication
+  only where appropriate, and preserve native API/client authentication. Define
+  its relationship with Cloudflare Access and retain tested local recovery logins
+  so an identity-provider outage cannot lock out infrastructure administration.
+- [ ] Plan Prometheus and Alertmanager for infrastructure/service metrics and
+  alerts, with Grafana dashboards. Choose supported exporters for Proxmox,
+  Kubernetes/Talos, VyOS, Unraid and applications; define scrape permissions,
+  capacity, retention and actionable alerts before rollout. Keep dashboards
+  query-only and distinguish missing/stale telemetry from healthy services.
+- [ ] Evaluate ELK (Elasticsearch, Logstash and Kibana) against Grafana Loki for
+  central log search, parsing and retention. Measure expected ingestion/storage,
+  query needs, resource use and recovery; select a primary general-log backend
+  rather than deploy overlapping stacks by default. Assess Wazuh's separate
+  indexer/dashboard requirements before adding another search backend.
+
 ## Threat Protection
+
+- [ ] Replace the WSL-dependent software-inventory timer with an always-on,
+  Fleet-managed Kubernetes CronJob: compare observed deployed identities every
+  15 minutes, reuse digest-keyed SBOMs and scan only new/changed identities.
+  Use scoped Kubernetes RBAC and dedicated restricted NAS/Proxmox collection
+  access, not an administrator kubeconfig or general controller SSH key. Add
+  deployment-triggered refreshes where useful, retaining periodic reconciliation,
+  freshness/failure alerts and a verified handoff before disabling the WSL timer.
 
 - [ ] Integrate the [software inventory and SBOM workflow](docs/guides/software-inventory.md)
   with a personal vulnerability news feed: review CPE candidates, retain PURL and
   vendor/backport-aware matching, report stale/missing coverage and send deduplicated
   actionable alerts. Extend coverage to firmware/endpoints separately; do not
-  treat an inventory or naming match as a confirmed vulnerability.
+  treat an inventory or naming match as a confirmed vulnerability. Refresh
+  vulnerability intelligence independently of commits/deployments so newly
+  disclosed issues in unchanged software are not missed. Evaluate maintained
+  SBOM analysis such as Grype/Trivy or Dependency-Track before custom matching.
 - [ ] Qualify Suricata rule updates, resource limits and retention; prove a
-  controlled alert reaches a useful read-only diagnostics view.
+  controlled alert reaches a useful read-only diagnostics view on the pinned
+  VyOS build. Start with passive IDS; native service availability does not prove
+  working rules or inline IPS. Any blocking path needs separate support,
+  throughput/latency, false-positive, failure-mode and rollback qualification.
+- [ ] Evaluate Wazuh for endpoint security monitoring, file-integrity monitoring,
+  configuration assessment and vulnerability visibility on supported hosts.
+  Qualify agent/resource impact, retention and its server/indexer/dashboard;
+  use supported remote log collection for appliances such as VyOS rather than
+  installing unsupported agents there. Correlate with the inventory/news feed
+  without creating duplicate alerts or treating SIEM as network enforcement.
 - [ ] Define CrowdSec acquisition, parsers and private LAPI placement; validate
   detection, administrative exclusions, decision expiry and feed-outage behavior
   before enabling a single supported enforcement path.
@@ -125,6 +163,15 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   behavior before activation; do not combine incompatible or overlapping feeds blindly.
 - [ ] Provide searchable connection diagnostics with time, address, port,
   protocol, interface, rule and verdict filters; prefer an existing log backend.
+- [ ] Assess remaining Zenarmor-like application/category visibility and control
+  gaps after native firewall, Suricata, DNS/reputation filtering and logging are
+  qualified. These layers are not equivalent to application-aware inline DPI.
+  Prefer supported solutions; do not install an unsupported packet engine on
+  VyOS or silently introduce TLS interception or another inline gateway.
+- [ ] Evaluate Zeek or Security Onion only if deeper network metadata/forensics
+  is needed beyond the chosen tools. Review mirrored-traffic coverage, encrypted
+  traffic limitations, sensor resources and retention before adding another
+  platform; router-only observation does not cover every same-VLAN connection.
 
 ## Public DNS And External Access
 
