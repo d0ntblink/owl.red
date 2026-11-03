@@ -97,6 +97,9 @@ Other phases require `JELLYFIN_DEPLOY_ALLOWED=true`:
   library records. Existing matching libraries are preserved, not duplicated.
 - `media-verify`: checks all declared library names/types/paths, read-only binds,
   process read/traversal permissions and unchanged Plex identity/start time.
+- `scan-status`: reads native scheduled-task state/progress, indexed-item counts,
+  library image types and scan options. It does not start, cancel or restart a
+  scan. Initial folder validation can remain at 0% before global progress starts.
 - `qualify`: runs the generated NVENC test and checks Plex continuity. It is
   a bounded GPU workload, not a read-only health check.
 

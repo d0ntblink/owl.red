@@ -8,12 +8,12 @@ import { parseEnv } from 'node:util';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'inspect';
-assert(['inspect', 'deploy', 'configure', 'finish', 'template', 'qualify', 'media-plan', 'media-apply', 'media-verify'].includes(phase), 'Use inspect, deploy, configure, finish, template, qualify or media-plan/media-apply/media-verify.');
+assert(['inspect', 'deploy', 'configure', 'finish', 'template', 'qualify', 'media-plan', 'media-apply', 'media-verify', 'scan-status'].includes(phase), 'Use inspect, deploy, configure, finish, template, qualify, scan-status or media-plan/media-apply/media-verify.');
 const repository = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const config = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/jellyfin.json'), 'utf8'));
 const recovery = fs.mkdtempSync(path.join(os.homedir(), '.local/state/owl-red/jellyfin-'));
 const request = { phase, config, template: fs.readFileSync(path.join(repository, 'unraid/templates/jellyfin.xml'), 'utf8'), approved: process.env.JELLYFIN_DEPLOY_ALLOWED === 'true' };
-if (phase === 'configure' || phase === 'finish' || phase.startsWith('media-')) {
+if (phase === 'configure' || phase === 'finish' || phase === 'scan-status' || phase.startsWith('media-')) {
 	assert(request.approved, 'Explicit Jellyfin configuration approval required.');
 	const stored = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
 	const binary = path.join(os.homedir(), '.local/share/owl-red/tools/bitwarden/2026.7.0/bw');
@@ -28,7 +28,7 @@ if (phase === 'configure' || phase === 'finish' || phase.startsWith('media-')) {
 	const matches = JSON.parse(vault(['list', 'items', '--search', 'Jellyfin Access'])).filter(item => item.name === 'Jellyfin Access');
 	assert(matches.length <= 1, 'Ambiguous existing Jellyfin vault items.');
 	let item = matches[0];
-	if (phase === 'finish' || phase.startsWith('media-')) assert(item, 'Existing Jellyfin owner item required; no account reset.');
+	if (phase === 'finish' || phase === 'scan-status' || phase.startsWith('media-')) assert(item, 'Existing Jellyfin owner item required; no account reset.');
 	if (!item) {
 		item = JSON.parse(vault(['get', 'template', 'item']));
 		Object.assign(item, { type: 1, name: 'Jellyfin Access', notes: 'Owner login for the separate owl.red Jellyfin instance. Plex credentials are unchanged.', login: { username: 'admin', password: randomBytes(30).toString('base64url'), totp: null, uris: [{ uri: config.webui, match: null }] } });
@@ -52,6 +52,12 @@ $plex=inspect('plex');check($plex['State']['Running'],'Plex is not running; stop
 $existing=run(['docker','ps','-a','--filter','name=^jellyfin$','--format','{{.ID}}']);
 if($request['phase']==='inspect'){echo json_encode(['existingJellyfin'=>$existing!=='','plexRunning'=>true,'plexStarted'=>$plex['State']['StartedAt'],'gpu'=>$config['gpu']]);exit;}
 check($request['approved'],'Explicit Jellyfin deployment approval required');
+if($request['phase']==='scan-status'){
+ $auth=api('/Users/AuthenticateByName','POST',['Username'=>$request['login']['username'],'Pw'=>$request['login']['password']]);$token=$auth['AccessToken'];check($auth['User']['Policy']['IsAdministrator'],'Owner is not administrator');
+ $tasks=api('/ScheduledTasks','GET',null,$token);$active=array_values(array_filter($tasks,fn($task)=>$task['State']!=='Idle'||($task['Key']??'')==='RefreshLibrary'));$counts=api('/Items/Counts','GET',null,$token);$folders=api('/Library/VirtualFolders','GET',null,$token);$libraries=[];
+ foreach($folders as $folder){$items=api('/Items?'.http_build_query(['ParentId'=>$folder['ItemId'],'Recursive'=>'true','Limit'=>0,'EnableTotalRecordCount'=>'true']),'GET',null,$token);$images=api('/Items/'.$folder['ItemId'].'/Images','GET',null,$token);$libraries[]=['name'=>$folder['Name'],'id'=>$folder['ItemId'],'indexedItems'=>$items['TotalRecordCount'],'locations'=>$folder['Locations'],'imageTypes'=>array_column($images,'ImageType'),'scanOptions'=>array_intersect_key($folder['LibraryOptions']??[],array_flip(['EnableRealtimeMonitor','SaveLocalMetadata','EnableChapterImageExtraction','EnableTrickplayImageExtraction','ExtractChapterImagesDuringLibraryScan','EnableAutomaticSeriesGrouping','MetadataSavers','TypeOptions']))];}
+ api('/Sessions/Logout','POST',null,$token);echo json_encode(['observedAt'=>gmdate('c'),'tasks'=>$active,'counts'=>$counts,'libraries'=>$libraries]);exit;
+}
 if(str_starts_with($request['phase'],'media-')){
  check($existing!=='','Jellyfin container missing');$before=inspect('jellyfin');check($before['State']['Running']&&$before['Config']['Image']===$config['image'],'Unexpected Jellyfin runtime');
  $auth=api('/Users/AuthenticateByName','POST',['Username'=>$request['login']['username'],'Pw'=>$request['login']['password']]);$token=$auth['AccessToken'];check($auth['User']['Policy']['IsAdministrator'],'Owner is not administrator');
