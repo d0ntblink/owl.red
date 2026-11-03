@@ -27,112 +27,117 @@ pages:
     columns:
       - size: full
         widgets:
-          - type: monitor
+          - type: bookmarks
             title: Core Platform
-            style: compact
-            cache: 1m
-            sites:
-              - title: Rancher
-                url: https://rancher.owl.red
-                check-url: http://rancher.cattle-system.svc.cluster.local/ping
-                icon: di:rancher
-              - title: Home Assistant
-                url: https://ha.owl.red
-                check-url: http://home-assistant.home-assistant.svc.cluster.local:8123/
-                icon: di:home-assistant
-              - title: Technitium DNS
-                url: https://dns.owl.red
-                check-url: http://technitium.technitium.svc.cluster.local:5380/
-                icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
-              - title: Open WebUI
-                url: https://ai.owl.red
-                check-url: https://nas.owl.red:11436/health
-                icon: di:open-webui
-              - title: Gatus
-                url: https://gatus.owl.red
-                check-url: http://gatus.gatus.svc.cluster.local/health
-                icon: di:gatus
+            groups:
+              - links: &core-platform
+                  - title: Rancher
+                    url: https://rancher.owl.red
+                    check-url: http://rancher.cattle-system.svc.cluster.local/ping
+                    icon: di:rancher
+                  - title: Home Assistant
+                    url: https://ha.owl.red
+                    check-url: http://home-assistant.home-assistant.svc.cluster.local:8123/
+                    icon: di:home-assistant
+                  - title: Technitium DNS
+                    url: https://dns.owl.red
+                    check-url: http://technitium.technitium.svc.cluster.local:5380/
+                    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
+                  - title: Open WebUI
+                    url: https://ai.owl.red
+                    check-url: https://nas.owl.red:11436/health
+                    icon: di:open-webui
+                  - title: Gatus
+                    url: https://gatus.owl.red
+                    check-url: http://gatus.gatus.svc.cluster.local/health
+                    icon: di:gatus
           - type: bookmarks
             title: Administration
             groups:
-              - links:
+              - links: &administration
                   - title: Traefik
                     url: https://traefik.owl.red/dashboard/
+                    alt-status-codes: [403]
                     icon: di:traefik
-          - type: monitor
+          - type: bookmarks
             title: Media
-            style: compact
-            cache: 1m
-            sites:
-              - title: Plex
-                url: http://nas.owl.red:32400/web
-                check-url: http://nas.owl.red:32400/identity
-                icon: di:plex
-              - title: Jellyfin
-                url: https://jellyfin.owl.red
-                check-url: http://nas.owl.red:8096/health
-                icon: di:jellyfin
-              - title: Seerr
-                url: https://seerr.owl.red
-                check-url: http://seerr.seerr.svc.cluster.local:5055/api/v1/status
-                icon: di:overseerr
-              - title: Bazarr
-                url: https://bazarr.owl.red
-                check-url: http://bazarr.arr.svc.cluster.local:6767/
-                icon: di:bazarr
-              - title: qBittorrent
-                url: https://qbittorrent.owl.red
-                check-url: http://qbittorrent.qbittorrent.svc.cluster.local:8080/
-                icon: di:qbittorrent
-              - title: Tautulli
-                url: https://tautulli.owl.red
-                check-url: http://tautulli.media-apps.svc.cluster.local:8181/
-                icon: di:tautulli
-              - title: Reclaimerr
-                url: https://reclaimerr.owl.red
-                check-url: http://reclaimerr.media-apps.svc.cluster.local:8000/
-                icon: mdi:broom
+            groups:
+              - links: &media
+                  - title: Plex
+                    url: http://nas.owl.red:32400/web
+                    check-url: http://nas.owl.red:32400/identity
+                    icon: di:plex
+                  - title: Jellyfin
+                    url: https://jellyfin.owl.red
+                    check-url: http://nas.owl.red:8096/health
+                    icon: di:jellyfin
+                  - title: Seerr
+                    url: https://seerr.owl.red
+                    check-url: http://seerr.seerr.svc.cluster.local:5055/api/v1/status
+                    icon: di:overseerr
+                  - title: Bazarr
+                    url: https://bazarr.owl.red
+                    check-url: http://bazarr.arr.svc.cluster.local:6767/
+                    icon: di:bazarr
+                  - title: qBittorrent
+                    url: https://qbittorrent.owl.red
+                    check-url: http://qbittorrent.qbittorrent.svc.cluster.local:8080/
+                    icon: di:qbittorrent
+                  - title: Tautulli
+                    url: https://tautulli.owl.red
+                    check-url: http://tautulli.media-apps.svc.cluster.local:8181/
+                    icon: di:tautulli
+                  - title: Reclaimerr
+                    url: https://reclaimerr.owl.red
+                    check-url: http://reclaimerr.media-apps.svc.cluster.local:8000/
+                    icon: mdi:broom
           - type: bookmarks
             title: Media Management
             groups:
-              - links:
+              - links: &media-management
                   - title: Sonarr HD
                     url: https://sonarr.owl.red
+                    check-url: http://sonarr-fhd.arr.svc.cluster.local:8989/login
                     icon: di:sonarr
                   - title: Sonarr 4K
                     url: https://sonarr-uhd.owl.red
+                    check-url: http://sonarr-uhd.arr.svc.cluster.local:8989/login
                     icon: di:sonarr
                   - title: Radarr HD
                     url: https://radarr.owl.red
+                    check-url: http://radarr-fhd.arr.svc.cluster.local:7878/login
                     icon: di:radarr
                   - title: Radarr 4K
                     url: https://radarr-uhd.owl.red
+                    check-url: http://radarr-uhd.arr.svc.cluster.local:7878/login
                     icon: di:radarr
                   - title: Lidarr
                     url: https://lidarr.owl.red
+                    check-url: http://lidarr.arr.svc.cluster.local:8686/login
                     icon: di:lidarr
                   - title: Prowlarr
                     url: https://prowlarr.owl.red
+                    check-url: http://prowlarr.arr.svc.cluster.local:9696/login
                     icon: di:prowlarr
-          - type: monitor
+          - type: bookmarks
             title: Transfers
-            style: compact
-            cache: 1m
-            sites:
-              - title: slskd
-                url: https://slskd.owl.red
-                check-url: http://slskd.qbittorrent.svc.cluster.local:5030/
-                icon: di:slskd
-              - title: Soularr
-                url: https://soularr.owl.red
-                check-url: http://soularr.qbittorrent.svc.cluster.local:8265/
-                icon: mdi:music-box
+            groups:
+              - links: &transfers
+                  - title: slskd
+                    url: https://slskd.owl.red
+                    check-url: http://slskd.qbittorrent.svc.cluster.local:5030/
+                    icon: di:slskd
+                  - title: Soularr
+                    url: https://soularr.owl.red
+                    check-url: http://soularr.qbittorrent.svc.cluster.local:8265/
+                    icon: mdi:music-box
           - type: bookmarks
             title: Home And Cameras
             groups:
-              - links:
+              - links: &home-cameras
                   - title: Frigate
                     url: https://nvr.owl.red
+                    check-url: https://nas.owl.red:8971/
                     icon: di:frigate
                   - title: Foyer Camera
                     url: http://wuuk-ptz-foyer.owl.red
@@ -148,9 +153,10 @@ pages:
           - type: bookmarks
             title: Infrastructure
             groups:
-              - links:
+              - links: &infrastructure
                   - title: VyOS Console
                     url: https://edge.pve.owl.red:8006/#v1:0:=qemu%2F103
+                    check-url: https://10.0.10.3:8006/
                     icon: mdi:router-network
                   - title: MikroTik Switch
                     url: http://switch.owl.red
@@ -160,27 +166,34 @@ pages:
                     icon: di:proxmox
                   - title: GWN Manager
                     url: https://gwn.owl.red
+                    check-url: https://10.0.10.32:8443/
                     icon: mdi:access-point-network
                   - title: Unraid
                     url: http://nas.owl.red
                     icon: di:unraid
                   - title: edge Proxmox
                     url: https://edge.pve.owl.red:8006
+                    check-url: https://10.0.10.3:8006/
                     icon: di:proxmox
                   - title: storage Proxmox
                     url: https://storage.pve.owl.red:8006
+                    check-url: https://10.0.10.4:8006/
                     icon: di:proxmox
                   - title: cp1 Proxmox
                     url: https://cp1.pve.owl.red:8006
+                    check-url: https://10.0.10.11:8006/
                     icon: di:proxmox
                   - title: cp2 Proxmox
                     url: https://cp2.pve.owl.red:8006
+                    check-url: https://10.0.10.12:8006/
                     icon: di:proxmox
                   - title: cp3 Proxmox
                     url: https://cp3.pve.owl.red:8006
+                    check-url: https://10.0.10.13:8006/
                     icon: di:proxmox
                   - title: worker1 Proxmox
                     url: https://worker1.pve.owl.red:8006
+                    check-url: https://10.0.10.14:8006/
                     icon: di:proxmox
                   - title: Storage IPMI
                     url: https://ipmi.storage.owl.red
@@ -188,29 +201,28 @@ pages:
                   - title: Rack PDU
                     url: http://pdu.owl.red
                     icon: mdi:power-socket
-          - type: monitor
+          - type: bookmarks
             title: Network Tools
-            style: compact
-            cache: 1m
-            sites:
-              - title: Speedtest Tracker
-                url: https://speedtest.owl.red
-                check-url: http://speedtest.speedtest.svc.cluster.local/admin/login
-                icon: mdi:speedometer
-              - title: LibreSpeed
-                url: https://librespeed.owl.red
-                check-url: http://librespeed.librespeed.svc.cluster.local/
-                icon: di:librespeed
-              - title: Guest Portal
-                url: https://guest.owl.red
-                icon: mdi:wifi-lock
-              - title: DiskSpeed
-                url: http://nas.owl.red:18888
-                icon: mdi:harddisk
+            groups:
+              - links: &network-tools
+                  - title: Speedtest Tracker
+                    url: https://speedtest.owl.red
+                    check-url: http://speedtest.speedtest.svc.cluster.local/admin/login
+                    icon: mdi:speedometer
+                  - title: LibreSpeed
+                    url: https://librespeed.owl.red
+                    check-url: http://librespeed.librespeed.svc.cluster.local/
+                    icon: di:librespeed
+                  - title: Guest Portal
+                    url: https://guest.owl.red
+                    icon: mdi:wifi-lock
+                  - title: DiskSpeed
+                    url: http://nas.owl.red:18888
+                    icon: mdi:harddisk
           - type: bookmarks
             title: Direct And Recovery
             groups:
-              - links:
+              - links: &direct-recovery
                   - title: Technitium Direct
                     url: http://ns1.owl.red:5380
                     icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
@@ -219,13 +231,69 @@ pages:
                     icon: di:proxmox
                   - title: qBittorrent Direct
                     url: http://qbittorrent-direct.owl.red:8080
+                    check-url: http://qbittorrent.qbittorrent.svc.cluster.local:8080/
                     icon: di:qbittorrent
                   - title: FlareSolverr Status
                     url: http://flaresolverr.owl.red:8191
+                    check-url: http://flaresolverr.flaresolverr.svc.cluster.local:8191/
                     icon: mdi:cloud-check
                   - title: Open WebUI Direct
                     url: https://nas.owl.red:11436
+                    check-url: https://nas.owl.red:11436/health
                     icon: di:open-webui
+  - name: monitor
+    slug: monitor
+    width: wide
+    columns:
+      - size: full
+        widgets:
+          - type: monitor
+            title: Core Platform
+            style: compact
+            cache: 1m
+            sites: *core-platform
+          - type: monitor
+            title: Administration
+            style: compact
+            cache: 1m
+            sites: *administration
+          - type: monitor
+            title: Media
+            style: compact
+            cache: 1m
+            sites: *media
+          - type: monitor
+            title: Media Management
+            style: compact
+            cache: 1m
+            sites: *media-management
+          - type: monitor
+            title: Transfers
+            style: compact
+            cache: 1m
+            sites: *transfers
+          - type: monitor
+            title: Home And Cameras
+            style: compact
+            cache: 1m
+            sites: *home-cameras
+      - size: full
+        widgets:
+          - type: monitor
+            title: Infrastructure
+            style: compact
+            cache: 1m
+            sites: *infrastructure
+          - type: monitor
+            title: Network Tools
+            style: compact
+            cache: 1m
+            sites: *network-tools
+          - type: monitor
+            title: Direct And Recovery
+            style: compact
+            cache: 1m
+            sites: *direct-recovery
   # - name: news
   # - name: briefing
   # - name: releases

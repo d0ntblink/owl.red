@@ -2,8 +2,9 @@
 
 Glance serves **https://home.owl.red** through the existing Traefik ingress,
 DNS record and TLS certificate. Fleet owns this bundle. The dashboard has all
-47 service shortcuts, grouped bookmarks, DuckDuckGo search, Catppuccin Mocha
-by default and an optional Catppuccin Latte theme.
+47 service shortcuts on the bookmark-only **apps** page, a separate
+**Monitor** page covering every entry, DuckDuckGo search, Catppuccin Mocha by
+default and an optional Catppuccin Latte theme.
 
 ## Contents
 
@@ -41,6 +42,7 @@ Run the commands below from the repository root. The configuration files are:
 | [glance.yml](glance.yml) | Pages, service links, subscriptions, widgets, themes and branding |
 | [kustomization.yaml](kustomization.yaml) | Files mounted into the Glance container |
 | [glance.yaml](glance.yaml) | Image version, resources and Kubernetes deployment |
+| [private-ca.pem](private-ca.pem) | Public Proxmox and GWN CA certificates trusted by Glance |
 
 The nesting is `pages` -> `columns` -> `widgets`. An RSS widget's subscriptions
 are under its `feeds` list. Keep the existing top-level `pages:` key; do not
@@ -94,8 +96,8 @@ article archive or synchronized read/unread inbox.
 
 ## Create A News Page
 
-Append this **page fragment** after the existing Home page, at the same
-indentation as `- name: Home` under `pages:`. Do not replace the Home page or
+Append this **page fragment** after the existing pages, at the same
+indentation as `- name: apps` under `pages:`. Do not replace the apps page or
 paste a new top-level `pages:` key:
 
 ```yaml
@@ -213,7 +215,7 @@ instead go directly in an RSS widget.
 
 ### Search
 
-Home already has a DuckDuckGo search widget. Edit its `search-engine` or add
+The apps page already has a DuckDuckGo search widget. Edit its `search-engine` or add
 search shortcuts with `bangs`:
 
 ```yaml
@@ -245,18 +247,43 @@ from Dashboard Icons; `mdi:server` comes from Material Design Icons. If an icon
 is missing, use a supported alternative or a verified image URL. Some Dashboard
 Icons exist only as PNG and need an explicit suffix, such as `di:name.png`.
 
-Core Platform, Media, Transfers and Network Tools use native monitor widgets
-with `style: compact` for 18 HTTP checks. This reduces their visual footprint
-without custom CSS. Each keeps its normal browser link while checking a known
-backend endpoint where needed. Authenticated Arr applications, Traefik,
-infrastructure, cameras and recovery links remain bookmarks rather than
-displaying misleading authentication failures as outages.
+The apps page contains only bookmarks. Open **https://home.owl.red/monitor**
+or select Monitor for native compact HTTP checks covering all 47 entries,
+including Arr applications, all six Proxmox hosts, cameras and recovery links.
+
+Each apps bookmark group's `links` list has a YAML anchor, such as
+`links: &media-management`. The corresponding Monitor widget uses
+`sites: *media-management`. Edit the anchored entry once to update both pages.
+Keep anchors before their aliases. Bookmark rendering ignores monitor-only
+fields such as `check-url`; they take effect on the Monitor page. Adding a link
+to an existing anchored group automatically adds its monitor too. A new group
+needs its own anchor and corresponding Monitor widget.
+
+The browser follows `url`, while the monitor requests `check-url` if supplied.
+Arr checks use their internal login pages without credentials. Proxmox checks
+use management IPs matching the node certificates, without changing browser
+links. The VyOS Console entry checks its Proxmox console host, not router
+forwarding or guest health. Cameras and other HTTP interfaces are monitored
+even when they are currently unreachable.
 
 Results are fetched on page load and reused for one minute. Refresh the page
 after the cache expires to fetch fresh results; these widgets do not poll in
 the background or send alerts. A login page returning 200 establishes HTTP
-availability, not authenticated application health. No passwords, pod-read RBAC,
-TLS bypasses or accepted-error status overrides are added.
+availability, not authenticated application health. Traefik alone accepts its
+expected HTTP 403 as a responding protected administration endpoint; that is
+not proof that routed applications are healthy. Other authentication, TLS,
+DNS and connection errors stay visible rather than being forced green.
+
+Glance retains normal public CA trust and additionally loads
+[private-ca.pem](private-ca.pem) through `SSL_CERT_DIR=/app/config`. The file
+contains only public certificates: Proxmox's cluster CA obtained through
+verified edge SSH, and the same GWN CA used by the existing GWN ingress.
+Hostname/IP validation stays enabled; there is no `allow-insecure` override.
+After a CA rotation, verify the replacement through the trusted owner, update
+this bundle and publish it. Do not automatically trust a certificate obtained
+from an unverified endpoint or add private keys. Other appliances with invalid
+or untrusted certificates will correctly show TLS errors until qualified trust
+or certificates are repaired separately.
 
 Use [Gatus](../gatus/README.md) for existing scheduled health checks/history.
 To add another lightweight Glance HTTP-status widget, this example uses Gatus's known
@@ -303,7 +330,7 @@ starting with `- name: News` at its top level, and replace that page in
 - $include: news.yml
 ```
 
-The existing Home page stays under `pages:`. Add `news.yml` to the existing
+The existing apps and Monitor pages stay under `pages:`. Add `news.yml` to the existing
 `configMapGenerator.files` list in [kustomization.yaml](kustomization.yaml),
 alongside `glance.yml`, so Fleet actually mounts it. Commit both configuration
 files and the Kustomize change together. Keep the leading `-` in the included
@@ -372,6 +399,8 @@ change. Do not revert unrelated work or use `git reset --hard`.
 |---------|-------|
 | No News page | Page must be under the existing `pages` list; confirm it was committed and pushed |
 | Service group missing on mobile | Use Glance's bottom column navigation |
+| No status beside an apps bookmark | Expected: status is on the separate Monitor page |
+| Proxmox TLS check fails | Check management IP/SAN, certificate expiry and the verified cluster CA bundle |
 | Feed error indicator | Open the widget error details; check the feed URL, provider response and pod logs |
 | Old articles | Check source publication dates and widget cache; date errors originate in some feeds |
 | One source dominates | Lower that feed's `limit`; check `preserve-order` |
@@ -404,7 +433,7 @@ reuse the existing ingress, service and disruption-budget wiring.
 
 The former Homepage ping/pod badges are not recreated. Use the existing
 [Gatus](../gatus/README.md) service for scheduled checks/history. Native
-Glance `monitor` widgets check selected HTTP backends, but neither a bookmark
+Glance `monitor` widgets cover all entries, but neither a bookmark
 nor a green backend check proves authenticated functionality or client access.
 No access restriction is relaxed to make dashboard checks pass.
 
