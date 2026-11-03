@@ -195,45 +195,57 @@ data:
       import requests
       from ruamel.yaml import YAML
 
-      LIBRARY = os.environ.get("ARTWORK_LIBRARY", "4K Movies")
       MEDIA_ROOTS = {"Movies": Path("/media/Movies"), "4K Movies": Path("/media/Movies-uhd"), "Shows": Path("/media/Shows"), "4K Shows": Path("/media/Shows-uhd")}
-      ITEM_LIMITS = {"Movies": 40, "4K Movies": 40, "Shows": 318, "4K Shows": 5}
-      ASSET_ROOT = Path("/assets") / LIBRARY
 
       def digest(filename):
         return hashlib.sha256(filename.read_bytes()).hexdigest()
 
-      def plan(items, media_root, kind="movie", limit=None):
+      def poster_digest(filename):
+        if filename.is_symlink() or (filename.exists() and not filename.is_file()):
+          raise RuntimeError("Local poster is not a regular file")
+        return digest(filename) if filename.exists() else None
+
+      def plan(items, media_root, kind="movie"):
         root = media_root.resolve(strict=True)
-        limit = (5 if kind == "show" else 40) if limit is None else limit
-        if kind not in ("movie", "show") or not 0 < limit <= (318 if kind == "show" else 40) or not 0 < len(items) <= limit:
-          raise RuntimeError("Item count outside approved library bounds")
+        if kind not in ("movie", "show"):
+          raise RuntimeError("Unexpected library type")
         result = []
-        directories = set()
+        skipped = []
+        directories = {}
+        asset_names = {}
         for item in items:
-          if kind == "show":
-            locations = [Path(location) for location in item.locations]
-            if len(locations) != 1:
-              raise RuntimeError("Multiple series locations require separate review")
-            directory = locations[0].resolve(strict=True)
+          key = str(item.ratingKey)
+          try:
+            if kind == "show":
+              locations = [Path(location) for location in item.locations]
+            else:
+              locations = [Path(part.file).parent for media in item.media for part in media.parts]
+            if not locations or len(set(locations)) != 1:
+              raise RuntimeError("Missing or ambiguous media folder")
+            directory = locations[0]
+            if root not in directory.parents:
+              raise RuntimeError("Item is outside an individual media folder")
+            if any(parent.is_symlink() for parent in (directory, *directory.parents) if parent != root and root in parent.parents):
+              raise RuntimeError("Symlinked media folder refused")
+            directory = directory.resolve(strict=True)
+            if root not in directory.parents or not directory.is_dir():
+              raise RuntimeError("Invalid media folder")
+            directories[directory] = directories.get(directory, 0) + 1
+            asset_names[directory.name] = asset_names.get(directory.name, 0) + 1
+            poster = directory / "poster.jpg"
+            result.append({"key": key, "poster": poster, "before": poster_digest(poster)})
+          except (RuntimeError, OSError) as error:
+            skipped.append({"key": key, "reason": str(error)})
+        unique = []
+        for item in result:
+          if directories[item["poster"].parent] != 1 or asset_names[item["poster"].parent.name] != 1:
+            skipped.append({"key": item["key"], "reason": "Items share a poster directory or clean-asset name"})
           else:
-            files = [Path(part.file) for media in item.media for part in media.parts]
-            if len(files) != 1:
-              raise RuntimeError("Multiple media files require separate review")
-            directory = files[0].resolve(strict=True).parent
-          if root not in directory.parents:
-            raise RuntimeError("Item is outside an individual trial folder")
-          poster = directory / "poster.jpg"
-          if poster.is_symlink() or not poster.is_file():
-            raise RuntimeError("Expected regular local poster missing")
-          if directory in directories:
-            raise RuntimeError("Items share a poster directory")
-          directories.add(directory)
-          result.append({"key": str(item.ratingKey), "poster": poster, "before": digest(poster)})
-        return result
+            unique.append(item)
+        return unique, skipped
 
       def replace_poster(target, source, expected):
-        if target.is_symlink() or digest(target) != expected:
+        if poster_digest(target) != expected:
           raise RuntimeError("Local artwork changed since preflight")
         temporary = None
         try:
@@ -243,70 +255,99 @@ data:
             output.flush()
             os.fsync(output.fileno())
           temporary.chmod(0o664)
-          if target.is_symlink() or digest(target) != expected:
+          if poster_digest(target) != expected:
             raise RuntimeError("Local artwork changed during export")
           os.replace(temporary, target)
         finally:
           if temporary is not None:
             temporary.unlink(missing_ok=True)
 
-      def main():
-        if LIBRARY not in MEDIA_ROOTS or "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
-          raise RuntimeError("Only a bounded allowlisted library is enabled")
-        configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
-        if configuration["libraries"][LIBRARY].get("settings", {}).get("asset_directory") != str(ASSET_ROOT):
-          raise RuntimeError("Native library clean-asset mapping is missing")
-        server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=60)
-        library = server.library.section(LIBRARY)
-        kind = "show" if LIBRARY in ("Shows", "4K Shows") else "movie"
+      def run_library(server, name, arguments):
+        library = server.library.section(name)
+        kind = "show" if name in ("Shows", "4K Shows") else "movie"
         if library.type != kind:
           raise RuntimeError("Unexpected library type")
         items = library.all()
         if kind == "show":
           for item in items:
             item.reload()
-        planned = plan(items, MEDIA_ROOTS[LIBRARY], kind, ITEM_LIMITS[LIBRARY])
+        planned, pending = plan(items, MEDIA_ROOTS[name], kind)
+        ready = []
         for item in planned:
-          clean = ASSET_ROOT / item["poster"].parent.name / "poster.jpg"
-          if not clean.is_file() or clean.is_symlink():
-            raise RuntimeError("Matched clean Posterizarr asset missing; refusing overlay stacking")
+          clean = Path("/assets") / name / item["poster"].parent.name / "poster.jpg"
+          if not clean.is_file() or clean.is_symlink() or clean.parent.is_symlink():
+            pending.append({"key": item["key"], "reason": "Clean Posterizarr asset missing"})
+          else:
+            ready.append(item)
         run = Path("/assetsbackup/local-posters") / uuid.uuid4().hex
         run.mkdir(parents=True, mode=0o700)
-        journal = {"library": LIBRARY, "items": [], "exported": []}
-        for item in planned:
-          shutil.copyfile(item["poster"], run / (item["key"] + ".before.jpg"))
+        journal = {"library": name, "items": [], "exported": [], "unchanged": [], "pending": pending, "complete": False}
+        for item in ready:
           journal["items"].append({"key": item["key"], "poster": str(item["poster"]), "before": item["before"]})
         manifest = run / "manifest.json"
         manifest.write_text(json.dumps(journal, indent=2))
-        subprocess.run([sys.executable, "/kometa.py", *sys.argv[1:]], check=True)
-        current = {str(item.ratingKey): item for item in library.all()}
-        if set(current) != {item["key"] for item in planned}:
-          raise RuntimeError("Library membership changed during trial")
-        for item in planned:
-          refreshed = server.fetchItem(int(item["key"]))
-          if not any(label.tag.lower() == "overlay" for label in refreshed.labels):
-            raise RuntimeError("Kometa overlay label missing; export stopped")
-          if not refreshed.thumb or not refreshed.thumb.startswith("/library/metadata/"):
-            raise RuntimeError("Unexpected selected artwork path")
-          response = requests.get(server._baseurl + refreshed.thumb, headers={"X-Plex-Token": os.environ["KOMETA_PLEXTOKEN"]}, timeout=60)
-          response.raise_for_status()
-          with Image.open(io.BytesIO(response.content)) as image:
-            if image.format != "JPEG" or image.width < 300 or image.height < 450:
-              raise RuntimeError("Selected finished artwork is not a valid poster JPEG")
-            image.verify()
-          (run / (item["key"] + ".finished.jpg")).write_bytes(response.content)
-        for item in planned:
-          if digest(item["poster"]) != item["before"]:
-            raise RuntimeError("Local artwork drift detected before export")
-        for item in planned:
-          replace_poster(item["poster"], run / (item["key"] + ".finished.jpg"), item["before"])
-          journal["exported"].append(item["key"])
-          manifest.write_text(json.dumps(journal, indent=2))
-        print(json.dumps({"library": LIBRARY, "finishedLocalPosters": len(planned), "manifest": str(manifest)}))
+        native_arguments = list(arguments)
+        native_arguments[native_arguments.index("--libraries") + 1] = name
+        subprocess.run([sys.executable, "/kometa.py", *native_arguments], check=True)
+        with requests.Session() as session:
+          session.headers["X-Plex-Token"] = os.environ["KOMETA_PLEXTOKEN"]
+          for item in ready:
+            try:
+              refreshed = server.fetchItem(int(item["key"]))
+              current, rejected = plan([refreshed], MEDIA_ROOTS[name], kind)
+              if rejected or len(current) != 1 or current[0]["poster"] != item["poster"] or current[0]["before"] != item["before"]:
+                raise RuntimeError("Media path or local artwork changed during run")
+              if not any(label.tag.lower() == "overlay" for label in refreshed.labels):
+                raise RuntimeError("Kometa overlay label missing")
+              if not refreshed.thumb or not refreshed.thumb.startswith("/library/metadata/"):
+                raise RuntimeError("Unexpected selected artwork path")
+              response = session.get(server._baseurl + refreshed.thumb, timeout=60)
+              response.raise_for_status()
+              with Image.open(io.BytesIO(response.content)) as image:
+                if image.format != "JPEG" or image.width < 300 or image.height < 450:
+                  raise RuntimeError("Selected artwork is not a valid poster JPEG")
+                image.verify()
+              if hashlib.sha256(response.content).hexdigest() == item["before"]:
+                journal["unchanged"].append(item["key"])
+              else:
+                finished = run / (item["key"] + ".finished.jpg")
+                finished.write_bytes(response.content)
+                if item["before"] is not None:
+                  shutil.copyfile(item["poster"], run / (item["key"] + ".before.jpg"))
+                replace_poster(item["poster"], finished, item["before"])
+                journal["exported"].append(item["key"])
+            except Exception as error:
+              journal["pending"].append({"key": item["key"], "reason": type(error).__name__})
+            manifest.write_text(json.dumps(journal, indent=2))
+        journal["complete"] = True
+        manifest.write_text(json.dumps(journal, indent=2))
+        print(json.dumps({"library": name, "finishedLocalPosters": len(journal["exported"]) + len(journal["unchanged"]), "pendingLocalPosters": len(journal["pending"]), "manifest": str(manifest)}), flush=True)
+
+      def main():
+        arguments = sys.argv[1:]
+        if "--libraries" not in arguments or "--overlays-only" not in arguments:
+          raise RuntimeError("Explicit video libraries and overlays-only are required")
+        names = arguments[arguments.index("--libraries") + 1].split("|")
+        if not names or len(names) != len(set(names)) or any(name not in MEDIA_ROOTS for name in names):
+          raise RuntimeError("Unexpected artwork libraries")
+        configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
+        for name in names:
+          if configuration["libraries"][name].get("settings", {}).get("asset_directory") != str(Path("/assets") / name):
+            raise RuntimeError("Native library clean-asset mapping is missing")
+        server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=180)
+        failed = []
+        for name in names:
+          try:
+            run_library(server, name, arguments)
+          except Exception:
+            failed.append(name)
+            print(json.dumps({"library": name, "failed": True}), flush=True)
+        if failed:
+          raise RuntimeError("Artwork libraries failed; completed sidecars retained")
 
       if __name__ == "__main__":
         try:
           main()
         except Exception:
-          print("Artwork trial/export stopped. Inspect the private run manifest; do not retry an unknown partial run.", file=sys.stderr)
+          print("Artwork run stopped. Completed posters and native caches are retained; inspect the run manifests.", file=sys.stderr)
           sys.exit(1)

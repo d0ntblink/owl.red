@@ -1,12 +1,51 @@
 # Plex Collections, Artwork And Image Cleanup
 
-Status: the suspended Fleet job and NAS-local ImageMaid definition are deployed.
+Status: the Fleet artwork job and NAS-local ImageMaid definition are deployed.
 All 13 UHD movies and both UHD series have styled, badged local posters. The
 operator confirmed the movie posters in Jellyfin, completing the UHD trial's
 cross-server visual acceptance; the series pilot verified both selected JPEGs
-on Plex and Jellyfin against the local files. The next approved run covers the
-318 series in Shows. Daily scheduling remains paused and no ImageMaid deletion
-is enabled.
+on Plex and Jellyfin against the local files. All 318 main Shows now also have
+finished local posters, confirmed by the completed export job. Jellyfin's main
+Shows indexing is still behind Plex; its eventual selection is not yet verified.
+The daily workflow targets all four video libraries. No ImageMaid deletion is
+enabled.
+
+## Automatic Artwork Workflow
+
+The Fleet-owned `plex-artwork` CronJob runs daily at 06:00 America/Edmonton.
+Posterizarr's native `Start.ps1 -Run` generates missing clean bases for Movies,
+4K Movies, Shows and 4K Shows, reusing its persistent assets. Its internal timer
+is disabled because Kubernetes owns the schedule. Kometa then runs its native
+overlays-only command sequentially for each library, using the separate clean
+asset directories and persistent 60-day provider caches. Collections, global
+award/streaming discovery, Music, seasons, episodes and backgrounds remain out
+of scope. Missing ratings are omitted, not invented.
+
+The local-sidecar requirement is an adapter, not a native creator feature: after
+each library's overlays, it retrieves Plex's selected finished JPEG and atomically
+writes only `poster.jpg` beside the movie or series. New folders need no initial
+poster. Same-folder versions share one item poster; ambiguous multi-folder items,
+shared folder/asset names, symlinks and missing clean bases remain pending in the
+private run manifest instead of blocking other exports. Titles added during a run
+are picked up next time. Native overlay processing still covers the whole library;
+the pending clean-base check controls local sidecar export, not native builders.
+
+Unchanged JPEGs are not rewritten or backed up again. Changed originals and
+finished replacements are retained outside media under
+`assetsbackup/local-posters/<run>/`, with progress and pending reasons in
+`manifest.json`. Preserve these preimages; ImageMaid does not clean this directory.
+To recover an exported poster, first suspend future runs and wait for the active
+writer to finish, verify the current JPEG matches that run's finished preimage,
+then restore its matching original. A newly created sidecar has no original;
+removing one is a separate, explicitly approved recovery action.
+
+`concurrencyPolicy: Forbid`, no automatic pod retries, and a 24-hour run deadline
+prevent scheduled overlap and runaway jobs. Manual starts must first require no
+active artwork jobs and retain the CronJob owner reference. Quota exhaustion or
+missing source artwork can leave pending work for the next daily run; completion
+by a particular date is not guaranteed. To pause, set `suspend: true` in the owning
+manifest and publish it; suspension does not interrupt an already running job.
+No cache clearing, Plex restart, share-permission change or cleanup is required.
 
 ## Placement
 
@@ -17,9 +56,9 @@ SQLite cache and native working state; bulk clean artwork and poster preimages
 use a separate NAS appdata claim. Do not put SQLite on SMB or replicate bulk
 poster storage onto Longhorn. SMB claim sizes are not storage quotas.
 
-The bounded export adapter mounts only the existing `Movies-uhd` media subtree
+The export adapter mounts only the four existing video media subtrees
 with the already-authorized SMB credential. No share or recursive ownership
-change is required. This mount technically permits video writes, so the adapter
+change is required. These mounts technically permit video writes, so the adapter
 must enforce its poster-only path, media identity and drift guards. Neither
 Posterizarr nor Jellyfin receives this new writable mount.
 
@@ -102,10 +141,10 @@ video format and the right-side three-rating strip. The operator approved
 deferring award ribbons and streaming indicators because their native defaults
 perform global discovery and IMDb-to-TMDb conversion for non-library titles,
 which cannot be bounded by a small Plex library. This is intentionally a partial
-style match until those sources have a quota-safe approach. The TV pilot adapts
+style match until those sources have a quota-safe approach. The TV configuration adapts
 the series-level layout only; season and episode artwork remain deferred.
 Badges must describe actual media and available ratings; do not stamp screenshot
-values on every title. Visual acceptance remains part of the bounded trial.
+values on every title. The accepted UHD samples establish the layout.
 
 The operator declined paid fonts and selected an open-font adaptation. Use
 Arimo Bold for Rotten Tomatoes, Libre Franklin Black for IMDb, and Figtree Black
@@ -130,19 +169,18 @@ Posterizarr and Kometa. Persistent provider caches explicitly retain results for
 60 days. Keep the existing cache between runs and do not force-refresh it during
 onboarding.
 
-The first pilot targeted only `4K Movies` in both applications and ran Kometa
-overlays only. The next approved pilot targets only the two series in `4K Shows`;
-season posters, episode cards and backgrounds are explicitly disabled in both
-the renderer and overlay definitions. Broad collection builders and the main
-Movies library are not part of either pilot. Automatic job retries are disabled. Check available
-provider usage before and after the trial; count credential preflight calls too.
-Quota exhaustion is a stop condition, not a reason to retry or rotate keys.
+The operator approved whole-library onboarding without more pilot batches or a
+custom quota scheduler. Quota exhaustion may leave work for the next daily run;
+do not clear caches, immediately retry requests or rotate keys to bypass it.
+Season posters, episode cards, backgrounds and broad collection builders remain
+disabled. Daily runs reuse completed native assets and cached provider results.
 
 After the stopped first trial, MDBList reported 10/1,000 requests used; after
 the first completed overlay/export run it reported 19/1,000. Do not
-infer TMDb's usage from that separate provider's counter. Keep both the manual
-trial and daily CronJob suspended while reviewing an uncertain run, and do not
-overlap the replacement trial with ImageMaid reporting or removal.
+infer TMDb's usage from that separate provider's counter. Main Shows later used
+18/1,000 MDBList calls because its native client batches up to 100 uncached IDs
+per request; IMDb ratings use separate bulk data. Missing ratings do not by
+themselves establish quota exhaustion. Do not overlap artwork with ImageMaid.
 
 The guarded NAS-local report phase is:
 
@@ -157,16 +195,17 @@ WebUI, restart policy `no`, a read-only Plex profile and a private report config
 It does not schedule cleanup or enable transcoder, trash, bundle or optimize
 operations.
 
-Caching and a small trial are not a hard daily request limiter, and longer cache
-retention makes ratings less current. Keep automatic scheduling suspended until
-the measured trial establishes a safe batch size and the remaining library can
-be onboarded across provider reset windows with headroom for other consumers.
+Caching is not a hard daily request limiter, and longer retention makes ratings
+less current. The operator accepts provider limits and continuation after reset.
 
-Run the minimal credential/inventory check with:
+The historical UHD-only credential/inventory helper is:
 
 ```bash
 node scripts/plex-maintenance-run.mjs preflight
 ```
+
+It is not the four-library scheduler and does not need to be rerun before each
+automatic job. The owning CronJob supplies the current native workflow.
 
 The successful preparation check authenticated TMDb key/read-token and MDBList,
 with two TMDb calls and one MDBList usage call. MDBList reported 0/1,000 used;
@@ -180,8 +219,8 @@ of every consumer or the provider's complete daily usage.
 The operator wants exactly one finished, badged `poster.jpg` beside each movie,
 used by both Plex and Jellyfin. Clean working artwork remains outside media
 directories so reruns cannot stack overlays. Never configure the finished
-sidecar as Kometa's clean input asset. Existing artwork replacement must be
-scoped during the bounded trial, with no video/NFO/subtitle deletion.
+sidecar as Kometa's clean input asset. Replacement is scoped to the four video
+libraries, with no video/NFO/subtitle deletion.
 
 Both servers support local movie artwork. Plex Movie's Use local assets setting
 is already enabled for the trial library; no preference change is needed.
@@ -191,20 +230,13 @@ enabled. An already-selected cached image may need a targeted image refresh.
 
 The pinned Kometa release saves a composited temporary image and uploads it to
 Plex. The small `run.py` adapter in the config resource then exports Plex's
-selected finished JPEG to the exact matched movie or series directory. It requires a
-successful native run, an Overlay label, a verified JPEG and unchanged library
-membership. It validates every downloaded poster before replacing any local
-poster, then atomically replaces only `poster.jpg`, checking preimage hashes.
+selected finished JPEG to the exact matched movie or series directory. It requires
+an Overlay label, a verified JPEG, matching current media location and unchanged
+local preimage hash. It validates and exports each eligible poster independently,
+recording pending items and atomically replacing only `poster.jpg`. There are no
+fixed library-count caps or requirements for an existing sidecar. See the
+automatic workflow above for ambiguous-path handling and retained recovery data.
 
-The current trial inventory is 13 movies, each with one media file in its own
-folder and an existing regular `poster.jpg`. The adapter refuses symlinks,
-multiple versions/parts, shared directories, missing clean assets and more than
-40 movies. Its series path uses one verified series directory and an existing
-regular `poster.jpg`. Per-library limits are five UHD series and 318 main Shows;
-the 318 limit does not apply to movies. The current job mounts only `Shows`;
-other media claims are retained but not mounted. It preserves current posters
-and a per-item export journal under
-NAS appdata `assetsbackup/local-posters/<run-id>`, outside media directories.
 Its isolated native-runtime replacement/refusal tests passed. The first completed
 run exported 13 JPEGs and byte-for-byte Plex/sidecar equality passed for all 13.
 Visual review then caught the wrong clean base: per-library `asset_directory`
@@ -219,9 +251,8 @@ subsequently reached 52.7%. A later broad read timed out and was not counted as
 an automated pass. The operator has since confirmed that Jellyfin displays the
 labeled posters, closing the trial's visual acceptance without another refresh
 or server restart. This confirmation does not certify full-library scan
-completion or an automated per-image hash comparison in Jellyfin. Daily
-scheduling, additional-library onboarding and ImageMaid cleanup remain separate
-pending work.
+completion or an automated per-image hash comparison in Jellyfin. ImageMaid
+cleanup retains its separate report and deletion gate.
 
 ## UHD Series Pilot
 
@@ -233,8 +264,8 @@ Only the series-level community layout is adapted: no season or episode
 bundled Figtree Black in place of the commercial font. Native renderer settings
 disable season posters, backgrounds, title cards, direct Plex uploads and cleanup.
 
-The renderer must produce exactly the two expected clean posters before the
-export stage can run. Both native configuration validation and synthetic
+That initial run required exactly two expected clean posters. Native configuration
+validation and synthetic
 series-poster replacement/refusal tests passed. The manual run completed and
 both sidecars matched the saved outputs, Plex-selected images and Jellyfin-selected
 images byte-for-byte, without a Jellyfin refresh. The finished sample passed
@@ -245,31 +276,22 @@ visual review. MDBList reported 5/1,000 requests used after the run.
 The operator approved processing the main Shows library as a whole after
 confirming its size. Read-only preflight verified exactly 318 series, each with
 one unique folder under `/media/Shows` and an existing regular `poster.jpg`.
-The job mounts only that subtree and uses the same series-level overlays as the
-accepted UHD pilot. Seasons, episodes, backgrounds, collections, Movies and
-ImageMaid remain excluded.
+That initial job mounted only Shows and used the accepted series-level overlays.
+Posterizarr generated 317 clean bases; one unmatched lecture used its verified
+untouched original cover through native manual input. Native overlays completed
+and job `plex-artwork-shows-20261103-final` exported all 318 finished sidecars.
+The automatic workflow now includes new series without a separate count review.
+Seasons, episodes, backgrounds, collections and ImageMaid deletion remain excluded.
 
-Native generation must supply all 318 clean base posters before Kometa starts.
-If the renderer stops on a provider limit or missing artwork, retained clean
-assets/cache can support a later reviewed retry; do not clear them or rotate
-credentials to bypass quotas. Export still preserves preimages, checks current
-membership and file hashes, validates finished JPEGs, and atomically replaces
-only series `poster.jpg` files. A 319th series requires a fresh scope review.
-Daily scheduling stays suspended; the manual run requires its own live acceptance.
-
-If the run fails, leave scheduling suspended and inspect the private manifest
-before doing anything else. Stop the artwork writer before recovery. Use the
-recorded exact paths/hashes to restore only changed local posters from that
-run's `.before.jpg` files; restore Plex's prior selected images and remove only
-the trial's Overlay labels as needed. Do not replay an unknown partial run or
-restore an entire Plex database/profile. Native cache/originals and NAS SSH
-recovery remain available independently of the Kubernetes job.
+On an uncertain partial run, inspect its journal before a manual replay. Native
+cache/originals and NAS SSH recovery remain available independently of the job;
+do not restore an entire Plex database/profile to recover individual posters.
 
 Publishing the scoped source also triggers the existing Technitium SHA-based
-full sync and its brief DHCP quiescence. Publication and the one-shot trial need
-bounded approval; do not activate the full-library schedule or include unrelated
-Jellyfin/downloader edits in the commit. ImageMaid permanent deletion retains
-its separate report/review gate.
+full sync and its brief DHCP quiescence. The operator approved scoped publication
+and automatic four-library onboarding. Do not include unrelated roadmap,
+Jellyfin or downloader changes in that commit. ImageMaid permanent deletion
+retains its separate report/review gate.
 
 ## Initial Acceptance And Cleanup
 
@@ -283,8 +305,8 @@ the Plex database, selected artwork, trash contents or bundles.
 Use Kometa's supported validation mode before a bounded, reviewed initial run.
 `--read-only-config` only prevents rewriting YAML; it does not prevent Plex API
 changes. `--tests` also performs real changes for matching test collections.
-Acceptance includes successful authenticated connections, the intended new
-collections and at least one correct overlay, with unrelated libraries and
+Acceptance includes successful authenticated connections and correct finished
+overlays, with unrelated libraries and
 current Plex access preserved.
 
 Do not overlap ImageMaid with Kometa, Posterizarr or Plex metadata maintenance.
