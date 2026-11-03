@@ -1,60 +1,75 @@
-# Dashboards Bake-Off (GitOps)
+# Glance Dashboard
 
-This bundle deploys the selected dashboard product for ongoing operations.
+Glance serves **https://home.owl.red** through the existing Traefik ingress,
+DNS record and TLS certificate. Fleet owns this bundle. The dashboard has all
+47 service shortcuts, grouped bookmarks, DuckDuckGo search, Catppuccin Mocha
+by default and an optional Catppuccin Latte theme.
 
-- `home.owl.red`
+## Edit The Dashboard
 
-All manifests are reconciled by Fleet from this repository.
+Edit [glance.yml](glance.yml) for links, pages, widgets, feeds and theme colors.
+It is Glance's native configuration, not an API import or generated subscription
+database. Commit and publish the reviewed change to `main`; Fleet renders
+[kustomization.yaml](kustomization.yaml), generates a content-hashed ConfigMap
+and rolls the deployment automatically. No manual restart is needed.
 
-Availability defaults in this bundle:
+Use bookmarks for service navigation. Each link has `title`, `url` and optional
+`icon`/`description`. Icons use Glance's `di:` or `mdi:` prefixes or a full image
+URL. Icons are fetched by the browser from external CDNs; no Docker socket,
+Kubernetes credentials or application passwords are needed.
 
-- Homepage runs as a single replica (cold failover model).
-- Control-plane fallback tolerations are enabled for dashboard pods.
-- Topology spread + anti-affinity hints remain in place for scheduler behavior.
+## Add RSS Feeds
 
-## Selected Dashboard
+Add an RSS widget to a page column's `widgets` list, replacing the example URL
+with the feed you choose:
 
-Homepage is the chosen dashboard and is wired with:
+```yaml
+- type: rss
+  title: News
+  style: detailed-list
+  cache: 30m
+  limit: 25
+  collapse-after: 8
+  feeds:
+    - url: https://example.org/feed.xml
+      title: Example
+      limit: 5
+```
 
-- Catppuccin-inspired custom CSS
-- Curated sections for Core Platform, Infrastructure, and Future Roadmap
-- Clean bookmark rails for rapid navigation
+Add/remove entries under `feeds` in Git to change subscriptions. Add another
+entry under `pages` for a dedicated News page. Glance fetches feeds itself;
+no subscription reconciler or database is required. No feeds have been selected
+on your behalf. Glance caches articles but is not a persistent RSS inbox with
+synchronized unread state or an archive.
 
-## Notes
+Scheduled LLM enrichment is not deployed. A later worker can publish a private
+briefing feed for an RSS widget; use `preserve-order: true` when that feed's
+ordering represents relevance. Never put API tokens or article-triggered tool
+execution into dashboard configuration.
 
-- Hostnames are expected in DNS zone data:
-  - `home.owl.red`
-- Traefik currently redirects HTTP to HTTPS. If certs are not yet provisioned for these hosts, browser warnings may appear until TLS policy is finalized.
+## Operations
 
-## Service Health Indicators
+[glance.yaml](glance.yaml) pins Glance v0.8.7 by digest. One non-root, read-only
+container runs without a service-account token, RBAC, persistent storage or
+host mounts. Control-plane fallback scheduling remains enabled. Legacy
+`homepage` resource/container names and selector are intentionally retained to
+reuse the existing ingress, service and disruption-budget wiring.
 
-All 47 services have deployed status indicators: 23 HTTP checks,
-17 host pings and 7 Kubernetes pod-readiness indicators. HTTP checks use native
-backend routes where authentication or ingress restrictions would otherwise
-misrepresent availability. Pod readiness covers Traefik and authenticated Arr
-services, using a dedicated service account with read-only `get`/`list` access
-to pods in `traefik` and `arr` only. No Secrets access or write permissions are
-granted. Ping indicates host reachability, not application health; Unraid stays
-ping-only until its certificate is repaired.
+The former Homepage HTTP/ping/pod badges are not recreated. Use the existing
+[Gatus](../gatus/README.md) service for scheduled checks/history. A future native
+Glance `monitor` widget can check selected HTTP backends, but neither a bookmark
+nor a green backend check proves authenticated functionality or client access.
+No access restriction is relaxed to make dashboard checks pass.
 
-The Gatus entry uses its native `/health` route and was verified in the live UI.
-Jellyfin uses its native NAS `/health` endpoint; its browser link is the
-restricted HTTPS hostname, not an unrestricted NAS port link.
-Browser links remain their normal hostnames; no administration allowlist is
-weakened to permit monitoring. A failed monitor
-can display 500 for a connection timeout; this does not mean the application
-itself returned HTTP 500.
+For validation, use the matching official Glance binary plus existing kubectl:
 
-These checks show backend HTTP availability from the Homepage pod, not complete
-client DNS/TLS/ingress or authenticated application functionality. They do not
-send background alerts or replace Kubernetes liveness. The selected Gatus
-monitor is deployed as separate Fleet bundles with retained Longhorn SQLite
-history and notifications disabled. Its in-cluster placement cannot report a
-total cluster outage. See [Gatus](../gatus/README.md).
+```sh
+glance --config gitops/dashboards/glance.yml config:validate
+kubectl kustomize gitops/dashboards
+kubectl -n dashboards rollout status deployment/homepage --timeout=180s
+```
 
-ConfigMap changes need one controlled rollout because files use `subPath`.
-Preserve all other live ConfigMap data and the existing replica count. The
-health-indicator changes are published. The earlier imperative service-list
-update caused an SSA conflict; its full guarded ConfigMap is now owned by
-`fleetagent` again. Do not introduce another imperative field owner when
-updating the service list. A correct live mount is not proof of Fleet convergence.
+Rollback is a reviewed Git revert of the dashboard replacement followed by
+Fleet reconciliation. There is no dashboard database to restore. Publishing
+any repository commit can also trigger the existing Technitium sync; do not
+apply a second Helm release or introduce another dashboard configuration writer.

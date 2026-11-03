@@ -32,6 +32,8 @@ retired implementations. They are not instructions to replay migrations.
 
 ## Platform And Services
 
+- [Glance dashboard](../gitops/dashboards/README.md): service shortcuts, native
+  YAML RSS subscriptions, Catppuccin themes and Fleet-managed updates.
 - [Software inventory](guides/software-inventory.md): read-only version/image
   collection, cached SBOMs and inputs for a future personal vulnerability feed.
 - [Proxmox](guides/proxmox-terraform.md) and [node upgrades](guides/proxmox-node-upgrades.md).

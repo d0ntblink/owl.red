@@ -22,8 +22,8 @@ their existing design systems.
   Inspect the current site visually when proposing a design; do not infer its
   appearance from extracted text alone or copy its branding, assets or wording.
 - **Catppuccin:** the user likes the
-  [Catppuccin](https://catppuccin.com/) theme ecosystem. The existing Homepage
-  styling is Catppuccin-inspired, and the guest portal's approved accent is
+  [Catppuccin](https://catppuccin.com/) theme ecosystem. Glance uses native
+  Catppuccin Mocha/Latte palettes, and the guest portal's approved accent is
   Mocha Mauve, `#cba6f7`. Preserve established typography and layout unless a
   change is requested. The other flavors are Latte, Frappe and Macchiato;
   liking Catppuccin does not require every application to use dark Mocha.
@@ -78,7 +78,7 @@ when they solve a concrete requirement or the user requests a comparison.
 - [d0ntb.link](https://d0ntb.link/): the user's personal website and direct
   early-internet design reference; its separate repository owns its HTML, CSS
   and banner. This guide does not authorize changing that site.
-- [Homepage configuration and CSS](../../gitops/dashboards/homepage.yaml).
+- [Glance configuration and themes](../../gitops/dashboards/glance.yml).
 - [Dashboard guide](../../gitops/dashboards/README.md).
 - [Guest portal application](https://github.com/d0ntblink/owl.red-guest-captive-portal):
   separate application repository; preserve its accepted fonts/layout and mauve

@@ -1,0 +1,200 @@
+server:
+  port: 8080
+  proxied: true
+branding:
+  logo-text: owl.red
+  app-name: owl.red
+theme:
+  background-color: 240 21 15
+  primary-color: 267 84 81
+  positive-color: 115 54 76
+  negative-color: 343 81 75
+  contrast-multiplier: 1.2
+  presets:
+    catppuccin-latte:
+      light: true
+      background-color: 220 23 95
+      primary-color: 266 85 58
+      positive-color: 109 58 40
+      negative-color: 347 87 44
+pages:
+  - name: Home
+    width: wide
+    head-widgets:
+      - type: search
+        search-engine: duckduckgo
+        new-tab: true
+    columns:
+      - size: full
+        widgets:
+          - type: bookmarks
+            title: Core Platform
+            groups:
+              - links:
+                  - title: Rancher
+                    url: https://rancher.owl.red
+                    icon: di:rancher
+                  - title: Home Assistant
+                    url: https://ha.owl.red
+                    icon: di:home-assistant
+                  - title: Technitium DNS
+                    url: https://dns.owl.red
+                    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
+                  - title: Open WebUI
+                    url: https://ai.owl.red
+                    icon: di:open-webui
+                  - title: Gatus
+                    url: https://gatus.owl.red
+                    icon: di:gatus
+                  - title: Traefik
+                    url: https://traefik.owl.red/dashboard/
+                    icon: di:traefik
+          - type: bookmarks
+            title: Media
+            groups:
+              - links:
+                  - title: Plex
+                    url: http://nas.owl.red:32400/web
+                    icon: di:plex
+                  - title: Jellyfin
+                    url: https://jellyfin.owl.red
+                    icon: di:jellyfin
+                  - title: Seerr
+                    url: https://seerr.owl.red
+                    icon: di:overseerr
+                  - title: Sonarr HD
+                    url: https://sonarr.owl.red
+                    icon: di:sonarr
+                  - title: Sonarr 4K
+                    url: https://sonarr-uhd.owl.red
+                    icon: di:sonarr
+                  - title: Radarr HD
+                    url: https://radarr.owl.red
+                    icon: di:radarr
+                  - title: Radarr 4K
+                    url: https://radarr-uhd.owl.red
+                    icon: di:radarr
+                  - title: Lidarr
+                    url: https://lidarr.owl.red
+                    icon: di:lidarr
+                  - title: Bazarr
+                    url: https://bazarr.owl.red
+                    icon: di:bazarr
+                  - title: Prowlarr
+                    url: https://prowlarr.owl.red
+                    icon: di:prowlarr
+                  - title: qBittorrent
+                    url: https://qbittorrent.owl.red
+                    icon: di:qbittorrent
+                  - title: Tautulli
+                    url: https://tautulli.owl.red
+                    icon: di:tautulli
+                  - title: Reclaimerr
+                    url: https://reclaimerr.owl.red
+                    icon: mdi:broom
+          - type: bookmarks
+            title: Transfers
+            groups:
+              - links:
+                  - title: slskd
+                    url: https://slskd.owl.red
+                    icon: di:slskd
+                  - title: Soularr
+                    url: https://soularr.owl.red
+                    icon: mdi:music-box
+          - type: bookmarks
+            title: Home And Cameras
+            groups:
+              - links:
+                  - title: Frigate
+                    url: https://nvr.owl.red
+                    icon: di:frigate
+                  - title: Foyer Camera
+                    url: http://wuuk-ptz-foyer.owl.red
+                    icon: mdi:cctv
+                  - title: Office Camera
+                    url: http://wuuk-ptz-office.owl.red
+                    icon: mdi:cctv
+                  - title: Canon Printer
+                    url: http://printer.owl.red
+                    icon: mdi:printer
+      - size: full
+        widgets:
+          - type: bookmarks
+            title: Infrastructure
+            groups:
+              - links:
+                  - title: VyOS Console
+                    url: https://edge.pve.owl.red:8006/#v1:0:=qemu%2F103
+                    icon: mdi:router-network
+                  - title: MikroTik Switch
+                    url: http://switch.owl.red
+                    icon: di:mikrotik
+                  - title: PDM
+                    url: https://pdm.owl.red
+                    icon: di:proxmox
+                  - title: GWN Manager
+                    url: https://gwn.owl.red
+                    icon: mdi:access-point-network
+                  - title: Unraid
+                    url: http://nas.owl.red
+                    icon: di:unraid
+                  - title: edge Proxmox
+                    url: https://edge.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: storage Proxmox
+                    url: https://storage.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: cp1 Proxmox
+                    url: https://cp1.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: cp2 Proxmox
+                    url: https://cp2.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: cp3 Proxmox
+                    url: https://cp3.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: worker1 Proxmox
+                    url: https://worker1.pve.owl.red:8006
+                    icon: di:proxmox
+                  - title: Storage IPMI
+                    url: https://ipmi.storage.owl.red
+                    icon: mdi:server-security
+                  - title: Rack PDU
+                    url: http://pdu.owl.red
+                    icon: mdi:power-socket
+          - type: bookmarks
+            title: Network Tools
+            groups:
+              - links:
+                  - title: Speedtest Tracker
+                    url: https://speedtest.owl.red
+                    icon: di:speedtest-tracker
+                  - title: LibreSpeed
+                    url: https://librespeed.owl.red
+                    icon: di:librespeed
+                  - title: Guest Portal
+                    url: https://guest.owl.red
+                    icon: mdi:wifi-lock
+                  - title: DiskSpeed
+                    url: http://nas.owl.red:18888
+                    icon: mdi:harddisk
+          - type: bookmarks
+            title: Direct And Recovery
+            groups:
+              - links:
+                  - title: Technitium Direct
+                    url: http://ns1.owl.red:5380
+                    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/technitium.png
+                  - title: PDM Direct
+                    url: https://pdm-direct.owl.red:8443
+                    icon: di:proxmox
+                  - title: qBittorrent Direct
+                    url: http://qbittorrent-direct.owl.red:8080
+                    icon: di:qbittorrent
+                  - title: FlareSolverr Status
+                    url: http://flaresolverr.owl.red:8191
+                    icon: mdi:cloud-check
+                  - title: Open WebUI Direct
+                    url: https://nas.owl.red:11436
+                    icon: di:open-webui
