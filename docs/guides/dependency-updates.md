@@ -90,6 +90,18 @@ Do not grant the bot bypass rights or enable automerge to clear a backlog. Pause
 an update by leaving it unapproved, or close an unwanted PR after reading
 Renovate's explanation of what future updates that suppresses.
 
+### Qualified Version Pairs
+
+The offline renderer workflow retains Python 3.12 with Ansible Core 2.16.3
+and adds Python 3.15 with Ansible Core 2.22.0. Both pairs pass the existing
+rendering and unsafe-input checks. This does not upgrade the controller's local
+virtual environment or certify every live playbook on the newer pair.
+
+The current Kubernetes 1.31 cluster is outside cert-manager 1.21's supported
+Kubernetes 1.33-1.36 range. Keep that update held until a separately reviewed
+cluster upgrade establishes compatibility. Successful Helm rendering alone is
+not sufficient, and an older compatible branch may already be end-of-life.
+
 ## Validate Configuration
 
 Use Node.js 24 and npm/npx on the controller. From the repository root:

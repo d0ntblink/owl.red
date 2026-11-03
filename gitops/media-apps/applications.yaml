@@ -71,7 +71,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: reclaimerr
-          image: ghcr.io/jessielw/reclaimerr@sha256:95748d1905f3ccc0024ab0286ef4a0ab2d24946c025abd80830d6cd902afeb9c
+          image: ghcr.io/jessielw/reclaimerr@sha256:61604dc7334955857fed19a9aa06d9e43a08f69399766b1cc93dd6eb0916985f
           command: [granian]
           args: [--interface, asgi, --workers, "1", --host, 0.0.0.0, --port, "8000", backend.api.main:app]
           env:

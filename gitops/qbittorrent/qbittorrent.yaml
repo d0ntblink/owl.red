@@ -152,7 +152,7 @@ spec:
       initContainers:
         - name: gluetun
           restartPolicy: Always
-          image: qmcgaw/gluetun@sha256:c2ee4191762fca6b6a3c3359a731198a95d9c9af4db32d466e223bf3a84e779b
+          image: qmcgaw/gluetun@sha256:4af0c804003481e100180e1f8d4d5e9c48163fedc0f88d061881b615aef9d183
           command: [/bin/sh, -ec]
           args:
             - >-
@@ -201,7 +201,7 @@ spec:
           volumeMounts:
             - {name: gateway, mountPath: /gluetun}
         - name: wait-for-gateway
-          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          image: binhex/arch-qbittorrent@sha256:351c015baa25316db1432460237462be06d6d9c6cba323d435390fc988ac0b19
           command: [curl, --fail, --silent, --retry, "10", --retry-connrefused, --retry-delay, "2", --max-time, "5", http://127.0.0.1:9999/]
           securityContext:
             runAsUser: 99
@@ -214,7 +214,7 @@ spec:
             limits: {cpu: 100m, memory: 64Mi}
       containers:
         - name: qbittorrent
-          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          image: binhex/arch-qbittorrent@sha256:351c015baa25316db1432460237462be06d6d9c6cba323d435390fc988ac0b19
           command: [/bin/bash, -ec]
           args: ["umask 000; exec /usr/bin/qbittorrent-nox --profile=/config --webui-port=8080"]
           env:
@@ -245,7 +245,7 @@ spec:
             - {name: media, mountPath: /media}
             - {name: shared, mountPath: /shared}
         - name: slskd
-          image: slskd/slskd@sha256:588af49abc3088d639c8f1174d3bfad6e92c093a275a593140e3ac9311ebf6c4
+          image: slskd/slskd@sha256:d0963a3e5b16facd295bf4f2156dad0182f246b1b21a032cae12f5494c694843
           command: [/bin/sh, -ec]
           args:
             - >-
@@ -280,7 +280,7 @@ spec:
             - {name: slskd-data, mountPath: /app/data}
             - {name: media, mountPath: /media}
         - name: soularr
-          image: mrusse08/soularr@sha256:89b6809a169f6c78032c9a66abf5130e4877c46c0b95391818a38ab66cd71548
+          image: mrusse08/soularr@sha256:61ee506de5fb1447f3abd4a5a47e2537fad152ddf8c7e0392a36ef00b4f1c3d9
           env:
             - {name: TZ, value: America/New_York}
             - {name: SCRIPT_INTERVAL, value: "300"}
