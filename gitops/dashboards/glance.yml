@@ -29,6 +29,7 @@ pages:
         widgets:
           - type: monitor
             title: Core Platform
+            style: compact
             cache: 1m
             sites:
               - title: Rancher
@@ -60,6 +61,7 @@ pages:
                     icon: di:traefik
           - type: monitor
             title: Media
+            style: compact
             cache: 1m
             sites:
               - title: Plex
@@ -114,6 +116,7 @@ pages:
                     icon: di:prowlarr
           - type: monitor
             title: Transfers
+            style: compact
             cache: 1m
             sites:
               - title: slskd
@@ -187,6 +190,7 @@ pages:
                     icon: mdi:power-socket
           - type: monitor
             title: Network Tools
+            style: compact
             cache: 1m
             sites:
               - title: Speedtest Tracker

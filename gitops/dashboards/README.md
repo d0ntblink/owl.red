@@ -246,7 +246,8 @@ is missing, use a supported alternative or a verified image URL. Some Dashboard
 Icons exist only as PNG and need an explicit suffix, such as `di:name.png`.
 
 Core Platform, Media, Transfers and Network Tools use native monitor widgets
-for 18 HTTP checks. Each keeps its normal browser link while checking a known
+with `style: compact` for 18 HTTP checks. This reduces their visual footprint
+without custom CSS. Each keeps its normal browser link while checking a known
 backend endpoint where needed. Authenticated Arr applications, Traefik,
 infrastructure, cameras and recovery links remain bookmarks rather than
 displaying misleading authentication failures as outages.
