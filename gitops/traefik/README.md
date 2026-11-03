@@ -43,6 +43,16 @@ Remote administration needs a separately reviewed path.
 
 ## Change And Verify
 
+Chart 42.3.0 uses `log.level`, replacing the older `logs.general.level` key.
+Keep the chart pin and this values migration in the same change.
+
+Helm does not upgrade existing CRDs automatically. Before a chart upgrade,
+compare its pinned CRDs with the installed schemas and follow the upstream
+CRD upgrade procedure through an explicitly approved maintenance action.
+Refresh only the in-use Traefik Proxy CRDs, preserve their existing field
+ownership, and retain the prior schemas for recovery. Traefik Hub CRDs are
+outside this deployment's upgrade scope. Fleet remains the workload owner.
+
 Custom Certificates, TLSStores, Middlewares and the redirect IngressRoute live
 in `extraObjects` so the remote chart actually renders and owns them. Standalone
 files beside a remote chart are not automatically part of its templates.
