@@ -67,6 +67,7 @@ data:
     $config.PrerequisitePart.SeasonPosters = 'false'
     $config.PrerequisitePart.BackgroundPosters = 'false'
     $config.PrerequisitePart.TitleCards = 'false'
+    $config.PrerequisitePart.SkipLocalPosterTextAdd = 'true'
     $config.PrerequisitePart.PlexUpload = 'false'
     $config.PrerequisitePart.AssetCleanup = 'false'
     $config.PrerequisitePart.AutoUpdatePosterizarr = 'false'
