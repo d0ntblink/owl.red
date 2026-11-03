@@ -32,6 +32,8 @@ retired implementations. They are not instructions to replay migrations.
 
 ## Platform And Services
 
+- [Dependency updates](guides/dependency-updates.md): Renovate GitHub App setup,
+  PR-only upgrade policy, coverage and review before Fleet deployment.
 - [Glance dashboard](../gitops/dashboards/README.md): service shortcuts, native
   YAML RSS subscriptions, Catppuccin themes and Fleet-managed updates.
 - [Software inventory](guides/software-inventory.md): read-only version/image

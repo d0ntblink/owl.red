@@ -25,6 +25,7 @@ existing process environment.
 | iconv, base64 | Kubernetes-to-Bitwarden secret export | Ubuntu `libc-bin` and coreutils; values must be valid UTF-8 and only approved human-managed secrets may be exported. |
 | sshpass | Optional Ansible password-based OpenSSH transport | Needed when the selected Ansible connection uses SSH passwords; not a prerequisite for key-only SSH or API-only work. |
 | Node.js | Optional audit helpers, standard dotenv parsing and Node-based distributions of tools | `util.parseEnv` needs Node 20.12+/21.7+; use a supported Node LTS that provides it. Standalone `bw`/`bws` binaries do not require a separate Node runtime just to run. |
+| npm/npx, Renovate validator | [Dependency-update policy validation](dependency-updates.md) | Node.js 24 and `renovate@44.209.0`; run the pinned repository-scoped validator through npx. The hosted GitHub App needs no homelab runner or infrastructure credentials. |
 | Ansible, ansible-playbook, ansible-galaxy | Mutable-host/appliance configuration | Install Ansible in pipx or a project virtual environment; install each lane's collections and controller-side Python libraries. |
 | OpenSSH client | SSH-managed hosts, jumps and tablet access | Verify destination/host key and the owning lane's SSH credentials. Target hosts need an SSH server; the controller does not need a server merely to run Ansible. |
 | Terraform | Guest/infrastructure and API-backed appliance configuration | Respect each root's `required_providers` and committed lockfile; do not run `init -upgrade` as routine setup. |

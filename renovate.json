@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["fleet", "kubernetes", "helmv3", "helm-values", "github-actions"],
+  "includePaths": ["gitops/**", ".github/workflows/**"],
+  "kubernetes": {
+    "managerFilePatterns": ["/^gitops/.*\\.ya?ml$/"]
+  },
+  "helm-values": {
+    "managerFilePatterns": ["/^gitops/.*fleet\\.ya?ml$/"]
+  },
+  "timezone": "America/Edmonton",
+  "schedule": ["* 0-7 * * 1"],
+  "updateNotScheduled": false,
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 1,
+  "automerge": false,
+  "platformAutomerge": false,
+  "dependencyDashboard": true,
+  "separateMajorMinor": true,
+  "rebaseWhen": "conflicted",
+  "pin": {"groupName": null},
+  "pinDigest": {"groupName": null},
+  "major": {"dependencyDashboardApproval": true},
+  "vulnerabilityAlerts": {"enabled": false},
+  "prBodyNotes": [
+    "Manual merge only. Merging to main deploys Fleet changes and may trigger Technitium reconciliation.",
+    "Check Kubernetes compatibility, chart/image overrides, duplicated pins in JSON/scripts, release notes and rollback before merging. Existing CI is not full application-upgrade validation."
+  ],
+  "packageRules": [
+    {
+      "description": "Keep unrelated dependencies in separate PRs, including preset groups.",
+      "matchPackageNames": ["*"],
+      "groupName": null
+    },
+    {
+      "description": "Keep container references immutable.",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "Require an explicit dashboard request for critical platform and stateful upgrades.",
+      "matchFileNames": [
+        "gitops/{traefik,cert-manager,cert-manager-controller,longhorn,longhorn-config,csi-smb,metallb,bitwarden-operator,rancher,home-assistant,qbittorrent,open-webui,kometa}/**"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Longhorn 1.13 requires newer Kubernetes; requalify this ceiling after a cluster upgrade.",
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["longhorn"],
+      "allowedVersions": "<1.13.0"
+    }
+  ]
+}

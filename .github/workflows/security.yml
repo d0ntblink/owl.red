@@ -65,3 +65,14 @@ jobs:
         run: python -m pip install 'ansible-core==2.16.3'
       - name: Exercise current rendering and unsafe-input guards
         run: node --test scripts/vyos-config.test.mjs
+
+  renovate-config:
+    name: Renovate configuration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Validate repository update policy
+        run: npx --yes --package renovate@44.209.0 renovate-config-validator --strict --no-global renovate.json
