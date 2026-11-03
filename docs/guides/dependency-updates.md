@@ -90,6 +90,11 @@ Do not grant the bot bypass rights or enable automerge to clear a backlog. Pause
 an update by leaving it unapproved, or close an unwanted PR after reading
 Renovate's explanation of what future updates that suppresses.
 
+For stalled rollouts, prerequisite CRD work, runtime compatibility failures and
+misleading health reports, use the [upgrade exceptions playbook](upgrade-exceptions.md).
+It records the unexpected recovery work from the 2026-11-03 update batch and
+the acceptance gates to reuse, not historical approvals to replay.
+
 ### Qualified Version Pairs
 
 The offline renderer workflow retains Python 3.12 with Ansible Core 2.16.3
