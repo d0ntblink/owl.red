@@ -249,49 +249,40 @@ pages:
         widgets:
           - type: monitor
             title: Core Platform
-            style: compact
             cache: 1m
             sites: *core-platform
           - type: monitor
             title: Administration
-            style: compact
             cache: 1m
             sites: *administration
           - type: monitor
             title: Media
-            style: compact
             cache: 1m
             sites: *media
           - type: monitor
             title: Media Management
-            style: compact
             cache: 1m
             sites: *media-management
           - type: monitor
             title: Transfers
-            style: compact
             cache: 1m
             sites: *transfers
           - type: monitor
             title: Home And Cameras
-            style: compact
             cache: 1m
             sites: *home-cameras
       - size: full
         widgets:
           - type: monitor
             title: Infrastructure
-            style: compact
             cache: 1m
             sites: *infrastructure
           - type: monitor
             title: Network Tools
-            style: compact
             cache: 1m
             sites: *network-tools
           - type: monitor
             title: Direct And Recovery
-            style: compact
             cache: 1m
             sites: *direct-recovery
   # - name: news
