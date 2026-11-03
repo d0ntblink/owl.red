@@ -1,10 +1,11 @@
 # Plex Collections, Artwork And Image Cleanup
 
 Status: the suspended Fleet job and NAS-local ImageMaid definition are deployed.
-All 13 UHD movies have styled, badged local posters; the corrected run's journal
-verifies all 13 sidecars. Daily scheduling and full-library onboarding remain
-paused. The operator confirmed that Jellyfin displays the labeled posters,
-completing the UHD trial's cross-server visual acceptance. No ImageMaid deletion
+All 13 UHD movies and both UHD series have styled, badged local posters. The
+operator confirmed the movie posters in Jellyfin, completing the UHD trial's
+cross-server visual acceptance; the series pilot verified both selected JPEGs
+on Plex and Jellyfin against the local files. The next approved run covers the
+318 series in Shows. Daily scheduling remains paused and no ImageMaid deletion
 is enabled.
 
 ## Placement
@@ -190,7 +191,7 @@ enabled. An already-selected cached image may need a targeted image refresh.
 
 The pinned Kometa release saves a composited temporary image and uploads it to
 Plex. The small `run.py` adapter in the config resource then exports Plex's
-selected finished JPEG to the exact matched movie-file directory. It requires a
+selected finished JPEG to the exact matched movie or series directory. It requires a
 successful native run, an Overlay label, a verified JPEG and unchanged library
 membership. It validates every downloaded poster before replacing any local
 poster, then atomically replaces only `poster.jpg`, checking preimage hashes.
@@ -199,9 +200,10 @@ The current trial inventory is 13 movies, each with one media file in its own
 folder and an existing regular `poster.jpg`. The adapter refuses symlinks,
 multiple versions/parts, shared directories, missing clean assets and more than
 40 movies. Its series path uses one verified series directory and an existing
-regular `poster.jpg`, with a maximum of five series. Only `Movies`, `4K Movies`
-and `4K Shows` are allowlisted; the main Movies directory is not mounted by this
-pilot. It preserves current posters and a per-item export journal under
+regular `poster.jpg`. Per-library limits are five UHD series and 318 main Shows;
+the 318 limit does not apply to movies. The current job mounts only `Shows`;
+other media claims are retained but not mounted. It preserves current posters
+and a per-item export journal under
 NAS appdata `assetsbackup/local-posters/<run-id>`, outside media directories.
 Its isolated native-runtime replacement/refusal tests passed. The first completed
 run exported 13 JPEGs and byte-for-byte Plex/sidecar equality passed for all 13.
@@ -224,8 +226,8 @@ pending work.
 ## UHD Series Pilot
 
 The operator approved a separate two-series pilot for `Arcane` and
-`Game of Thrones` in `4K Shows`. The writable media mount is limited to
-`Shows-uhd`; the old movie claim is retained but not mounted by this job.
+`Game of Thrones` in `4K Shows`. Its writable media mount was limited to
+`Shows-uhd`; other media claims were retained but not mounted by that job.
 Only the series-level community layout is adapted: no season or episode
 `builder_level`, global ribbons or streaming discovery. The status banner uses
 bundled Figtree Black in place of the commercial font. Native renderer settings
@@ -233,8 +235,27 @@ disable season posters, backgrounds, title cards, direct Plex uploads and cleanu
 
 The renderer must produce exactly the two expected clean posters before the
 export stage can run. Both native configuration validation and synthetic
-series-poster replacement/refusal tests passed; the live pilot still requires
-its own selected-image and sidecar acceptance. The daily CronJob stays suspended.
+series-poster replacement/refusal tests passed. The manual run completed and
+both sidecars matched the saved outputs, Plex-selected images and Jellyfin-selected
+images byte-for-byte, without a Jellyfin refresh. The finished sample passed
+visual review. MDBList reported 5/1,000 requests used after the run.
+
+## Main Shows Run
+
+The operator approved processing the main Shows library as a whole after
+confirming its size. Read-only preflight verified exactly 318 series, each with
+one unique folder under `/media/Shows` and an existing regular `poster.jpg`.
+The job mounts only that subtree and uses the same series-level overlays as the
+accepted UHD pilot. Seasons, episodes, backgrounds, collections, Movies and
+ImageMaid remain excluded.
+
+Native generation must supply all 318 clean base posters before Kometa starts.
+If the renderer stops on a provider limit or missing artwork, retained clean
+assets/cache can support a later reviewed retry; do not clear them or rotate
+credentials to bypass quotas. Export still preserves preimages, checks current
+membership and file hashes, validates finished JPEGs, and atomically replaces
+only series `poster.jpg` files. A 319th series requires a fresh scope review.
+Daily scheduling stays suspended; the manual run requires its own live acceptance.
 
 If the run fails, leave scheduling suspended and inspect the private manifest
 before doing anything else. Stop the artwork writer before recovery. Use the

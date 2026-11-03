@@ -196,16 +196,18 @@ data:
       from ruamel.yaml import YAML
 
       LIBRARY = os.environ.get("ARTWORK_LIBRARY", "4K Movies")
-      MEDIA_ROOTS = {"Movies": Path("/media/Movies"), "4K Movies": Path("/media/Movies-uhd"), "4K Shows": Path("/media/Shows-uhd")}
+      MEDIA_ROOTS = {"Movies": Path("/media/Movies"), "4K Movies": Path("/media/Movies-uhd"), "Shows": Path("/media/Shows"), "4K Shows": Path("/media/Shows-uhd")}
+      ITEM_LIMITS = {"Movies": 40, "4K Movies": 40, "Shows": 318, "4K Shows": 5}
       ASSET_ROOT = Path("/assets") / LIBRARY
 
       def digest(filename):
         return hashlib.sha256(filename.read_bytes()).hexdigest()
 
-      def plan(items, media_root, kind="movie"):
+      def plan(items, media_root, kind="movie", limit=None):
         root = media_root.resolve(strict=True)
-        if kind not in ("movie", "show") or not 0 < len(items) <= (5 if kind == "show" else 40):
-          raise RuntimeError("Item count outside bounded trial")
+        limit = (5 if kind == "show" else 40) if limit is None else limit
+        if kind not in ("movie", "show") or not 0 < limit <= (318 if kind == "show" else 40) or not 0 < len(items) <= limit:
+          raise RuntimeError("Item count outside approved library bounds")
         result = []
         directories = set()
         for item in items:
@@ -250,20 +252,20 @@ data:
 
       def main():
         if LIBRARY not in MEDIA_ROOTS or "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
-          raise RuntimeError("Only a bounded allowlisted movie library is enabled")
+          raise RuntimeError("Only a bounded allowlisted library is enabled")
         configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
         if configuration["libraries"][LIBRARY].get("settings", {}).get("asset_directory") != str(ASSET_ROOT):
           raise RuntimeError("Native library clean-asset mapping is missing")
         server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=60)
         library = server.library.section(LIBRARY)
-        kind = "show" if LIBRARY == "4K Shows" else "movie"
+        kind = "show" if LIBRARY in ("Shows", "4K Shows") else "movie"
         if library.type != kind:
           raise RuntimeError("Unexpected library type")
         items = library.all()
         if kind == "show":
           for item in items:
             item.reload()
-        planned = plan(items, MEDIA_ROOTS[LIBRARY], kind)
+        planned = plan(items, MEDIA_ROOTS[LIBRARY], kind, ITEM_LIMITS[LIBRARY])
         for item in planned:
           clean = ASSET_ROOT / item["poster"].parent.name / "poster.jpg"
           if not clean.is_file() or clean.is_symlink():

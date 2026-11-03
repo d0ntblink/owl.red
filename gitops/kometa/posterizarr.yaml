@@ -6,10 +6,11 @@ data:
   prepare.ps1: |
     $ErrorActionPreference = 'Stop'
     $library = $env:ARTWORK_TRIAL_LIBRARY
-    if ($library -notin @('4K Movies','4K Shows')) { throw 'Unexpected pilot library' }
+    if ($library -notin @('4K Movies','4K Shows','Shows')) { throw 'Unexpected artwork library' }
     $expectedItems = if ($env:ARTWORK_EXPECTED_ITEMS) { [int]$env:ARTWORK_EXPECTED_ITEMS } else { 13 }
-    if ($expectedItems -lt 1 -or $expectedItems -gt 40 -or ($library -eq '4K Shows' -and $expectedItems -gt 5)) {
-        throw 'Pilot count outside approved bounds'
+    $itemLimit = switch ($library) { 'Shows' {318} '4K Shows' {5} default {40} }
+    if ($expectedItems -lt 1 -or $expectedItems -gt $itemLimit) {
+        throw 'Artwork count outside approved library bounds'
     }
     $assetDirectory = Join-Path '/assets' $library
     if ($env:ARTWORK_REUSE_EXISTING -eq 'true') {

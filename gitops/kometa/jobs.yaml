@@ -84,8 +84,8 @@ spec:
                 - {name: XDG_CACHE_HOME, value: /tmp/cache}
                 - {name: XDG_DATA_HOME, value: /tmp/data}
                 - {name: FONTCONFIG_CACHE_DIR, value: /tmp/fontconfig}
-                - {name: ARTWORK_TRIAL_LIBRARY, value: "4K Shows"}
-                - {name: ARTWORK_EXPECTED_ITEMS, value: "2"}
+                - {name: ARTWORK_TRIAL_LIBRARY, value: "Shows"}
+                - {name: ARTWORK_EXPECTED_ITEMS, value: "318"}
                 - {name: ARTWORK_REUSE_EXISTING, value: "false"}
               securityContext:
                 allowPrivilegeEscalation: false
@@ -104,9 +104,9 @@ spec:
             - name: kometa
               image: kometateam/kometa@sha256:e3f509c3044ac011e1938dae2f7e80ea3cfe9663720a9f98683d1ea28c127e64
               command: [python3, /scripts/run.py]
-              args: [--run, --read-only-config, --no-missing, --timings, --libraries, "4K Shows", --overlays-only]
+              args: [--run, --read-only-config, --no-missing, --timings, --libraries, "Shows", --overlays-only]
               env:
-                - {name: ARTWORK_LIBRARY, value: "4K Shows"}
+                - {name: ARTWORK_LIBRARY, value: "Shows"}
                 - {name: TZ, value: America/Edmonton}
                 - {name: HOME, value: /config}
                 - name: KOMETA_PLEXTOKEN
@@ -129,7 +129,7 @@ spec:
                 - {name: artwork, mountPath: /assets, subPath: assets}
                 - {name: artwork, mountPath: /assetsbackup, subPath: assetsbackup}
                 - {name: kometa-config, mountPath: /scripts, readOnly: true}
-                - {name: trial-media, mountPath: /media/Shows-uhd}
+                - {name: trial-media, mountPath: /media/Shows}
                 - {name: temporary, mountPath: /tmp}
           volumes:
             - name: workspace
@@ -143,7 +143,7 @@ spec:
             - name: temporary
               emptyDir: {}
             - name: trial-media
-              persistentVolumeClaim: {claimName: trial-series-posters}
+              persistentVolumeClaim: {claimName: shows-posters}
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -197,4 +197,31 @@ spec:
   accessModes: [ReadWriteMany]
   storageClassName: ""
   volumeName: plex-artwork-uhd-series
+  resources: {requests: {storage: 10Ti}}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata: {name: plex-artwork-shows}
+spec:
+  capacity: {storage: 10Ti}
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=3.1.1, cache=strict, noserverino, uid=1001, gid=100, dir_mode=0775, file_mode=0664]
+  claimRef: {namespace: media-maintenance, name: shows-posters}
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: nas.owl.red/media#Shows#plex-artwork-series#retain
+    volumeAttributes: {source: //nas.owl.red/media, subDir: Shows}
+    nodeStageSecretRef: {name: unraid-smb-credentials, namespace: storage-system}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shows-posters
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: plex-artwork-shows
   resources: {requests: {storage: 10Ti}}
