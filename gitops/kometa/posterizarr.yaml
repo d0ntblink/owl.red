@@ -5,13 +5,19 @@ metadata:
 data:
   prepare.ps1: |
     $ErrorActionPreference = 'Stop'
+    $library = $env:ARTWORK_TRIAL_LIBRARY
+    if ($library -notin @('4K Movies','4K Shows')) { throw 'Unexpected pilot library' }
+    $expectedItems = if ($env:ARTWORK_EXPECTED_ITEMS) { [int]$env:ARTWORK_EXPECTED_ITEMS } else { 13 }
+    if ($expectedItems -lt 1 -or $expectedItems -gt 40 -or ($library -eq '4K Shows' -and $expectedItems -gt 5)) {
+        throw 'Pilot count outside approved bounds'
+    }
+    $assetDirectory = Join-Path '/assets' $library
     if ($env:ARTWORK_REUSE_EXISTING -eq 'true') {
-        if ($env:ARTWORK_TRIAL_LIBRARY -ne '4K Movies') { throw 'Unexpected cached-artwork library' }
-        $posters = @(Get-ChildItem '/assets/4K Movies/*/poster.jpg' -File -ErrorAction Stop)
-        if ($posters.Count -ne 13 -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
-            throw 'The verified 13 clean posters are not available; refusing fresh provider calls'
+        $posters = @(Get-ChildItem "$assetDirectory/*/poster.jpg" -File -ErrorAction Stop)
+        if ($posters.Count -ne $expectedItems -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
+            throw 'The approved clean posters are not available; refusing fresh provider calls'
         }
-        Write-Output 'Reusing 13 verified clean trial posters; no Posterizarr provider calls.'
+        Write-Output "Reusing $expectedItems clean pilot posters; no Posterizarr provider calls."
         exit 0
     }
     $base = '/config'
@@ -56,6 +62,10 @@ data:
     $config.PrerequisitePart.BackupPath = '/assetsbackup'
     $config.PrerequisitePart.ManualAssetPath = '/manualassets'
     $config.PrerequisitePart.LibraryFolders = 'true'
+    $config.PrerequisitePart.Posters = 'true'
+    $config.PrerequisitePart.SeasonPosters = 'false'
+    $config.PrerequisitePart.BackgroundPosters = 'false'
+    $config.PrerequisitePart.TitleCards = 'false'
     $config.PrerequisitePart.PlexUpload = 'false'
     $config.PrerequisitePart.AssetCleanup = 'false'
     $config.PrerequisitePart.AutoUpdatePosterizarr = 'false'
@@ -79,4 +89,9 @@ data:
         exit 0
     }
     & /app/Start.ps1 -Run
-    exit $LASTEXITCODE
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $posters = @(Get-ChildItem "$assetDirectory/*/poster.jpg" -File -ErrorAction Stop)
+    if ($posters.Count -ne $expectedItems -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
+        throw 'Native renderer did not produce the approved clean pilot posters'
+    }
+    exit 0

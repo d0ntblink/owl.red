@@ -3,8 +3,9 @@
 Status: the suspended Fleet job and NAS-local ImageMaid definition are deployed.
 All 13 UHD movies have styled, badged local posters; the corrected run's journal
 verifies all 13 sidecars. Daily scheduling and full-library onboarding remain
-paused. Jellyfin is still indexing, so cross-server selected-image acceptance
-is incomplete. No ImageMaid deletion is enabled.
+paused. The operator confirmed that Jellyfin displays the labeled posters,
+completing the UHD trial's cross-server visual acceptance. No ImageMaid deletion
+is enabled.
 
 ## Placement
 
@@ -100,8 +101,8 @@ video format and the right-side three-rating strip. The operator approved
 deferring award ribbons and streaming indicators because their native defaults
 perform global discovery and IMDb-to-TMDb conversion for non-library titles,
 which cannot be bounded by a small Plex library. This is intentionally a partial
-style match until those sources have a quota-safe approach. TV overlays remain
-a reduced baseline pending their own adaptation.
+style match until those sources have a quota-safe approach. The TV pilot adapts
+the series-level layout only; season and episode artwork remain deferred.
 Badges must describe actual media and available ratings; do not stamp screenshot
 values on every title. Visual acceptance remains part of the bounded trial.
 
@@ -128,9 +129,11 @@ Posterizarr and Kometa. Persistent provider caches explicitly retain results for
 60 days. Keep the existing cache between runs and do not force-refresh it during
 onboarding.
 
-The initial suspended job targets only `4K Movies` in both applications and runs
-Kometa overlays only. Broad collection builders and the main Movies library are
-not part of this first run. Automatic job retries are disabled. Check available
+The first pilot targeted only `4K Movies` in both applications and ran Kometa
+overlays only. The next approved pilot targets only the two series in `4K Shows`;
+season posters, episode cards and backgrounds are explicitly disabled in both
+the renderer and overlay definitions. Broad collection builders and the main
+Movies library are not part of either pilot. Automatic job retries are disabled. Check available
 provider usage before and after the trial; count credential preflight calls too.
 Quota exhaustion is a stop condition, not a reason to retry or rotate keys.
 
@@ -195,7 +198,10 @@ poster, then atomically replaces only `poster.jpg`, checking preimage hashes.
 The current trial inventory is 13 movies, each with one media file in its own
 folder and an existing regular `poster.jpg`. The adapter refuses symlinks,
 multiple versions/parts, shared directories, missing clean assets and more than
-40 movies. It preserves current posters and a per-item export journal under
+40 movies. Its series path uses one verified series directory and an existing
+regular `poster.jpg`, with a maximum of five series. Only `Movies`, `4K Movies`
+and `4K Shows` are allowlisted; the main Movies directory is not mounted by this
+pilot. It preserves current posters and a per-item export journal under
 NAS appdata `assetsbackup/local-posters/<run-id>`, outside media directories.
 Its isolated native-runtime replacement/refusal tests passed. The first completed
 run exported 13 JPEGs and byte-for-byte Plex/sidecar equality passed for all 13.
@@ -207,11 +213,28 @@ invent missing ratings.
 
 Jellyfin initially listed only one UHD movie. One targeted UHD-library refresh
 was accepted without cancelling or restarting its existing global scan, which
-subsequently reached 52.7%. Remaining selected-image acceptance waits for
-indexing. A later broad read timed out, so it was not counted as a pass. Both
-Plex and Jellyfin subsequently returned HTTP 200 on their lightweight status
-endpoints. Reading sidecars through the existing read-only mount does not prove
-every movie is already indexed and displaying them.
+subsequently reached 52.7%. A later broad read timed out and was not counted as
+an automated pass. The operator has since confirmed that Jellyfin displays the
+labeled posters, closing the trial's visual acceptance without another refresh
+or server restart. This confirmation does not certify full-library scan
+completion or an automated per-image hash comparison in Jellyfin. Daily
+scheduling, additional-library onboarding and ImageMaid cleanup remain separate
+pending work.
+
+## UHD Series Pilot
+
+The operator approved a separate two-series pilot for `Arcane` and
+`Game of Thrones` in `4K Shows`. The writable media mount is limited to
+`Shows-uhd`; the old movie claim is retained but not mounted by this job.
+Only the series-level community layout is adapted: no season or episode
+`builder_level`, global ribbons or streaming discovery. The status banner uses
+bundled Figtree Black in place of the commercial font. Native renderer settings
+disable season posters, backgrounds, title cards, direct Plex uploads and cleanup.
+
+The renderer must produce exactly the two expected clean posters before the
+export stage can run. Both native configuration validation and synthetic
+series-poster replacement/refusal tests passed; the live pilot still requires
+its own selected-image and sidecar acceptance. The daily CronJob stays suspended.
 
 If the run fails, leave scheduling suspended and inspect the private manifest
 before doing anything else. Stop the artwork writer before recovery. Use the

@@ -89,9 +89,34 @@ data:
           - default: network
           - default: franchise
         overlay_files:
-          - default: resolution
+          - default: aspect
             template_variables:
-              use_edition: false
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 510
+          - default: audio_codec
+            template_variables:
+              vertical_offset: 95
+          - default: content_rating_us_show
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 630
+          - default: studio
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 870
+          - default: language_count
+          - default: languages
+          - default: languages
+            template_variables:
+              use_subtitles: true
+          - default: network
+            template_variables:
+              horizontal_align: left
+              vertical_align: top
+              vertical_offset: 990
           - default: ratings
             template_variables:
               rating1: mdb_tomatoes
@@ -107,7 +132,25 @@ data:
               rating3_font: fonts/Figtree-Black.ttf
               rating3_font_size: 70
               horizontal_position: right
+          - default: resolution
+            template_variables:
+              vertical_offset: 95
           - default: status
+            template_variables:
+              horizontal_align: center
+              vertical_align: top
+              vertical_offset: 0
+              horizontal_offset: 0
+              back_height: 85
+              back_width: 1100
+              font: fonts/Figtree-Black.ttf
+              font_size: 60
+              back_color_airing: "#016920"
+              back_color_returning: "#81007F"
+              back_color_canceled: "#B52222"
+              back_color_ended: "#000847"
+          - default: versions
+          - default: video_format
       4K Movies:
         <<: *movies
         settings:
@@ -152,32 +195,38 @@ data:
       import requests
       from ruamel.yaml import YAML
 
-      LIBRARY = "4K Movies"
-      MEDIA_ROOT = Path("/media/Movies-uhd")
+      LIBRARY = os.environ.get("ARTWORK_LIBRARY", "4K Movies")
+      MEDIA_ROOTS = {"Movies": Path("/media/Movies"), "4K Movies": Path("/media/Movies-uhd"), "4K Shows": Path("/media/Shows-uhd")}
       ASSET_ROOT = Path("/assets") / LIBRARY
 
       def digest(filename):
         return hashlib.sha256(filename.read_bytes()).hexdigest()
 
-      def plan(items, media_root=MEDIA_ROOT):
+      def plan(items, media_root, kind="movie"):
         root = media_root.resolve(strict=True)
-        if not 0 < len(items) <= 40:
-          raise RuntimeError("Movie count outside bounded trial")
+        if kind not in ("movie", "show") or not 0 < len(items) <= (5 if kind == "show" else 40):
+          raise RuntimeError("Item count outside bounded trial")
         result = []
         directories = set()
         for item in items:
-          files = [Path(part.file) for media in item.media for part in media.parts]
-          if len(files) != 1:
-            raise RuntimeError("Multiple media files require separate review")
-          movie = files[0].resolve(strict=True)
-          if root not in movie.parents or movie.parent == root:
-            raise RuntimeError("Movie is outside an individual trial folder")
-          poster = movie.parent / "poster.jpg"
+          if kind == "show":
+            locations = [Path(location) for location in item.locations]
+            if len(locations) != 1:
+              raise RuntimeError("Multiple series locations require separate review")
+            directory = locations[0].resolve(strict=True)
+          else:
+            files = [Path(part.file) for media in item.media for part in media.parts]
+            if len(files) != 1:
+              raise RuntimeError("Multiple media files require separate review")
+            directory = files[0].resolve(strict=True).parent
+          if root not in directory.parents:
+            raise RuntimeError("Item is outside an individual trial folder")
+          poster = directory / "poster.jpg"
           if poster.is_symlink() or not poster.is_file():
             raise RuntimeError("Expected regular local poster missing")
-          if movie.parent in directories:
-            raise RuntimeError("Movies share a poster directory")
-          directories.add(movie.parent)
+          if directory in directories:
+            raise RuntimeError("Items share a poster directory")
+          directories.add(directory)
           result.append({"key": str(item.ratingKey), "poster": poster, "before": digest(poster)})
         return result
 
@@ -200,14 +249,21 @@ data:
             temporary.unlink(missing_ok=True)
 
       def main():
-        if "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
-          raise RuntimeError("Only the bounded overlay trial is enabled")
+        if LIBRARY not in MEDIA_ROOTS or "--libraries" not in sys.argv or sys.argv[sys.argv.index("--libraries") + 1] != LIBRARY or "--overlays-only" not in sys.argv:
+          raise RuntimeError("Only a bounded allowlisted movie library is enabled")
         configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
         if configuration["libraries"][LIBRARY].get("settings", {}).get("asset_directory") != str(ASSET_ROOT):
           raise RuntimeError("Native library clean-asset mapping is missing")
         server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=60)
         library = server.library.section(LIBRARY)
-        planned = plan(library.all())
+        kind = "show" if LIBRARY == "4K Shows" else "movie"
+        if library.type != kind:
+          raise RuntimeError("Unexpected library type")
+        items = library.all()
+        if kind == "show":
+          for item in items:
+            item.reload()
+        planned = plan(items, MEDIA_ROOTS[LIBRARY], kind)
         for item in planned:
           clean = ASSET_ROOT / item["poster"].parent.name / "poster.jpg"
           if not clean.is_file() or clean.is_symlink():
