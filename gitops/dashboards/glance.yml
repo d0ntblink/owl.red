@@ -169,7 +169,7 @@ pages:
               - links:
                   - title: Speedtest Tracker
                     url: https://speedtest.owl.red
-                    icon: di:speedtest-tracker
+                    icon: mdi:speedometer
                   - title: LibreSpeed
                     url: https://librespeed.owl.red
                     icon: di:librespeed
