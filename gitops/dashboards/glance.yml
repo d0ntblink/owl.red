@@ -198,6 +198,6 @@ pages:
                   - title: Open WebUI Direct
                     url: https://nas.owl.red:11436
                     icon: di:open-webui
-  - name: news
-  - name: briefing
-  - name: releases
+  # - name: news
+  # - name: briefing
+  # - name: releases
