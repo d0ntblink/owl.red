@@ -18,7 +18,7 @@ theme:
       positive-color: 109 58 40
       negative-color: 347 87 44
 pages:
-  - name: home
+  - name: apps
     width: wide
     head-widgets:
       - type: search
