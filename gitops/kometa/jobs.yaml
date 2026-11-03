@@ -100,7 +100,7 @@ spec:
                 - {name: temporary, mountPath: /tmp}
           containers:
             - name: kometa
-              image: kometateam/kometa@sha256:e3f509c3044ac011e1938dae2f7e80ea3cfe9663720a9f98683d1ea28c127e64
+              image: kometateam/kometa@sha256:93b0909d1a34d75985c2258f451aac4ece4216d02f0c4914a0a4fa4be39a88c0
               command: [python3, /scripts/run.py]
               args: [--run, --read-only-config, --no-missing, --timings, --libraries, "Movies|4K Movies|Shows|4K Shows", --overlays-only]
               env:
