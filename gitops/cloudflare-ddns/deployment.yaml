@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: cloudflare-ddns
 spec:
-  replicas: 0
+  replicas: 1
   strategy: {type: Recreate}
   selector:
     matchLabels: {app.kubernetes.io/name: cloudflare-ddns}
