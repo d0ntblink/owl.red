@@ -86,7 +86,7 @@ spec:
                 - {name: FONTCONFIG_CACHE_DIR, value: /tmp/fontconfig}
                 - {name: ARTWORK_TRIAL_LIBRARY, value: "Shows"}
                 - {name: ARTWORK_EXPECTED_ITEMS, value: "318"}
-                - {name: ARTWORK_REUSE_EXISTING, value: "false"}
+                - {name: ARTWORK_REUSE_EXISTING, value: "true"}
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities: {drop: [ALL]}
