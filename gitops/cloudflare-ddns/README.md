@@ -4,6 +4,12 @@ Fleet-owned, stateless Favonia Cloudflare DDNS 1.18.0, pinned by digest. It repl
 the NAS `cloudflareddns` container and manages only the `dash.d0ntb.link` A record.
 It does not manage `*.owl.red`, IPv6, tunnels, WAF lists, or any other DNS name.
 
+Status: live on the cluster with one replica. The outdated A record was corrected
+to the verified WAN address while preserving its ID, proxy status and TTL; the
+other 15 zone records were unchanged. The old NAS container and matching Unraid
+template are retired, with appdata retained. An authenticated Terraform plan
+confirmed zero changes even while its initial IP seed differed from live DDNS.
+
 ## Runtime
 
 - One replica with `Recreate`; no NAS dependency, PVC, host network, inbound
@@ -54,6 +60,11 @@ The legacy token returned HTTP 401 during migration verification, so restarting
 the old container unchanged is not a functional fallback. Its retained definition
 is reconstruction evidence, not proof of working DNS updates. Do not restore an
 entire zone or stale Terraform state to recover one record.
+
+The private NAS retirement archive is
+`/root/.local/state/owl-red/cloudflare-ddns-retired`; controller DNS/state
+preimages are under `~/.local/state/owl-red/cloudflare-ddns`. These contain
+credentials or sensitive configuration and are not for publication.
 
 Inspect the native operational view with:
 

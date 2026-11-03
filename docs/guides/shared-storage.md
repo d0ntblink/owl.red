@@ -32,11 +32,16 @@ container. No matching boot-autostart entries were present. It did not run
 system/image/volume prune, force removal, or parent-image pruning. Image sizes
 in its output are logical sums, not a measurement of disk space reclaimed.
 
-Plex, Frigate, combined Open WebUI/Ollama, shared PostgreSQL, DiskSpeed, DDNS
-and not-yet-migrated Librespeed retained their container IDs, states and restart
+At that cleanup, Plex, Frigate, combined Open WebUI/Ollama, shared PostgreSQL,
+DiskSpeed, DDNS and not-yet-migrated Librespeed retained their container IDs, states and restart
 policies. Appdata, media, bind-mount roots and Docker volumes were not deleted.
 Other historical templates outside the reviewed migrated-service names were
 left alone. A second cleanup plan reported no remaining targets.
+
+DDNS was subsequently rebuilt as a stateless cluster workload and its NAS
+container/template retired. It needs no shared-storage claim; see the
+[DDNS runbook](../../gitops/cloudflare-ddns/README.md). Its retained NAS appdata
+is historical, not the live updater configuration.
 
 Full container definitions, image metadata/digests, template XML and boot-list
 preimages are private under
@@ -550,8 +555,9 @@ data resets. The old NAS container and its Unraid template/autostart entry
 were retired after acceptance; old appdata remains separate and was not copied
 into the new service. Private legacy-definition/template preimages are under
 `/root/.local/state/owl-red/librespeed-fresh`, not independent backups.
-Plex, Frigate, Open WebUI/Ollama, shared PostgreSQL, DiskSpeed and DDNS stay on
-the NAS; the remaining selected applications now run on Kubernetes.
+Plex, Frigate, Open WebUI/Ollama, shared PostgreSQL and DiskSpeed stay on the NAS.
+DDNS now runs statelessly on Kubernetes; the remaining selected applications
+also run on Kubernetes.
 
 ### LibreSpeed Runtime Isolation And Health
 
