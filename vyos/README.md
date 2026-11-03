@@ -1,9 +1,8 @@
-# VyOS Router And Permanent Lab
+# VyOS Router
 
 VyOS VM 103 is the accepted production router `edge.owl.red`, serving
-`10.0.10.1/24` with the original WAN/LAN PCI devices. VM 102 is the separate
-permanent `edge-lab.owl.red` (2 vCPU, 4 GB RAM), reachable only through Proxmox's
-loopback SSH forward. The old router VM 100, its 64-GB virtual disk and unused
+`10.0.10.1/24` with the original WAN/LAN PCI devices.
+The old router VM 100, its 64-GB virtual disk and unused
 installer ISO were explicitly deleted after acceptance. Its provider/migration
 tooling and host-local cutover recovery directories are retired. Future recovery
 uses pinned VyOS media, a private boot-config backup and PVE console access.
@@ -45,28 +44,25 @@ and [Phase 0.6](../ROADMAP.md#06-stage-and-accept-the-vyos-replacement).
 ## Configuration Ownership
 
 - [baseline.yml](baseline.yml) holds native production host mappings/generic NTP
-  upstreams and a separate synthetic lab profile. Existing hostnames are retained
+  upstreams and the production VLAN overlay profile. Existing hostnames are retained
   without an incidental rename. DHCP lease-preservation inputs remain private;
   this is not a second owner of the final Technitium registry.
-- [config.boot.j2](config.boot.j2) renders native VyOS grammar for the lab: DHCP
-  WAN, `192.0.2.0/24` LAN, Kea DHCP `.100-.199`, recursive DNS, a sample static
-  hostname, NTP, key-only LAN SSH, explicit IPv4/default-deny logging and sample
-  Plex DNAT/SNAT policy. It includes passive native Suricata capture on the
-  synthetic LAN, address/port variables and EVE alert/anomaly events to syslog.
-  The production profile adds the current lease-preservation mappings, Plex
+- [config.boot.j2](config.boot.j2) renders native VyOS bootstrap grammar from an
+  explicit router profile, including DHCP WAN, LAN services, key-only SSH,
+  default-deny logging and passive native Suricata configuration. It includes
+  EVE alert/anomaly events to syslog. The production profile adds lease-preservation mappings, Plex
   reflection, DHCPv6-PD and RA. WAN `ipv6 address autoconf` is required by this
   image to accept the RA-derived default route while forwarding remains enabled.
-  IPv6 is closed only in the synthetic lab profile, not in production.
-- [vyos-render.yml](../ansible/playbooks/vyos-render.yml) runs only on localhost,
-  refuses production profiles, fixes the lab identities and writes a private
-  candidate outside Git. It has no SSH/API router connection, native commit,
-  Proxmox operation or PCI transfer. No external Ansible collection is needed.
-- [The Terraform root](../terraform/proxmox/vyos-vm/main.tf) owns the lab and
-  separate production VM; Ansible owns native configuration and bootstrap
+  Offline tests use synthetic addresses; they do not supply a deployment profile.
+- [The production renderer](../ansible/playbooks/vyos-production-render.yml)
+  writes a private bootstrap candidate without deploying it. Never replay a
+  bootstrap configuration over the running router.
+- [The Terraform root](../terraform/proxmox/vyos-vm/main.tf) owns the
+  production VM; Ansible owns native configuration and bootstrap
   orchestration. Completed migration-only runners are removed. Preserve one
   config owner and use native candidate/confirmed-commit/save for future work.
-- [Credential references](credentials.json) identify separate lab/production
-  console accounts in Password Manager and Secrets Manager. Passwords and rendered
+- [Credential references](credentials.json) identify the production
+  console account in Password Manager and Secrets Manager. Passwords and rendered
   encrypted-password configurations stay outside Git. Automation uses the existing
   controller SSH key with pinned host keys; the dashboard receives no write keys.
 
@@ -80,43 +76,6 @@ Preflight requires a private copy of the current saved native configuration at
 `~/.local/state/owl-red/vyos-production/config.boot` (directory `0700`, file
 `0600`). It contains recovery credentials and must not enter Git or chat.
 
-## Render Locally
-
-Follow [controller requirements](../docs/guides/controller-setup.md#vyos-image-and-offline-preparation).
-Use the existing Ansible venv and the controller's Ed25519 public `.pub` file.
-The default output is `~/.local/state/owl-red/vyos-lab/candidate.config`, directory
-mode `0700` and file mode `0600`.
-
-```bash
-ANSIBLE_CONFIG="$PWD/ansible/ansible.cfg" \
-  .venv/bin/ansible-playbook -i localhost, ansible/playbooks/vyos-render.yml
-```
-
-An optional `-e vyos_public_key_file=/absolute/path/to/controller.pub` selects a
-different public key; never supply the private key. Output overrides must remain
-under `~/.local/state/owl-red/`. Repeated rendering is idempotent. Production
-profiles, repository output and non-Ed25519 bootstrap keys fail before rendering.
-
-Do not use the lab candidate as a production boot file. It uses synthetic MACs,
-the documentation subnet and no production DHCP reservations or live IPv6 setup.
-
-## First VLAN Lab Qualification
-
-[vyos-vlan-lab.yml](../ansible/playbooks/vyos-vlan-lab.yml) applies the
-[source profile](baseline.yml)'s conservative VLAN-20 overlay only to VM 102
-through its existing pinned loopback connection. It requires
-`-e vyos_vlan_pilot_apply_allowed=true`; it refuses production identities,
-endpoints and changed allocations before connecting. No VM lifecycle or switch
-operation is included. It saves a mode-`0600` native boot-config preimage in a
-fresh private controller directory before committing.
-
-The isolated lab has `eth1.20` at `10.0.20.1/24`, DNS/ping access to that gateway,
-scoped WAN masquerade and forwarding with nonpublic destinations denied. The
-original lab management interface is unchanged. Native commit/save, unchanged
-configuration on rerun, compiled rule IDs and a synthetic DNS query pass.
-No pilot DHCP scope or IPv6 delegation is enabled. This is not the final
-VLAN-20 application-service allowlist or a production promotion workflow.
-
 ## Accepted Wired VLAN Pilot
 
 VLAN 20 is now accepted on the bounded cp1-to-router path. Native `eth1.20` is
@@ -129,7 +88,7 @@ tested or enabled for this pilot; no real clients or AP/SSID paths moved.
 
 [vyos-vlan20.yml](../ansible/playbooks/vyos-vlan20.yml) is the production
 `trial`/`confirm`/`rollback` owner. It consumes the same
-[command template](../ansible/templates/vyos-vlan20-commands.j2) as the lab and
+[command template](../ansible/templates/vyos-vlan20-commands.j2) and
 uses `commit-confirm 5 no-prompt`, with private recovery preimages. Confirmation
 and boot-config save follow acceptance, never precede it.
 [swos-vlan20.yml](../ansible/playbooks/swos-vlan20.yml) and its
@@ -164,7 +123,7 @@ These are requested capabilities and qualification tasks, not deployed services:
   Define traffic direction, IPv4/IPv6 coverage, protected infrastructure,
   feed overlap, size, fetch validation, staleness and rollback. FireHOL feeds
   containing bogon/private ranges must not become indiscriminate LAN deny rules.
-- Suricata: qualify native IDS first. On a real lab boot, fetch/maintain rules
+- Suricata: qualify native IDS first. In a separately approved isolated test, fetch/maintain rules
   through the supported native mechanism, validate rule variables and service
   configuration, and prove a controlled alert reaches the logs. Empty rules or
   a configured service are not coverage. The current capture block has no inline
@@ -196,8 +155,9 @@ authority; their consumption must remain within the reviewed VyOS-owned rules.
 
 ## Focused Checks
 
-[The tests](../scripts/vyos-config.test.mjs) run the actual local Ansible playbook,
-generate an ephemeral test SSH key and clean their private fixture directory.
+[The tests](../scripts/vyos-config.test.mjs) render the shared template offline,
+run Ansible deployment-refusal checks, generate an ephemeral test SSH key and
+clean their private fixture directory. They require no running test guest.
 They require Node.js 20+, Python with Ansible/PyYAML, and OpenSSH `ssh-keygen`.
 `ANSIBLE_PLAYBOOK` and `PYTHON` can override the default repository venv paths.
 
@@ -236,8 +196,8 @@ DHCP offers, WAN/IPv6 operation or persistence after a real native save.
 
 ## Remaining Work
 
-Finish the small, repeatable configuration promotion workflow from lab to
-production, the read-only diagnostic view, application-specific NAT/reflection
+Finish the small, repeatable configuration validation and production deployment
+workflow, the read-only diagnostic view, application-specific NAT/reflection
 checks and native IDS rules/events. VLAN activation and the final Technitium
 DNS/DHCP handoff are still separate changes. CrowdSec, reputation feeds and new
 automatic blocking need their own scoped qualification/approval; do not infer

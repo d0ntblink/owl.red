@@ -35,7 +35,6 @@ Secrets and authentication material are excluded.
 | [pdu-rack](#pdu-rack) | Rack power distribution | power-appliance | APC appliance firmware | `pdu.owl.red` / `10.0.10.9` |
 | [ups-rack](#ups-rack) | Rack UPS | power-appliance | USB HID UPS | USB on storage host |
 | [router-edge](#router-edge) | Production router | virtual-machine | VyOS | `edge.owl.red` / `10.0.10.1` |
-| [router-lab](#router-lab) | Isolated router lab | virtual-machine | VyOS | No production allocation |
 | [nas](#nas) | Central NAS | virtual-machine | Unraid | `nas.owl.red` / `10.0.10.5` |
 | [dns](#dns) | DNS and DHCP | container | NixOS | `ns1.owl.red` / `10.0.10.30` |
 | [gwn-manager](#gwn-manager) | Wireless controller | container | NixOS / Grandstream GWN Manager | `https://gwn.owl.red`; native `10.0.10.32` |
@@ -74,7 +73,7 @@ Secrets and authentication material are excluded.
 | memory | 32 GiB DDR4; four 8 GiB DIMMs |
 | boot_storage | Samsung SSD 860 EVO M.2 250 GB; serial `S413NS0R510123L` |
 | expansion | Intel X710 dual-port SFP+ and Intel I226-V; assigned to router guest |
-| guest_ids | `102`, `103`, `104`, `200`, `201` |
+| guest_ids | `103`, `104`, `200`, `201` |
 | configuration | [Ansible inventory](../ansible/inventory/hosts.yml), [router VM definition](../terraform/proxmox/vyos-vm/main.tf) |
 
 | Interface | MAC | Address | Connection |
@@ -341,24 +340,6 @@ MAC rather than its permanent address.
 | WAN / Intel I226-V | `e0:d4:e8:ef:2b:f2` | ISP-assigned | Physical WAN |
 | LAN / Intel X710 | `6c:fe:54:70:08:31` | `10.0.10.1` | SW SFP+1; client VLAN gateways use `10.0.<VLAN>.1` |
 | Spare X710 port | `6c:fe:54:70:08:30` | Not assigned | Physical spare |
-
-### router-lab
-
-| Field | Value |
-|-------|-------|
-| id | `router-lab` |
-| kind | virtual-machine |
-| model | QEMU q35 VM |
-| platform | VyOS |
-| role | Isolated router configuration qualification |
-| parent | `edge-pve` |
-| hostname | `edge-lab.owl.red` |
-| guest_id | `102` |
-| cpu | 2 vCPU |
-| memory | 4 GiB |
-| storage | 64 GiB local virtual disk |
-| network | No production NIC passthrough; lab-only interfaces and addressing |
-| configuration | [Lab profile and procedures](../vyos/) |
 
 ### nas
 

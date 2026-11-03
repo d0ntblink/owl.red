@@ -9,8 +9,8 @@ running guests, but not a safe whole-root apply: Technitium has one untagged NIC
 versus five tagged target NICs, and live Talos is 1.8.1 versus the 1.7.5 source/
 ISO pins. Follow [G4](../../ROADMAP.md#stabilization-gates) for the touched root.
 Network work does not authorize NAS VM/passthrough/disk/boot/power changes.
-Current router update (2026-10-17): VyOS production VM 103 and permanent lab VM
-102 are declared in their own root. The old VM 100, its disk, installer ISO and
+VyOS production VM 103 is declared in its own root.
+The old VM 100, its disk, installer ISO and
 scaffold have been explicitly retired.
 
 ## How Terraform is run here
@@ -23,7 +23,7 @@ an exhaustive module inventory. The wrapper injects
 ```bash
 scripts/terraform-run.sh -chdir=terraform/proxmox/technitium  plan   # Talos cluster + Technitium LXC
 scripts/terraform-run.sh -chdir=terraform/proxmox/nas         plan   # Unraid NAS VM
-scripts/terraform-run.sh -chdir=terraform/proxmox/vyos-vm     plan   # VyOS production and permanent lab VM lifecycle
+scripts/terraform-run.sh -chdir=terraform/proxmox/vyos-vm     plan   # VyOS production VM lifecycle
 ```
 Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ignored ([ADR 015](../decisions/015-terraform-remote-state-deferred.md)).
 
@@ -31,7 +31,6 @@ Endpoint defaults to `https://10.0.10.3:8006/` (edge.pve). State is local/git-ig
 
 | VMID | Name | Node | Type | Terraform | Passthrough |
 |------|------|------|------|-----------|-------------|
-| 102 | `edge-lab.owl.red` | edge | VM | `terraform/proxmox/vyos-vm/` (managed) | none; private virtual networking |
 | 103 | `edge.owl.red` (VyOS) | edge | VM | `terraform/proxmox/vyos-vm/` (managed) | `hostpci0=01:00`, `hostpci1=04:00`, declared in Terraform |
 | 101 | `nas.owl.red` (Unraid) | storage | VM | ✅ `terraform/proxmox/nas/nas.tf` (`started=false`, `protection=true`) | 4× `hostpci` + `usb0` |
 | 200 | `technitium` | edge | LXC | ✅ `terraform/proxmox/technitium/technitium-lxc.tf` | none |

@@ -1,6 +1,6 @@
 ---
 - name: Stage only the declared off-AP Wi-Fi gateway services
-  hosts: "{{ wifi_gateway_target | default('edge_lab') }}"
+  hosts: edge_router
   gather_facts: false
   vars_files:
     - ../vars/wifi-networks.yml
@@ -9,7 +9,7 @@
     wifi_apply_allowed: false
     wifi_gateway_phase: trial
     wifi_gateway_scope: wifi
-    wifi_dhcp_authority: "{{ 'vyos' if inventory_hostname == 'edge_lab' else vyos_production_baseline.dhcp_authority }}"
+    wifi_dhcp_authority: "{{ vyos_production_baseline.dhcp_authority }}"
     wifi_ipv6_delegate: "{{ inventory_hostname == 'edge_router' }}"
     wifi_ipv6_plan: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/network.json') | from_json }}"
     wifi_target_registry: "{{ lookup('file', playbook_dir ~ '/../../gitops/technitium/dhcp-reservations.json') | from_json }}"
@@ -19,8 +19,9 @@
       ansible.builtin.assert:
         that:
           - wifi_apply_allowed | bool
-          - inventory_hostname in ['edge_lab', 'edge_router']
-          - (inventory_hostname == 'edge_lab' and vm_id | int == 102) or (inventory_hostname == 'edge_router' and vm_id | int == 103)
+          - inventory_hostname == 'edge_router'
+          - vm_id | int == 103
+          - ansible_host == '10.0.10.1'
           - wifi_gateway_phase in ['trial', 'confirm']
           - wifi_gateway_scope in ['wifi', 'ipv6', 'handoff']
           - wifi_networks.guest.gateway_owner == 'opennds'
@@ -31,7 +32,7 @@
     - name: Refuse collisions with non-owned gateway nodes
       ansible.builtin.raw: |
         /bin/vbash -c '
-        [[ $(hostname) == {{ 'edge-lab' if inventory_hostname == 'edge_lab' else 'edge' }} ]] || builtin exit 1
+        [[ $(hostname) == edge ]] || builtin exit 1
         /bin/cli-shell-api existsActive interfaces ethernet eth1 vif 20 || builtin exit 1
         /bin/cli-shell-api existsActive firewall group network-group OWL_VLAN20_NONPUBLIC || builtin exit 1
         if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810; then
@@ -91,9 +92,6 @@
         source /opt/vyatta/etc/functions/script-template
         configure
         if /bin/cli-shell-api sessionChanged; then builtin exit 1; fi
-        {% if inventory_hostname == 'edge_lab' %}
-        confirm >/dev/null 2>&1 || true
-        {% endif %}
         owl_command_output=$(
         {{ wifi_gateway_commands }}
         ) || builtin exit 1

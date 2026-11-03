@@ -96,11 +96,12 @@ overrides to the inspection command, and record package versions/checksums.
 Neither method changes appliance configuration. Local rendering and image/schema
 inspection are not a native boot, hardware or production acceptance test.
 
-The [localhost renderer](../../ansible/playbooks/vyos-render.yml) needs the
-existing controller Ansible/PyYAML environment and an Ed25519 public key; no
-VyOS collection, Bitwarden unlock, router credential or target Python is needed
-for this render-only step. It writes only under `~/.local/state/owl-red/` and
-refuses production profiles or images without qualified native Suricata support.
+The [offline configuration tests](../../scripts/vyos-config.test.mjs) render the
+shared production template with synthetic documentation addresses and an
+ephemeral public key. They require Python/Jinja/PyYAML and the existing Ansible
+environment for deployment-refusal checks, but no running guest, Bitwarden
+unlock, router credential or target Python. Temporary candidates remain private
+under `~/.local/state/owl-red/` and are removed after the tests.
 CrowdSec engine/parser/bouncer packages and credentials are future service
 dependencies, not hidden requirements of the renderer. Pin and document them
 when selecting that deployment; no new package was installed on a router here.
@@ -116,15 +117,15 @@ fixture is a reported skip, not release acceptance. See the
 
 ### VyOS Credential Creation
 
-Use separate `vyos-lab-admin-password` and `vyos-production-admin-password`
-Password Manager login items, with controlled mirrors in the existing
+Use the `vyos-production-admin-password` Password Manager login item, with a
+controlled mirror in the existing
 `owl-red-infra` Secrets Manager project. Password Manager is the human recovery
 source; never rotate the mirror independently or create Kubernetes mappings for
 these router credentials. Store item/secret UUIDs and activation status in Git,
 not passwords. A prepared production credential is not an active router login.
 
 The accepted deployment now uses the production credential on VM 103
-`edge.owl.red`; VM 102 `edge-lab.owl.red` keeps its separate credential. Both
+`edge.owl.red`. Both
 stores have current role/connection notes and verified unchanged values. The
 native install workflow uses Ansible, OpenSSH, the existing PVE tools
 and Node `util.parseEnv`; it needs no additional network collection. Guarded
@@ -413,7 +414,6 @@ separate; VyOS still serves clients.
 | Proxmox guest roots | `bpg/proxmox` `0.66.1` | Each root's Terraform declarations; committed locks where present. Existing scaffold guests still need state/import review. |
 | Talos in the cluster root | `siderolabs/talos` `0.6.1` | [Cluster root](../../terraform/proxmox/technitium/main.tf) and its lockfile. Generation and future ISO preparation use the verified live `1.8.1` baseline. Existing attached `1.7.5` recovery media remains unchanged pending a reviewed replacement; use the matching live client and inspect full configuration drift before apply. |
 | VyOS native configuration | Ansible core, OpenSSH, Jinja, the pinned image/native CLI | [Native configuration](../../vyos/config.boot.j2) and [profiles](../../vyos/baseline.yml); Terraform owns the VM, not a second router configuration writer. |
-| Isolated VyOS VLAN qualification | Existing Ansible core/OpenSSH, target native CLI, iproute2, nftables/systemd; `dig` for the synthetic DNS check | [Lab-only playbook](../../ansible/playbooks/vyos-vlan-lab.yml), fixed VM 102/loopback endpoint, explicit `vyos_vlan_pilot_apply_allowed=true`. Uses built-in modules, private recovery artifacts and no new collection/package. Its native commit is not a production confirmed-commit workflow. |
 | Bounded wired VLAN-20 pilot | Same controller Ansible/SwOS environment; strict-host-key SSH; cp1 root with Bash/iproute2 network namespaces, coreutils `timeout`/`install`, Python 3, ping/curl; native router tcpdump and confirmed-commit CLI | [Router phases](../../ansible/playbooks/vyos-vlan20.yml), [switch phases](../../ansible/playbooks/swos-vlan20.yml) and [temporary probe](../../ansible/files/vlan20-probe.sh). Explicit opt-in and fresh private recovery directory; switch password only in child environment. Native five-minute trial must be confirmed only after actual acceptance. No new collection/package or VM creation is required. |
 | Unraid settings API | `sullivtr/graphql` `2.6.1` | [Unraid root](../../terraform/unraid/main.tf), lockfile and the installed GraphQL schema. Destructive/operational mutations are outside this lane. |
 | Technitium OS/sync | NixOS module, `writeShellApplication`, Git/curl/jq runtime inputs | [Nix configuration](../../nix/hosts/technitium/configuration.nix); [local checks](../../nix/hosts/technitium/check.nix) pin an official NixOS 25.11 archive and unpacked SHA256 for validation. This does not update/pin the running host's channel; `stateVersion = "25.11"` is not a channel lock. |

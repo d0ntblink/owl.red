@@ -6,8 +6,7 @@ Accepted (2026-10-16). Architecture and preparation are approved; this is not
 approval to stop the live router, transfer PCI devices or activate the replacement.
 
 Deployed after separate bounded approval and acceptance (2026-10-17 UTC): VM 103
-is active `edge.owl.red`; VM 102 remains the permanent lightweight
-`edge-lab.owl.red`. The operational rollout used native CLI diagnostics; the external
+is active `edge.owl.red`. The operational rollout used native CLI diagnostics; the external
 read-only dashboard remains a follow-up, not a protection claimed by the cutover.
 
 Supersedes [ADR 016](016-opnsense-terraform.md) for the future router architecture.
@@ -19,7 +18,7 @@ Explicitly approved and completed on 2026-10-17 after fresh native service,
 IPv4/IPv6 default-route and verified HTTPS checks: VM 100 and its 64-GB virtual
 disk were deleted, followed by its unreferenced installer ISO, completed cutover
 recovery unit/directories and generated provider cache. No VM-100 disk remains.
-Production VM 103 and lab VM 102 remain running. Removed source includes the old
+Production VM 103 remains running. Removed source includes the old
 provider/VM scaffold, drafts, wrappers, migration-only controllers/tests and
 superseded interactive host installers. Decisions, documentation and guides are
 retained, with obsolete procedures marked historical. No Git history was rewritten.

@@ -1,4 +1,3 @@
-{% set vyos_lab = vyos_router | default(vyos_lab) %}
 firewall {
     ipv4 {
         forward {
@@ -19,40 +18,40 @@ firewall {
                     action accept
                     description "LAN-TO-WAN"
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     outbound-interface {
-                        name {{ vyos_lab.wan_interface }}
+                        name {{ vyos_router.wan_interface }}
                     }
                     source {
-                        address {{ vyos_lab.subnet }}
+                        address {{ vyos_router.subnet }}
                     }
                 }
                 rule 200 {
                     action accept
                     description "PLEX-DNAT"
                     destination {
-                        address {{ vyos_lab.nas_address }}
+                        address {{ vyos_router.nas_address }}
                         port 32400
                     }
                     inbound-interface {
-                        name {{ vyos_lab.wan_interface }}
+                        name {{ vyos_router.wan_interface }}
                     }
                     protocol tcp
                 }
-{% if vyos_lab.reflection_ip is defined %}
+{% if vyos_router.reflection_ip is defined %}
                 rule 210 {
                     action accept
                     description "PLEX-REFLECTION"
                     destination {
-                        address {{ vyos_lab.nas_address }}
+                        address {{ vyos_router.nas_address }}
                         port 32400
                     }
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     outbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol tcp
                 }
@@ -85,7 +84,7 @@ firewall {
                         port 67
                     }
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol udp
                     source {
@@ -98,7 +97,7 @@ firewall {
                         port 68
                     }
                     inbound-interface {
-                        name {{ vyos_lab.wan_interface }}
+                        name {{ vyos_router.wan_interface }}
                     }
                     protocol udp
                     source {
@@ -111,11 +110,11 @@ firewall {
                         port "22,53"
                     }
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol tcp
                     source {
-                        address {{ vyos_lab.subnet }}
+                        address {{ vyos_router.subnet }}
                     }
                 }
                 rule 70 {
@@ -124,21 +123,21 @@ firewall {
                         port "53,123"
                     }
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol udp
                     source {
-                        address {{ vyos_lab.subnet }}
+                        address {{ vyos_router.subnet }}
                     }
                 }
                 rule 80 {
                     action accept
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol icmp
                     source {
-                        address {{ vyos_lab.subnet }}
+                        address {{ vyos_router.subnet }}
                     }
                 }
             }
@@ -149,7 +148,7 @@ firewall {
             filter {
                 default-action drop
                 default-log
-{% if vyos_lab.ipv6_enabled | default(false) %}
+{% if vyos_router.ipv6_enabled | default(false) %}
                 rule 10 {
                     action accept
                     state established
@@ -162,10 +161,10 @@ firewall {
                 rule 100 {
                     action accept
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     outbound-interface {
-                        name {{ vyos_lab.wan_interface }}
+                        name {{ vyos_router.wan_interface }}
                     }
                 }
 {% endif %}
@@ -175,7 +174,7 @@ firewall {
             filter {
                 default-action drop
                 default-log
-{% if vyos_lab.ipv6_enabled | default(false) %}
+{% if vyos_router.ipv6_enabled | default(false) %}
                 rule 10 {
                     action accept
                     state established
@@ -195,7 +194,7 @@ firewall {
                         port 546
                     }
                     inbound-interface {
-                        name {{ vyos_lab.wan_interface }}
+                        name {{ vyos_router.wan_interface }}
                     }
                     protocol udp
                     source {
@@ -208,7 +207,7 @@ firewall {
                         port 53
                     }
                     inbound-interface {
-                        name {{ vyos_lab.lan_interface }}
+                        name {{ vyos_router.lan_interface }}
                     }
                     protocol tcp_udp
                 }
@@ -218,9 +217,9 @@ firewall {
     }
 }
 interfaces {
-    ethernet {{ vyos_lab.wan_interface }} {
+    ethernet {{ vyos_router.wan_interface }} {
         address dhcp
-{% if vyos_lab.ipv6_enabled | default(false) %}
+{% if vyos_router.ipv6_enabled | default(false) %}
         address dhcpv6
         ipv6 {
             address {
@@ -230,7 +229,7 @@ interfaces {
         dhcpv6-options {
             no-release
             pd 0 {
-                interface {{ vyos_lab.lan_interface }} {
+                interface {{ vyos_router.lan_interface }} {
                     address 1
                     sla-id 0
                 }
@@ -239,17 +238,17 @@ interfaces {
         }
 {% endif %}
         description "WAN"
-{% if vyos_lab.dhcp_hostname is defined %}
+{% if vyos_router.dhcp_hostname is defined %}
         dhcp-options {
-            host-name {{ vyos_lab.dhcp_hostname }}
+            host-name {{ vyos_router.dhcp_hostname }}
         }
 {% endif %}
-        hw-id {{ vyos_lab.wan_mac }}
+        hw-id {{ vyos_router.wan_mac }}
     }
-    ethernet {{ vyos_lab.lan_interface }} {
-        address {{ vyos_lab.address }}
+    ethernet {{ vyos_router.lan_interface }} {
+        address {{ vyos_router.address }}
         description "LAN"
-        hw-id {{ vyos_lab.lan_mac }}
+        hw-id {{ vyos_router.lan_mac }}
     }
     loopback lo {
     }
@@ -262,30 +261,30 @@ nat {
                 port 32400
             }
             inbound-interface {
-                name {{ vyos_lab.wan_interface }}
+                name {{ vyos_router.wan_interface }}
             }
             protocol tcp
             translation {
-                address {{ vyos_lab.nas_address }}
+                address {{ vyos_router.nas_address }}
                 port 32400
             }
         }
-{% if vyos_lab.reflection_ip is defined %}
+{% if vyos_router.reflection_ip is defined %}
         rule 110 {
             description "PLEX-REFLECTION"
             destination {
-                address {{ vyos_lab.reflection_ip }}
+                address {{ vyos_router.reflection_ip }}
                 port 32400
             }
             inbound-interface {
-                name {{ vyos_lab.lan_interface }}
+                name {{ vyos_router.lan_interface }}
             }
             protocol tcp
             source {
-                address {{ vyos_lab.subnet }}
+                address {{ vyos_router.subnet }}
             }
             translation {
-                address {{ vyos_lab.nas_address }}
+                address {{ vyos_router.nas_address }}
                 port 32400
             }
         }
@@ -295,28 +294,28 @@ nat {
         rule 100 {
             description "MASQUERADE"
             outbound-interface {
-                name {{ vyos_lab.wan_interface }}
+                name {{ vyos_router.wan_interface }}
             }
             source {
-                address {{ vyos_lab.subnet }}
+                address {{ vyos_router.subnet }}
             }
             translation {
                 address masquerade
             }
         }
-{% if vyos_lab.reflection_ip is defined %}
+{% if vyos_router.reflection_ip is defined %}
         rule 110 {
             description "PLEX-REFLECTION-RETURN"
             destination {
-                address {{ vyos_lab.nas_address }}
+                address {{ vyos_router.nas_address }}
                 port 32400
             }
             outbound-interface {
-                name {{ vyos_lab.lan_interface }}
+                name {{ vyos_router.lan_interface }}
             }
             protocol tcp
             source {
-                address {{ vyos_lab.subnet }}
+                address {{ vyos_router.subnet }}
             }
             translation {
                 address masquerade
@@ -327,30 +326,30 @@ nat {
 }
 service {
     dhcp-server {
-        listen-interface {{ vyos_lab.lan_interface }}
-        shared-network-name {{ vyos_lab.network_name | default('LAB') }} {
+        listen-interface {{ vyos_router.lan_interface }}
+        shared-network-name {{ vyos_router.network_name | default('LAN') }} {
             authoritative
-            subnet {{ vyos_lab.subnet }} {
-                lease {{ vyos_lab.lease_seconds }}
+            subnet {{ vyos_router.subnet }} {
+                lease {{ vyos_router.lease_seconds }}
                 option {
-                    default-router {{ vyos_lab.gateway }}
-                    domain-name {{ vyos_lab.domain }}
-                    name-server {{ vyos_lab.gateway }}
+                    default-router {{ vyos_router.gateway }}
+                    domain-name {{ vyos_router.domain }}
+                    name-server {{ vyos_router.gateway }}
                 }
                 range 0 {
-                    start {{ vyos_lab.dhcp_start }}
-                    stop {{ vyos_lab.dhcp_stop }}
+                    start {{ vyos_router.dhcp_start }}
+                    stop {{ vyos_router.dhcp_stop }}
                 }
-{% if vyos_lab.reservations is not defined %}
+{% if vyos_router.reservations is not defined %}
                 static-mapping nas {
-                    ip-address {{ vyos_lab.nas_address }}
-                    mac {{ vyos_lab.nas_mac }}
+                    ip-address {{ vyos_router.nas_address }}
+                    mac {{ vyos_router.nas_mac }}
                 }
 {% endif %}
                 subnet-id 10
-{% if vyos_lab.reservations is defined %}
+{% if vyos_router.reservations is defined %}
                 ignore-client-id
-{% for reservation in vyos_lab.reservations %}
+{% for reservation in vyos_router.reservations %}
                 static-mapping {{ reservation.name }} {
                     ip-address {{ reservation.ip }}
                     mac {{ reservation.mac }}
@@ -363,10 +362,10 @@ service {
     dns {
         forwarding {
             allow-from 127.0.0.0/8
-            allow-from {{ vyos_lab.subnet }}
+            allow-from {{ vyos_router.subnet }}
             listen-address 127.0.0.1
-            listen-address {{ vyos_lab.gateway }}
-{% if vyos_lab.ipv6_enabled | default(false) %}
+            listen-address {{ vyos_router.gateway }}
+{% if vyos_router.ipv6_enabled | default(false) %}
             allow-from 2000::/3
             allow-from fe80::/10
             listen-address "::"
@@ -375,22 +374,22 @@ service {
     }
     ntp {
         allow-client {
-            address {{ vyos_lab.subnet }}
+            address {{ vyos_router.subnet }}
         }
-        listen-address {{ vyos_lab.gateway }}
-{% for server in vyos_lab.ntp_servers %}
+        listen-address {{ vyos_router.gateway }}
+{% for server in vyos_router.ntp_servers %}
         server {{ server }} {
         }
 {% endfor %}
     }
     ssh {
         disable-password-authentication
-        listen-address {{ vyos_lab.gateway }}
+        listen-address {{ vyos_router.gateway }}
         port 22
     }
-{% if vyos_lab.ipv6_enabled | default(false) %}
+{% if vyos_router.ipv6_enabled | default(false) %}
     router-advert {
-        interface {{ vyos_lab.lan_interface }} {
+        interface {{ vyos_router.lan_interface }} {
             prefix ::/64 {
             }
         }
@@ -398,7 +397,7 @@ service {
 {% endif %}
     suricata {
         address-group home-net {
-            address {{ vyos_lab.subnet }}
+            address {{ vyos_router.subnet }}
         }
         address-group external-net {
             group "!home-net"
@@ -411,7 +410,7 @@ service {
         address-group aim-servers {
             group external-net
         }
-        interface {{ vyos_lab.lan_interface }}
+        interface {{ vyos_router.lan_interface }}
         log {
             eve {
                 filetype syslog
@@ -440,10 +439,10 @@ system {
             speed 115200
         }
     }
-    domain-name {{ vyos_lab.system_domain }}
-    host-name {{ vyos_lab.hostname }}
+    domain-name {{ vyos_router.system_domain }}
+    host-name {{ vyos_router.hostname }}
     login {
-        user {{ vyos_lab.user }} {
+        user {{ vyos_router.user }} {
             authentication {
                 public-keys controller {
                     key {{ vyos_ssh_key_parts[1] | to_json }}
@@ -461,15 +460,15 @@ system {
         }
     }
     static-host-mapping {
-{% if vyos_lab.host_mappings is defined %}
-{% for mapping in vyos_lab.host_mappings %}
+{% if vyos_router.host_mappings is defined %}
+{% for mapping in vyos_router.host_mappings %}
         host-name {{ mapping.hostname }} {
             inet {{ mapping.ip }}
         }
 {% endfor %}
 {% else %}
-        host-name nas.{{ vyos_lab.domain }} {
-            inet {{ vyos_lab.nas_address }}
+        host-name nas.{{ vyos_router.domain }} {
+            inet {{ vyos_router.nas_address }}
         }
 {% endif %}
     }

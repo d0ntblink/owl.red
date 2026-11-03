@@ -11,7 +11,7 @@
   "release_page": "https://github.com/vyos/vyos-nightly-build/releases/tag/2026.10.16-0024-rolling",
   "build_git": "",
   "build_uuid": "ae7b6104-8d03-4b05-952b-abd3c725e52b",
-  "purpose": "isolated-lab-candidate",
+  "purpose": "production-router",
   "suricata_decision": "qualify-native-ids-on-pinned-rolling",
   "crowdsec_decision": "required-in-design-not-deployed",
   "qualification": {

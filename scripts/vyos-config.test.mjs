@@ -15,11 +15,9 @@ const temporary = fs.mkdtempSync(path.join(stateDirectory, 'vyos-config-test-'))
 const keyfile = path.join(temporary, 'bootstrap');
 const outputDirectory = path.join(temporary, 'rendered');
 const candidate = path.join(outputDirectory, 'candidate.config');
-const rejectedOutput = path.join(repository, path.basename(temporary));
 
 after(() => {
   fs.rmSync(temporary, { recursive: true, force: true });
-  fs.rmSync(rejectedOutput, { recursive: true, force: true });
 });
 
 const keygen = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', keyfile], {
@@ -27,28 +25,35 @@ const keygen = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', k
 });
 assert.equal(keygen.status, 0, keygen.stderr);
 
-function render(extra = {}) {
-  return spawnSync(ansible, [
-    '-i', 'localhost,',
-    'ansible/playbooks/vyos-render.yml',
-    '--extra-vars', JSON.stringify({
-      vyos_output_dir: outputDirectory,
-      vyos_public_key_file: `${keyfile}.pub`,
-      ...extra,
-    }),
-  ], {
-    cwd: repository,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg'),
-      ANSIBLE_NOCOLOR: '1',
-      ANSIBLE_FORCE_COLOR: '0',
-    },
-  });
+function render() {
+  fs.mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
+  return spawnSync(python, ['-c', String.raw`
+import json
+from pathlib import Path
+import sys
+from jinja2 import Environment, StrictUndefined
+
+environment = Environment(undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
+environment.filters['to_json'] = json.dumps
+router = {
+    'hostname': 'validation-router', 'system_domain': 'example.invalid',
+    'domain': 'example.invalid', 'network_name': 'VALIDATION', 'user': 'owl-ansible',
+    'wan_interface': 'eth0', 'lan_interface': 'eth1',
+    'wan_mac': '02:00:5e:10:00:01', 'lan_mac': '02:00:5e:10:00:02',
+    'subnet': '192.0.2.0/24', 'address': '192.0.2.1/24', 'gateway': '192.0.2.1',
+    'dhcp_start': '192.0.2.100', 'dhcp_stop': '192.0.2.199', 'lease_seconds': 86400,
+    'nas_address': '192.0.2.5', 'nas_mac': '02:00:5e:10:00:05',
+    'ntp_servers': ['0.pool.ntp.org', '1.pool.ntp.org'],
+}
+rendered = environment.from_string(Path('vyos/config.boot.j2').read_text()).render(
+    vyos_router=router, vyos_ssh_key_parts=Path(sys.argv[2]).read_text().split())
+target = Path(sys.argv[1])
+target.write_text(rendered)
+target.chmod(0o600)
+`, candidate, `${keyfile}.pub`], { cwd: repository, encoding: 'utf8' });
 }
 
-test('real localhost render is private, isolated and idempotent', () => {
+test('shared production template renders a private synthetic candidate without live dependencies', () => {
   const first = render();
   assert.equal(first.status, 0, first.error?.message || first.stdout + first.stderr);
   const configuration = fs.readFileSync(candidate, 'utf8');
@@ -60,71 +65,7 @@ test('real localhost render is private, isolated and idempotent', () => {
   assert.doesNotMatch(configuration, /10\.0\.10\.|vif |action queue|copy-mode ips/);
   const second = render();
   assert.equal(second.status, 0, second.error?.message || second.stdout + second.stderr);
-  assert.match(second.stdout, /changed=0\s/);
   assert.equal(fs.readFileSync(candidate, 'utf8'), configuration);
-});
-
-test('unsafe profiles, paths, keys and image qualifications are refused before rendering', () => {
-  const wrongKey = path.join(temporary, 'wrong-type.pub');
-  fs.writeFileSync(wrongKey, 'ssh-rsa invalid-test-key\n', { mode: 0o600 });
-  const image = JSON.parse(fs.readFileSync(path.join(repository, 'vyos/image.json'), 'utf8'));
-  const attempts = [
-    { vyos_profile: 'production', vyos_output_dir: path.join(temporary, 'production') },
-    { vyos_output_dir: rejectedOutput },
-    { vyos_public_key_file: wrongKey, vyos_output_dir: path.join(temporary, 'wrong-key') },
-    { vyos_image: { ...image, verified: false }, vyos_output_dir: path.join(temporary, 'unverified') },
-    { vyos_image: { ...image, channel: 'stream' }, vyos_output_dir: path.join(temporary, 'wrong-channel') },
-    {
-      vyos_image: { ...image, qualification: { ...image.qualification, native_suricata: false } },
-      vyos_output_dir: path.join(temporary, 'missing-suricata'),
-    },
-  ];
-  for (const extra of attempts) {
-    const result = render(extra);
-    assert.notEqual(result.status, 0, 'Unsafe input unexpectedly succeeded');
-    assert.equal(fs.existsSync(extra.vyos_output_dir), false, result.stdout + result.stderr);
-  }
-});
-
-test('VLAN lab overlay refuses missing approval, production identities and allocation changes offline', () => {
-  const inventory = path.join(temporary, 'vlan-lab-inventory.json');
-  fs.writeFileSync(inventory, JSON.stringify({
-    all: {
-      hosts: {
-        edge_lab: {
-          ansible_connection: 'local',
-          ansible_host: '127.0.0.1',
-          ansible_port: 22102,
-          vm_id: 102,
-        },
-      },
-    },
-  }));
-  const attempts = [
-    {},
-    { vyos_vlan_pilot_apply_allowed: true, vm_id: 103 },
-    { vyos_vlan_pilot_apply_allowed: true, ansible_host: '10.0.10.1', ansible_port: 22 },
-    { vyos_vlan_pilot_apply_allowed: true, vyos_vlan_pilot: { vlan_id: 10 } },
-  ];
-  for (const extra of attempts) {
-    const result = spawnSync(ansible, [
-      '-i', inventory,
-      'ansible/playbooks/vyos-vlan-lab.yml',
-      '--extra-vars', JSON.stringify(extra),
-    ], {
-      cwd: repository,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        ANSIBLE_CONFIG: path.join(repository, 'ansible/ansible.cfg'),
-        ANSIBLE_NOCOLOR: '1',
-        ANSIBLE_FORCE_COLOR: '0',
-      },
-    });
-    assert.notEqual(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stdout, /This opt-in playbook cannot target the production router/);
-    assert.doesNotMatch(result.stdout, /TASK \[Verify actual lab identity/);
-  }
 });
 
 test('production VLAN pilot refuses missing approval and changed host/operator boundaries offline', () => {
@@ -143,7 +84,7 @@ test('production VLAN pilot refuses missing approval and changed host/operator b
   }));
   const attempts = [
     { owner: 'vyos', extra: {} },
-    { owner: 'vyos', extra: { vlan20_pilot_allowed: true, vm_id: 102 } },
+    { owner: 'vyos', extra: { vlan20_pilot_allowed: true, vm_id: 999 } },
     { owner: 'vyos', extra: { vlan20_pilot_allowed: true, ansible_host: '127.0.0.1' } },
     { owner: 'swos', extra: {} },
     { owner: 'swos', extra: { vlan20_pilot_allowed: true, vlan20_members: [2, 22, 25] } },
@@ -298,7 +239,7 @@ expected = [
     ('set', 'interfaces', 'ethernet', 'eth0', 'address', 'dhcp'),
     ('set', 'interfaces', 'ethernet', 'eth1', 'address', '192.0.2.1/24'),
     ('set', 'service', 'dhcp-server', 'listen-interface', 'eth1'),
-    ('set', 'service', 'dhcp-server', 'shared-network-name', 'LAB', 'subnet', '192.0.2.0/24', 'subnet-id', '10'),
+    ('set', 'service', 'dhcp-server', 'shared-network-name', 'VALIDATION', 'subnet', '192.0.2.0/24', 'subnet-id', '10'),
     ('set', 'firewall', 'ipv4', 'forward', 'filter', 'default-action', 'drop'),
     ('set', 'firewall', 'ipv4', 'input', 'filter', 'default-log'),
     ('set', 'firewall', 'ipv6', 'forward', 'filter', 'default-action', 'drop'),
