@@ -18,7 +18,7 @@ theme:
       positive-color: 109 58 40
       negative-color: 347 87 44
 pages:
-  - name: Home
+  - name: home
     width: wide
     head-widgets:
       - type: search
@@ -198,3 +198,6 @@ pages:
                   - title: Open WebUI Direct
                     url: https://nas.owl.red:11436
                     icon: di:open-webui
+  - name: news
+  - name: briefing
+  - name: releases
