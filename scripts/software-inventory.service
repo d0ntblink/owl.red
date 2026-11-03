@@ -1,0 +1,15 @@
+[Unit]
+Description=Read-only owl.red software inventory and bounded SBOM refresh
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/owl.red
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+Environment=KUBECONFIG=%h/.kube/config
+ExecStart=/usr/bin/node %h/owl.red/scripts/software-inventory.mjs refresh
+TimeoutStartSec=40min
+KillMode=control-group
+SuccessExitStatus=75
+UMask=0077
+Nice=10
+CPUQuota=100%

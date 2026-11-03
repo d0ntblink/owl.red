@@ -70,6 +70,12 @@ Controller YAML checks use the existing project Python/PyYAML environment.
 Follow the [maintenance runbook](plex-maintenance.md) for daily API budgets,
 Fleet ownership, bounded poster replacement and cleanup gates.
 
+## Software Inventory And SBOMs
+
+For read-only software/version inventory and cached image SBOMs, use the
+[software inventory guide](software-inventory.md). It documents Node, PyYAML,
+kubectl/OpenSSH, pinned Syft, private storage and the WSL user-timer limitations.
+
 ## VyOS Image And Offline Preparation
 
 Use [the release manifest](../../vyos/image.json) for the exact dated rolling

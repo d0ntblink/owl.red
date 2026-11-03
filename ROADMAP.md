@@ -110,6 +110,11 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
 
 ## Threat Protection
 
+- [ ] Integrate the [software inventory and SBOM workflow](docs/guides/software-inventory.md)
+  with a personal vulnerability news feed: review CPE candidates, retain PURL and
+  vendor/backport-aware matching, report stale/missing coverage and send deduplicated
+  actionable alerts. Extend coverage to firmware/endpoints separately; do not
+  treat an inventory or naming match as a confirmed vulnerability.
 - [ ] Qualify Suricata rule updates, resource limits and retention; prove a
   controlled alert reaches a useful read-only diagnostics view.
 - [ ] Define CrowdSec acquisition, parsers and private LAPI placement; validate

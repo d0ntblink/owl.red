@@ -1,0 +1,15 @@
+check-for-app-update: false
+parallelism: 2
+scope: squashed
+enrich: []
+file:
+  metadata:
+    selection: none
+source:
+  image:
+    max-layer-size: 512MiB
+registry:
+  insecure-skip-tls-verify: false
+  insecure-use-http: false
+python:
+  guess-unpinned-requirements: false

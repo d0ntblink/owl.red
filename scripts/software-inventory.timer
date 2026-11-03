@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly owl.red inventory refresh
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+Unit=owl-software-inventory.service
+
+[Install]
+WantedBy=timers.target

@@ -32,6 +32,8 @@ retired implementations. They are not instructions to replay migrations.
 
 ## Platform And Services
 
+- [Software inventory](guides/software-inventory.md): read-only version/image
+  collection, cached SBOMs and inputs for a future personal vulnerability feed.
 - [Proxmox](guides/proxmox-terraform.md) and [node upgrades](guides/proxmox-node-upgrades.md).
 - [Shared storage](guides/shared-storage.md) and [PostgreSQL](guides/postgresql.md).
 - [Unraid changes](guides/unraid-making-changes.md) and [power/recovery](guides/power-and-recovery.md).
