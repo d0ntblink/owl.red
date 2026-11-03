@@ -60,7 +60,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: speedtest
-          image: linuxserver/speedtest-tracker@sha256:7f296f2f4f3fbc5ad7281a83743d3342a7ff143b9f382f0c8e87bdf5a4b29438
+          image: linuxserver/speedtest-tracker@sha256:14d56d7c4ff0af18f0a09be8494352ba40d23196e78c5f812cee69afaa1edc45
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: [NET_RAW]}
