@@ -62,6 +62,12 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
   alongside Frigate/Plex before accepting broader use.
 - [ ] Qualify the deferred Arr/Bazarr SQLite-to-PostgreSQL conversion separately;
   their existing schemas now run on Longhorn by the approved batch exception.
+- [ ] Represent Plex in Fleet with a selectorless Service and EndpointSlice,
+  private ingress if needed, and health monitoring; keep its container, GPU and
+  data on Unraid and preserve direct NAS access. Document that this is an external
+  backend, not a Kubernetes-managed pod: container lifecycle and secret delivery
+  remain outside Kubernetes. Defer GPU reassignment or runtime migration to a
+  separately reviewed change.
 - [ ] Choose a consistent certificate issuance/distribution method for
   off-cluster services and automate renewal through their configuration lanes.
 
