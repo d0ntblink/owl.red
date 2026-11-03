@@ -280,7 +280,7 @@ spec:
             - {name: slskd-data, mountPath: /app/data}
             - {name: media, mountPath: /media}
         - name: soularr
-          image: mrusse08/soularr@sha256:89b6809a169f6c78032c9a66abf5130e4877c46c0b95391818a38ab66cd71548
+          image: mrusse08/soularr@sha256:61ee506de5fb1447f3abd4a5a47e2537fad152ddf8c7e0392a36ef00b4f1c3d9
           env:
             - {name: TZ, value: America/New_York}
             - {name: SCRIPT_INTERVAL, value: "300"}
