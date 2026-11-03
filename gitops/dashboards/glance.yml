@@ -2,8 +2,8 @@ server:
   port: 8080
   proxied: true
 branding:
-  logo-text: owl.red
-  app-name: owl.red
+  logo-text: nest
+  app-name: home.owl.red
 theme:
   background-color: 240 21 15
   primary-color: 267 84 81
