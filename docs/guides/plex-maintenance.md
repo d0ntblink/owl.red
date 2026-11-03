@@ -1,10 +1,10 @@
 # Plex Collections, Artwork And Image Cleanup
 
-Status: the suspended Fleet job and NAS-local ImageMaid report container are
-deployed. The first UHD artwork trial was stopped during global ribbon-list
-gathering; its journal records zero exports and all 13 local posters match their
-preimage hashes. Daily artwork scheduling remains suspended. No ImageMaid
-deletion has been enabled.
+Status: the suspended Fleet job and NAS-local ImageMaid definition are deployed.
+All 13 UHD movies have styled, badged local posters; the corrected run's journal
+verifies all 13 sidecars. Daily scheduling and full-library onboarding remain
+paused. Jellyfin is still indexing, so cross-server selected-image acceptance
+is incomplete. No ImageMaid deletion is enabled.
 
 ## Placement
 
@@ -43,6 +43,31 @@ Use the maintained official images; releases observed during preparation are
 Kometa `2.5.4` and ImageMaid `1.2.2`. Resolve immutable image digests and verify
 the actual release's CLI/config support before activation: current wiki features
 can differ from a stable image.
+
+## ImageMaid Safety
+
+Do not use Plex's `/diagnostics/databases` endpoint for this deployment. The
+initial report request timed out after ten minutes and Plex's HTTP service
+stalled during that attempt. One explicitly approved Plex-container-only restart
+recovered HTTP 200 without changing its container definition, image or mounts.
+The exact internal cause is not established; no database repair was performed.
+ImageMaid returned exit code 0 despite a Critical Report, so exit status alone is
+not report acceptance.
+
+The guarded [report launcher](../../unraid/imagemaid/report.py) uses SQLite's
+consistent backup API against the read-only profile mount and hands the result
+to ImageMaid's existing-database mode. Diagnostic HTTP fallback is blocked and
+all destructive operations are forced off. It checks metadata-table readability,
+not full database integrity: stock SQLite cannot perform a whole-Plex
+`quick_check` with Plex's custom `collating` tokenizer.
+
+That snapshot passed an isolated test against the actual profile, but the
+bounded report-container attempt exceeded its 120-second limit. Reporting is
+paused and no deletion inventory has been accepted. Inspect private
+`report-error.log` and the current container state before another attempt. Do
+not automatically increase limits, restart Plex again, enable `IGNORE_RUNNING`,
+or fall back to copying the live database file. Keep the report stopped until
+the snapshot can complete safely.
 
 TMDb credentials are in Bitwarden Secrets Manager, not Google Secret Manager:
 
@@ -109,7 +134,8 @@ not part of this first run. Automatic job retries are disabled. Check available
 provider usage before and after the trial; count credential preflight calls too.
 Quota exhaustion is a stop condition, not a reason to retry or rotate keys.
 
-After the stopped first trial, MDBList reported 10/1,000 requests used. Do not
+After the stopped first trial, MDBList reported 10/1,000 requests used; after
+the first completed overlay/export run it reported 19/1,000. Do not
 infer TMDb's usage from that separate provider's counter. Keep both the manual
 trial and daily CronJob suspended while reviewing an uncertain run, and do not
 overlap the replacement trial with ImageMaid reporting or removal.
@@ -120,10 +146,12 @@ The guarded NAS-local report phase is:
 node scripts/plex-maintenance-run.mjs imagemaid-report
 ```
 
-It refuses an active artwork job or an existing ImageMaid container requiring
-inspection. The headless Unraid template has a real upstream icon, no fake WebUI,
-restart policy `no`, a read-only Plex profile and a private report config. It does
-not schedule cleanup or enable transcoder, trash, bundle or optimize operations.
+It refuses an active artwork job, an unowned/non-exited ImageMaid container, or
+an unmanaged config directory. It preserves the stopped owned definition before
+replacement. The headless Unraid template has a real upstream icon, no fake
+WebUI, restart policy `no`, a read-only Plex profile and a private report config.
+It does not schedule cleanup or enable transcoder, trash, bundle or optimize
+operations.
 
 Caching and a small trial are not a hard daily request limiter, and longer cache
 retention makes ratings less current. Keep automatic scheduling suspended until
@@ -169,8 +197,21 @@ folder and an existing regular `poster.jpg`. The adapter refuses symlinks,
 multiple versions/parts, shared directories, missing clean assets and more than
 40 movies. It preserves current posters and a per-item export journal under
 NAS appdata `assetsbackup/local-posters/<run-id>`, outside media directories.
-Its isolated native-runtime replacement/refusal tests passed; the live export
-and Plex/Jellyfin selected-image acceptance are not yet established.
+Its isolated native-runtime replacement/refusal tests passed. The first completed
+run exported 13 JPEGs and byte-for-byte Plex/sidecar equality passed for all 13.
+Visual review then caught the wrong clean base: per-library `asset_directory`
+must be nested under `settings` in this release. The corrected run resolved the
+native paths, exported all 13 again, and its journal and styled sample passed.
+Six items lacked a fetched Rotten Tomatoes value in the native run; do not
+invent missing ratings.
+
+Jellyfin initially listed only one UHD movie. One targeted UHD-library refresh
+was accepted without cancelling or restarting its existing global scan, which
+subsequently reached 52.7%. Remaining selected-image acceptance waits for
+indexing. A later broad read timed out, so it was not counted as a pass. Both
+Plex and Jellyfin subsequently returned HTTP 200 on their lightweight status
+endpoints. Reading sidecars through the existing read-only mount does not prove
+every movie is already indexed and displaying them.
 
 If the run fails, leave scheduling suspended and inspect the private manifest
 before doing anything else. Stop the artwork writer before recovery. Use the
@@ -189,8 +230,8 @@ its separate report/review gate.
 ## Initial Acceptance And Cleanup
 
 Start ImageMaid in `report` mode with the Plex profile mounted read-only and all
-other operations explicitly false. Use an API-exported database snapshot rather
-than copying a live SQLite database or setting `IGNORE_RUNNING=true`. Inspect
+other operations explicitly false. Use the guarded consistent SQLite snapshot,
+never diagnostic HTTP export, a plain live file copy, or `IGNORE_RUNNING=true`. Inspect
 the precise unused-artwork report before changing to deletion. The operator does
 not want a recoverable-move workflow; that does not authorize deleting media,
 the Plex database, selected artwork, trash contents or bundles.

@@ -62,6 +62,10 @@ Kometa/Posterizarr use their pinned official images. Pillow, PlexAPI and request
 are provided by that Kometa image; PowerShell and ImageMagick are provided by
 Posterizarr. No controller Docker daemon is required: isolated runtime tests and
 NAS-local ImageMaid use the existing Unraid Docker daemon over pinned SSH.
+ImageMaid's guarded report launcher uses the image's standard-library SQLite
+backup API and bundled requests package, not a live-file copy or Plex diagnostic
+export. Its snapshot has a 120-second limit; reporting stays paused if that
+cannot complete. The Plex profile stays read-only and destructive operations off.
 Controller YAML checks use the existing project Python/PyYAML environment.
 Follow the [maintenance runbook](plex-maintenance.md) for daily API budgets,
 Fleet ownership, bounded poster replacement and cleanup gates.

@@ -63,40 +63,46 @@ const sdk=require(require('node:os').homedir()+'/.local/share/owl-red/tools/bitw
     const environment = {
         PLEX_PATH: '/plex', MODE: 'report', SCHEDULE: '', PLEX_URL: config.plex_url,
         PLEX_TOKEN: token, OVERLAYS_ONLY: 'False', LOCAL_DB: 'False', IGNORE_RUNNING: 'False',
-        USE_EXISTING: 'False', PHOTO_TRANSCODER: 'False', EMPTY_TRASH: 'False',
+        USE_EXISTING: 'True', PHOTO_TRANSCODER: 'False', EMPTY_TRASH: 'False',
         CLEAN_BUNDLES: 'False', OPTIMIZE_DB: 'False', TRACE: 'False', LOG_REQUESTS: 'False',
         GOTIFY_ENABLED: 'False', TIMEOUT: '600', TZ: config.timezone
     };
-    const encoded = Buffer.from(JSON.stringify({ config, environment })).toString('base64');
+    const reportScript = fs.readFileSync(path.join(repository, 'unraid/imagemaid/report.py'), 'utf8');
+    const encoded = Buffer.from(JSON.stringify({ config, environment, reportScript })).toString('base64');
     const program = String.raw`<?php
 set_exception_handler(function($error){file_put_contents('php://stderr','Private ImageMaid report preparation failed');exit(1);});
 $input=json_decode(base64_decode('__INPUT__'),true,512,JSON_THROW_ON_ERROR);
 $config=$input['config'];
 if($config['plex_profile']!='/mnt/user/appdata/plex'||$config['imagemaid_config']!='/mnt/cache/appdata/imagemaid')throw new Exception('Unexpected paths');
 function docker($method,$path,$data=null,$allowMissing=false){$curl=curl_init('http://localhost'.$path);curl_setopt_array($curl,[CURLOPT_UNIX_SOCKET_PATH=>'/var/run/docker.sock',CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>60]);if($data!==null){curl_setopt($curl,CURLOPT_POSTFIELDS,json_encode($data));curl_setopt($curl,CURLOPT_HTTPHEADER,['Content-Type: application/json']);}$body=curl_exec($curl);$status=curl_getinfo($curl,CURLINFO_HTTP_CODE);curl_close($curl);if($allowMissing&&$status==404)return null;if($status<200||$status>=300)throw new Exception('Docker request failed');return json_decode($body,true);}
-if(docker('GET','/containers/imagemaid/json',null,true)!==null)throw new Exception('Existing container requires inspection; no automatic repeat');
+$existing=docker('GET','/containers/imagemaid/json',null,true);
+if($existing!==null&&($existing['State']['Status']!=='exited'||($existing['Config']['Labels']['owl.red.component']??'')!=='imagemaid'||$existing['Config']['Image']!==$config['imagemaid_image']))throw new Exception('Unreviewed or non-exited container; no automatic repeat');
 if(!is_dir($config['plex_profile'].'/Metadata')||!is_dir($config['plex_profile'].'/Plug-in Support'))throw new Exception('Wrong Plex profile');
 $directory=$config['imagemaid_config'];
-if(file_exists($directory)&&(!is_dir($directory)||count(array_diff(scandir($directory),['.','..']))))throw new Exception('Unreviewed existing config');
+if(file_exists($directory)&&(!is_dir($directory)||!file_exists($directory.'/.owl-red-report-created')))throw new Exception('Unreviewed existing config');
 if(!is_dir($directory)&&!mkdir($directory,0770,true))throw new Exception('Config creation failed');
 chown($directory,99);chgrp($directory,100);chmod($directory,0770);
+$preimage=$directory.'/definition-before-snapshot-wrapper.json';
+if($existing!==null&&!file_exists($preimage)){file_put_contents($preimage,json_encode($existing));chmod($preimage,0600);}
 $env='';foreach($input['environment'] as $name=>$value)$env.=$name.'='.$value.PHP_EOL;
 file_put_contents($directory.'/.env',$env,LOCK_EX);chown($directory.'/.env',99);chgrp($directory.'/.env',100);chmod($directory.'/.env',0600);
+file_put_contents($directory.'/report.py',$input['reportScript'],LOCK_EX);chown($directory.'/report.py',99);chgrp($directory.'/report.py',100);chmod($directory.'/report.py',0640);
 $icon='https://raw.githubusercontent.com/Kometa-Team/ImageMaid/v1.2.2/.github/logo.png';
-$definition=['Image'=>$config['imagemaid_image'],'User'=>'99:100','Env'=>['TZ='.$config['timezone'],'HOME=/config'],'Cmd'=>['--mode','report'],'Labels'=>['owl.red.component'=>'imagemaid','net.unraid.docker.icon'=>$icon],'HostConfig'=>['Binds'=>[$directory.':/config:rw',$config['plex_profile'].':/plex:ro'],'NetworkMode'=>'bridge','RestartPolicy'=>['Name'=>'no'],'Memory'=>1073741824,'NanoCpus'=>1000000000,'CapDrop'=>['ALL'],'SecurityOpt'=>['no-new-privileges:true'],'ReadonlyRootfs'=>true,'Tmpfs'=>['/tmp'=>'rw,nosuid,nodev,size=64m,mode=1777']]];
+$definition=['Image'=>$config['imagemaid_image'],'User'=>'99:100','Env'=>['TZ='.$config['timezone'],'HOME=/config'],'Entrypoint'=>['python3'],'Cmd'=>['/config/report.py'],'Labels'=>['owl.red.component'=>'imagemaid','net.unraid.docker.icon'=>$icon],'HostConfig'=>['Binds'=>[$directory.':/config:rw',$config['plex_profile'].':/plex:ro'],'NetworkMode'=>'bridge','RestartPolicy'=>['Name'=>'no'],'Memory'=>1073741824,'NanoCpus'=>1000000000,'CapDrop'=>['ALL'],'SecurityOpt'=>['no-new-privileges:true'],'ReadonlyRootfs'=>true,'Tmpfs'=>['/tmp'=>'rw,nosuid,nodev,size=64m,mode=1777']]];
+if($existing!==null)docker('DELETE','/containers/imagemaid');
 docker('POST','/containers/create?name=imagemaid',$definition);
 $xml=new SimpleXMLElement('<Container version="2"/>');
-foreach(['Name'=>'imagemaid','Repository'=>$config['imagemaid_image'],'Registry'=>'https://hub.docker.com/r/kometateam/imagemaid','Network'=>'bridge','Shell'=>'sh','Privileged'=>'false','Support'=>'https://github.com/Kometa-Team/ImageMaid','Project'=>'https://github.com/Kometa-Team/ImageMaid','Overview'=>'Headless Plex metadata image report. Permanent deletion requires separate review.','Category'=>'Tools:','Icon'=>$icon,'ExtraParams'=>'--user 99:100 --memory=1g --cpus=1 --cap-drop=ALL --security-opt=no-new-privileges:true --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777','PostArgs'=>'--mode report'] as $name=>$value)$xml->addChild($name,htmlspecialchars($value,ENT_XML1));
+foreach(['Name'=>'imagemaid','Repository'=>$config['imagemaid_image'],'Registry'=>'https://hub.docker.com/r/kometateam/imagemaid','Network'=>'bridge','Shell'=>'sh','Privileged'=>'false','Support'=>'https://github.com/Kometa-Team/ImageMaid','Project'=>'https://github.com/Kometa-Team/ImageMaid','Overview'=>'Headless report using a consistent read-only snapshot. Diagnostic export disabled. Permanent deletion requires separate review.','Category'=>'Tools:','Icon'=>$icon,'ExtraParams'=>'--entrypoint python3 --user 99:100 --memory=1g --cpus=1 --cap-drop=ALL --security-opt=no-new-privileges:true --read-only --tmpfs /tmp:rw,nosuid,nodev,size=64m,mode=1777','PostArgs'=>'/config/report.py'] as $name=>$value)$xml->addChild($name,htmlspecialchars($value,ENT_XML1));
 foreach([['Name'=>'Config','Target'=>'/config','Default'=>$directory,'Mode'=>'rw'],['Name'=>'Plex profile','Target'=>'/plex','Default'=>$config['plex_profile'],'Mode'=>'ro']] as $mount){$child=$xml->addChild('Config',$mount['Default']);foreach($mount+['Type'=>'Path','Display'=>'always','Required'=>'true','Mask'=>'false'] as $name=>$value)$child->addAttribute($name,$value);}
 $template='/boot/config/plugins/dockerMan/templates-user/my-imagemaid.xml';
-if(file_exists($template))throw new Exception('Existing template requires inspection');
+if(file_exists($template)&&!file_exists($directory.'/template-before-snapshot-wrapper.xml')){copy($template,$directory.'/template-before-snapshot-wrapper.xml');chmod($directory.'/template-before-snapshot-wrapper.xml',0600);}
 if(!is_dir(dirname($template)))throw new Exception('Unraid template directory absent');
 file_put_contents($template,$xml->asXML());
 $actual=docker('GET','/containers/imagemaid/json');
-if($actual['HostConfig']['Binds']!==$definition['HostConfig']['Binds']||$actual['Config']['Cmd']!==['--mode','report'])throw new Exception('Container mismatch');
+if($actual['HostConfig']['Binds']!==$definition['HostConfig']['Binds']||$actual['Config']['Cmd']!==['/config/report.py']||$actual['Config']['Entrypoint']!==['python3'])throw new Exception('Container mismatch');
 file_put_contents($directory.'/.owl-red-report-created',gmdate('c'));
 docker('POST','/containers/imagemaid/start');
-echo json_encode(['container'=>'imagemaid','mode'=>'report','plexProfileReadOnly'=>true,'otherOperations'=>false,'restartPolicy'=>'no','templateCreated'=>true]);
+echo json_encode(['container'=>'imagemaid','mode'=>'report','plexProfileReadOnly'=>true,'snapshot'=>'SQLite backup API','diagnosticExportBlocked'=>true,'otherOperations'=>false,'restartPolicy'=>'no','templateCreated'=>true]);
 `;
     console.log(execute('ssh', ['-T', '-i', path.join(os.homedir(), '.ssh/id_ed25519_owl_ansible'), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', 'root@10.0.10.5', 'php'], program.replace('__INPUT__', encoded)));
 } else {
