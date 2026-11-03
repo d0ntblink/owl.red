@@ -104,7 +104,7 @@ test('production VLAN pilot refuses missing approval and changed host/operator b
   }
 });
 
-test('private ingress allowlist is exact TCP443 to the shared VIP only', () => {
+test('owner-trusted private access is confined to the management subnet', () => {
   const result = spawnSync(python, ['-c', String.raw`
 import json
 from pathlib import Path
@@ -125,11 +125,12 @@ expected = [
     ['inbound-interface', 'name', 'eth1.20'],
     ['outbound-interface', 'name', 'eth1'],
     ['source', 'address', '10.0.20.0/24'],
-    ['destination', 'address', '10.0.10.201'],
-    ['protocol', 'tcp'], ['destination', 'port', '443'], ['action', 'accept'],
+    ['destination', 'address', '10.0.10.0/24'],
+    ['action', 'accept'],
 ]
 assert sorted(actual) == sorted(expected), actual
 assert 2810 < 3000
+assert all(f'if /bin/cli-shell-api existsActive firewall ipv4 forward filter rule 2810 {setting}; then delete firewall ipv4 forward filter rule 2810 {setting}; fi &&' in rendered for setting in ['protocol', 'destination port'])
 guard = Path('ansible/playbooks/vyos-wifi.yml').read_text()
 assert 'returnActiveValue firewall ipv4 forward filter rule 2810 description' in guard
 assert 'OWL-WIFI-PRIVATE-INGRESS' in guard

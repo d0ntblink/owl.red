@@ -48,8 +48,16 @@ jobs:
         run: node --test scripts/capture-dhcp-authority.test.mjs
 
   vyos-config:
-    name: VyOS configuration renderer (offline only)
+    name: VyOS renderer (Python ${{ matrix.python }}, Ansible ${{ matrix.ansible }})
     runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            ansible: "2.16.3"
+          - python: "3.15"
+            ansible: "2.22.0"
     env:
       ANSIBLE_PLAYBOOK: ansible-playbook
       PYTHON: python3
@@ -60,9 +68,9 @@ jobs:
           node-version: "26"
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - name: Install the tested controller version for rendering
-        run: python -m pip install 'ansible-core==2.16.3'
+        run: python -m pip install 'ansible-core==${{ matrix.ansible }}'
       - name: Exercise current rendering and unsafe-input guards
         run: node --test scripts/vyos-config.test.mjs
 
