@@ -201,7 +201,7 @@ spec:
           volumeMounts:
             - {name: gateway, mountPath: /gluetun}
         - name: wait-for-gateway
-          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          image: binhex/arch-qbittorrent@sha256:351c015baa25316db1432460237462be06d6d9c6cba323d435390fc988ac0b19
           command: [curl, --fail, --silent, --retry, "10", --retry-connrefused, --retry-delay, "2", --max-time, "5", http://127.0.0.1:9999/]
           securityContext:
             runAsUser: 99
@@ -214,7 +214,7 @@ spec:
             limits: {cpu: 100m, memory: 64Mi}
       containers:
         - name: qbittorrent
-          image: binhex/arch-qbittorrent@sha256:ceb8e99cae1f7ca5ca067088d674505ec27f2b9102731866c1899b98167ea592
+          image: binhex/arch-qbittorrent@sha256:351c015baa25316db1432460237462be06d6d9c6cba323d435390fc988ac0b19
           command: [/bin/bash, -ec]
           args: ["umask 000; exec /usr/bin/qbittorrent-nox --profile=/config --webui-port=8080"]
           env:
