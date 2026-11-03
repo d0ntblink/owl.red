@@ -245,8 +245,20 @@ from Dashboard Icons; `mdi:server` comes from Material Design Icons. If an icon
 is missing, use a supported alternative or a verified image URL. Some Dashboard
 Icons exist only as PNG and need an explicit suffix, such as `di:name.png`.
 
+Core Platform, Media, Transfers and Network Tools use native monitor widgets
+for 18 HTTP checks. Each keeps its normal browser link while checking a known
+backend endpoint where needed. Authenticated Arr applications, Traefik,
+infrastructure, cameras and recovery links remain bookmarks rather than
+displaying misleading authentication failures as outages.
+
+Results are fetched on page load and reused for one minute. Refresh the page
+after the cache expires to fetch fresh results; these widgets do not poll in
+the background or send alerts. A login page returning 200 establishes HTTP
+availability, not authenticated application health. No passwords, pod-read RBAC,
+TLS bypasses or accepted-error status overrides are added.
+
 Use [Gatus](../gatus/README.md) for existing scheduled health checks/history.
-For a lightweight Glance HTTP-status widget, this example uses Gatus's known
+To add another lightweight Glance HTTP-status widget, this example uses Gatus's known
 internal health endpoint while retaining its normal browser URL:
 
 ```yaml
@@ -389,9 +401,9 @@ host mounts. Control-plane fallback scheduling remains enabled. Legacy
 `homepage` resource/container names and selector are intentionally retained to
 reuse the existing ingress, service and disruption-budget wiring.
 
-The former Homepage HTTP/ping/pod badges are not recreated. Use the existing
-[Gatus](../gatus/README.md) service for scheduled checks/history. A future native
-Glance `monitor` widget can check selected HTTP backends, but neither a bookmark
+The former Homepage ping/pod badges are not recreated. Use the existing
+[Gatus](../gatus/README.md) service for scheduled checks/history. Native
+Glance `monitor` widgets check selected HTTP backends, but neither a bookmark
 nor a green backend check proves authenticated functionality or client access.
 No access restriction is relaxed to make dashboard checks pass.
 
