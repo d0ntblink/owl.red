@@ -13,11 +13,26 @@ data:
         throw 'Artwork count outside approved library bounds'
     }
     $assetDirectory = Join-Path '/assets' $library
+    function Get-VerifiedCleanPosters {
+        $posters = @(
+            foreach ($directory in [IO.Directory]::EnumerateDirectories($assetDirectory)) {
+                if (([IO.File]::GetAttributes($directory) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                    throw 'Symlinked clean-artwork directory refused'
+                }
+                $poster = [IO.Path]::Combine($directory, 'poster.jpg')
+                if ([IO.File]::Exists($poster)) {
+                    if (([IO.File]::GetAttributes($poster) -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                        throw 'Symlinked clean poster refused'
+                    }
+                    $poster
+                }
+            }
+        )
+        if ($posters.Count -ne $expectedItems) { throw 'The approved clean poster count is not available' }
+        return $posters
+    }
     if ($env:ARTWORK_REUSE_EXISTING -eq 'true') {
-        $posters = @(Get-ChildItem "$assetDirectory/*/poster.jpg" -File -ErrorAction Stop)
-        if ($posters.Count -ne $expectedItems -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
-            throw 'The approved clean posters are not available; refusing fresh provider calls'
-        }
+        $posters = @(Get-VerifiedCleanPosters)
         Write-Output "Reusing $expectedItems clean pilot posters; no Posterizarr provider calls."
         exit 0
     }
@@ -92,8 +107,5 @@ data:
     }
     & /app/Start.ps1 -Run
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $posters = @(Get-ChildItem "$assetDirectory/*/poster.jpg" -File -ErrorAction Stop)
-    if ($posters.Count -ne $expectedItems -or @($posters | Where-Object { $_.LinkType }).Count -ne 0) {
-        throw 'Native renderer did not produce the approved clean pilot posters'
-    }
+    $posters = @(Get-VerifiedCleanPosters)
     exit 0
