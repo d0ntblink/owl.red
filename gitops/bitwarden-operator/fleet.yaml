@@ -2,7 +2,7 @@ defaultNamespace: sm-operator-system
 helm:
   repo: https://charts.bitwarden.com
   chart: sm-operator
-  version: 2.0.1
+  version: 2.0.3
   releaseName: sm-operator
   force: true
   valuesFiles:
