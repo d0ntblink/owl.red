@@ -4,21 +4,21 @@
 
 The 2026-11-03 configuration replaces the historical community badge layout
 with Kometa defaults and four independently editable library definitions:
-[Movies](../../gitops/kometa/libraries/movies.yml),
-[4K Movies](../../gitops/kometa/libraries/4k-movies.yml),
-[Shows](../../gitops/kometa/libraries/shows.yml) and
-[4K Shows](../../gitops/kometa/libraries/4k-shows.yml).
+[Movies](../../gitops/kometa/movies.yml),
+[4K Movies](../../gitops/kometa/4k-movies.yml),
+[Shows](../../gitops/kometa/shows.yml) and
+[4K Shows](../../gitops/kometa/4k-shows.yml).
 Kustomize packages these files and the local overlays into a hashed ConfigMap;
 the existing runner assembles the native Kometa configuration before processing.
 
 Movie posters display Rotten Tomatoes and Letterboxd ratings; series posters
 display Rotten Tomatoes and IMDb. Missing ratings are omitted, not substituted.
-The local [ratings definition](../../gitops/kometa/overlays/ratings-simple.yml)
+The local [ratings definition](../../gitops/kometa/ratings-simple.yml)
 uses the pinned native template without the Rotten Tomatoes Certified Fresh
 seal. Aspect ratio is top-right beside the audio codec; resolution, audio codec,
 audio-language count and video-format badges otherwise use the native defaults.
 Movies with matching TMDb during/after-credits keywords get a bottom-right
-[CREDITS SCENE](../../gitops/kometa/overlays/credits-scene.yml) text badge.
+[CREDITS SCENE](../../gitops/kometa/credits-scene.yml) text badge.
 No credit-scene claim is made for TV series.
 
 Collections include native IMDb charts, audio languages and franchises for

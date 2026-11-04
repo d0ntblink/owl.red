@@ -7,9 +7,9 @@ resources:
 configMapGenerator:
   - name: kometa-libraries
     files:
-      - libraries/movies.yml
-      - libraries/4k-movies.yml
-      - libraries/shows.yml
-      - libraries/4k-shows.yml
-      - overlays/ratings-simple.yml
-      - overlays/credits-scene.yml
+      - movies.yml
+      - 4k-movies.yml
+      - shows.yml
+      - 4k-shows.yml
+      - ratings-simple.yml
+      - credits-scene.yml

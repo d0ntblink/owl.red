@@ -99,7 +99,7 @@ class ArtworkTests(unittest.TestCase):
     def test_library_sources_and_rating_scope(self):
         base = self.root / "config.yml"
         base.write_text(SOURCE["config.yml"])
-        configuration = NAMESPACE["load_configuration"](base, REPOSITORY / "gitops/kometa/libraries")
+        configuration = NAMESPACE["load_configuration"](base, REPOSITORY / "gitops/kometa")
         self.assertEqual(set(configuration["libraries"]), set(NAMESPACE["MEDIA_ROOTS"]))
         self.assertEqual(configuration["settings"]["playlist_sync_to_users"], [])
         for name, library in configuration["libraries"].items():
@@ -118,7 +118,7 @@ class ArtworkTests(unittest.TestCase):
                 base = self.root / "config.yml"
                 base.write_text(SOURCE["config.yml"])
                 def mapped_path(value):
-                    return {"/config/config.yml": base, "/libraries": REPOSITORY / "gitops/kometa/libraries"}.get(str(value), Path(value))
+                    return {"/config/config.yml": base, "/libraries": REPOSITORY / "gitops/kometa"}.get(str(value), Path(value))
                 def library_run(server, name, arguments):
                     self.assertNotIn("playlist_files", YAML(typ="safe").load(base.read_text()))
                 runner, native = Mock(side_effect=library_run), Mock()
