@@ -1,4 +1,5 @@
 import ast
+import fcntl
 import hashlib
 import os
 from pathlib import Path
@@ -141,6 +142,15 @@ class ArtworkTests(unittest.TestCase):
         function = next(node for node in TREE.body if isinstance(node, ast.FunctionDef) and node.name == "run_library")
         source = ast.unparse(function)
         self.assertIn("native_arguments.append('--overlays-only')", source)
+
+    def test_native_lock_refuses_a_second_writer(self):
+        guard = next(node for node in TREE.body if isinstance(node, ast.If))
+        self.assertIn("fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)", ast.unparse(guard))
+        lockfile = self.root / "artwork.lock"
+        with lockfile.open("a") as first, lockfile.open("a") as second:
+            fcntl.flock(first.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(second.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 if __name__ == "__main__":

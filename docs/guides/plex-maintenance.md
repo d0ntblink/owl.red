@@ -46,7 +46,9 @@ acceptance; writing a sidecar alone is not that acceptance.
 
 Manual recovery runs must suspend the CronJob before checking for writers and
 starting a job. `Forbid` alone did not prevent an observed scheduled/manual job
-overlap; retain the pause until the manual writer has finished. The 2026-11-04
+overlap; retain the pause until the manual writer has finished. The runner also
+holds a native nonblocking file lock in the shared local workspace for its full
+lifetime; a second instance exits without starting another writer. The 2026-11-04
 repair paused scheduling and normally stopped the two overlapping jobs, keeping
 their logs and configuration under controller-local recovery state. No force
 deletion, Plex restart, cache clearing or artwork-backup deletion was used.

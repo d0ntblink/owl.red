@@ -47,6 +47,7 @@ data:
       overlay_artwork_filetype: jpg
       overlay_artwork_quality: 90
   run.py: |
+      import fcntl
       import hashlib
       import io
       import json
@@ -265,7 +266,9 @@ data:
 
       if __name__ == "__main__":
         try:
-          main()
+          with Path("/config/.artwork-run.lock").open("a") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            main()
         except Exception:
           print("Artwork run stopped. Completed posters and native caches are retained; inspect the run manifests.", file=sys.stderr)
           sys.exit(1)
