@@ -238,6 +238,9 @@ data:
           raise RuntimeError("Unexpected artwork libraries")
         configuration = load_configuration(Path("/config/config.yml"), Path("/libraries"))
         playlist_files = configuration.pop("playlist_files", None)
+        collection_files = {name: library.get("collection_files", []) for name, library in configuration["libraries"].items()}
+        for library in configuration["libraries"].values():
+          library["collection_files"] = []
         with Path("/config/config.yml").open("w") as output:
           YAML().dump(configuration, output)
         server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=180)
@@ -251,12 +254,19 @@ data:
         if failed:
           raise RuntimeError("Artwork libraries failed; completed sidecars retained")
         if "--overlays-only" not in arguments:
+          for name, library in configuration["libraries"].items():
+            library["collection_files"] = collection_files[name]
+            library["overlay_files"] = []
+          with Path("/config/config.yml").open("w") as output:
+            YAML().dump(configuration, output)
           for name in names:
             collection_arguments = list(arguments)
             collection_arguments[collection_arguments.index("--libraries") + 1] = name
             subprocess.run([sys.executable, "/kometa.py", *collection_arguments, "--collections-only"], check=True)
         if playlist_files and "--overlays-only" not in arguments and set(names) == set(MEDIA_ROOTS):
           configuration["playlist_files"] = playlist_files
+          for library in configuration["libraries"].values():
+            library["collection_files"] = []
           with Path("/config/config.yml").open("w") as output:
             YAML().dump(configuration, output)
           playlist_arguments = list(arguments)

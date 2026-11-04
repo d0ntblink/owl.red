@@ -26,6 +26,9 @@ movies and shows; movie libraries also use Letterboxd charts, Academy Awards,
 Cannes, Sundance and TIFF. Shows use Emmy and network collections. Existing
 basic, genre, decade and other previously configured collection defaults remain.
 All four artwork/export passes run overlays-only before any collection builder.
+Their runtime config also has empty collection-file lists: native Kometa can
+parse dynamic collections even with `--overlays-only`. Collection passes restore
+their lists and disable overlay files; the playlist pass clears collections.
 Collection-only passes follow, then the nine native chronological playlists
 run once, restricted to those libraries, without automatically sharing to every
 Plex user. Collections/playlists do not download missing media or enable cleanup.

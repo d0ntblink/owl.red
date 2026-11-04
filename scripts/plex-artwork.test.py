@@ -121,9 +121,18 @@ class ArtworkTests(unittest.TestCase):
                 def mapped_path(value):
                     return {"/config/config.yml": base, "/libraries": REPOSITORY / "gitops/kometa"}.get(str(value), Path(value))
                 def library_run(server, name, arguments):
-                    self.assertNotIn("playlist_files", YAML(typ="safe").load(base.read_text()))
+                    active = YAML(typ="safe").load(base.read_text())
+                    self.assertNotIn("playlist_files", active)
+                    self.assertTrue(all(library["collection_files"] == [] for library in active["libraries"].values()))
                     native.assert_not_called()
-                runner, native = Mock(side_effect=library_run), Mock()
+                def native_run(command, **kwargs):
+                    active = YAML(typ="safe").load(base.read_text())
+                    self.assertTrue(all(library["overlay_files"] == [] for library in active["libraries"].values()))
+                    if "--collections-only" in command:
+                        self.assertTrue(all(library["collection_files"] for library in active["libraries"].values()))
+                    else:
+                        self.assertTrue(all(library["collection_files"] == [] for library in active["libraries"].values()))
+                runner, native = Mock(side_effect=library_run), Mock(side_effect=native_run)
                 arguments = ["run.py", "--run", "--read-only-config", "--no-missing", "--libraries", "Movies|4K Movies|Shows|4K Shows"]
                 if overlay_only:
                     arguments.append("--overlays-only")
