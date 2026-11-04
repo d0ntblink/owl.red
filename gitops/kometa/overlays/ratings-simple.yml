@@ -1,0 +1,13 @@
+external_templates:
+  - url: https://raw.githubusercontent.com/Kometa-Team/Kometa/v2.5.4/defaults/overlays/ratings.yml
+overlays:
+  Rating1Rotten:
+    template: {name: Rating, rating_num: "1", image_level: Rotten}
+  Rating1Fresh:
+    template: {name: Rating, weight: 105, rating_num: "1", image_level: Fresh}
+  Rating2Rotten:
+    template: {name: Rating, rating_num: "2", image_level: Rotten}
+  Rating2Fresh:
+    template: {name: Rating, weight: 105, rating_num: "2", image_level: Fresh}
+  Rating2Top:
+    template: {name: Rating, weight: 110, rating_num: "2", image_level: Top}

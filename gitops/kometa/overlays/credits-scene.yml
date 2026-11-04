@@ -1,0 +1,19 @@
+overlays:
+  Credits Scene:
+    plex_all: true
+    filters:
+      tmdb_keyword: aftercreditsstinger, duringcreditsstinger
+    overlay:
+      name: text(CREDITS SCENE)
+      font: fonts/Inter-Bold.ttf
+      font_size: 40
+      font_color: "#FFFFFF"
+      horizontal_align: right
+      horizontal_offset: 15
+      vertical_align: bottom
+      vertical_offset: 30
+      back_color: "#00000099"
+      back_width: 350
+      back_height: 105
+      back_align: center
+      back_radius: 30

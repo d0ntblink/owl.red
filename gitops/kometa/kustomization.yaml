@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - config.yaml
+  - jobs.yaml
+  - posterizarr.yaml
+configMapGenerator:
+  - name: kometa-libraries
+    files:
+      - libraries/movies.yml
+      - libraries/4k-movies.yml
+      - libraries/shows.yml
+      - libraries/4k-shows.yml
+      - overlays/ratings-simple.yml
+      - overlays/credits-scene.yml

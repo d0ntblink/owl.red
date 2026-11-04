@@ -20,145 +20,12 @@ data:
     mdblist:
       apikey: <<mdblistkey>>
       cache_expiration: 60
-    libraries:
-      Movies: &movies
-        settings:
-          asset_directory: /assets/Movies
-        collection_files:
-          - default: basic
-          - default: imdb
-          - default: tmdb
-          - default: genre
-          - default: decade
-          - default: franchise
-          - default: studio
-          - default: oscars
-          - default: seasonal
-        overlay_files:
-          - default: aspect
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 517
-          - default: audio_codec
-          - default: language_count
-          - default: content_rating_us_movie
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 637
-          - default: languages
-          - default: languages
-            template_variables:
-              back_color: "#FFFFFF00"
-              font_color: "#FFFFFF00"
-              use_subtitles: true
-          - default: mediastinger
-          - default: ratings
-            template_variables:
-              rating1: mdb_tomatoes
-              rating1_image: rt_tomato
-              rating1_font: fonts/Arimo-Bold.ttf
-              rating1_font_size: 63
-              rating2: imdb
-              rating2_image: imdb
-              rating2_font: fonts/LibreFranklin-Black.ttf
-              rating2_font_size: 70
-              rating3: tmdb
-              rating3_image: tmdb
-              rating3_font: fonts/Figtree-Black.ttf
-              rating3_font_size: 70
-              horizontal_position: right
-          - default: resolution
-          - default: studio
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 877
-          - default: versions
-          - default: video_format
-      Shows: &shows
-        settings:
-          asset_directory: /assets/Shows
-        collection_files:
-          - default: basic
-          - default: imdb
-          - default: tmdb
-          - default: genre
-          - default: decade
-          - default: network
-          - default: franchise
-        overlay_files:
-          - default: aspect
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 510
-          - default: audio_codec
-            template_variables:
-              vertical_offset: 95
-          - default: content_rating_us_show
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 630
-          - default: studio
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 870
-          - default: language_count
-          - default: languages
-          - default: languages
-            template_variables:
-              use_subtitles: true
-          - default: network
-            template_variables:
-              horizontal_align: left
-              vertical_align: top
-              vertical_offset: 990
-          - default: ratings
-            template_variables:
-              rating1: mdb_tomatoes
-              rating1_image: rt_tomato
-              rating1_font: fonts/Arimo-Bold.ttf
-              rating1_font_size: 63
-              rating2: imdb
-              rating2_image: imdb
-              rating2_font: fonts/LibreFranklin-Black.ttf
-              rating2_font_size: 70
-              rating3: tmdb
-              rating3_image: tmdb
-              rating3_font: fonts/Figtree-Black.ttf
-              rating3_font_size: 70
-              horizontal_position: right
-          - default: resolution
-            template_variables:
-              vertical_offset: 95
-          - default: status
-            template_variables:
-              horizontal_align: center
-              vertical_align: top
-              vertical_offset: 0
-              horizontal_offset: 0
-              back_height: 85
-              back_width: 1100
-              font: fonts/Figtree-Black.ttf
-              font_size: 60
-              back_color_airing: "#016920"
-              back_color_returning: "#81007F"
-              back_color_canceled: "#B52222"
-              back_color_ended: "#000847"
-          - default: versions
-          - default: video_format
-      4K Movies:
-        <<: *movies
-        settings:
-          asset_directory: /assets/4K Movies
-      4K Shows:
-        <<: *shows
-        settings:
-          asset_directory: /assets/4K Shows
+    playlist_files:
+      - default: playlist
+        template_variables:
+          libraries: [Movies, 4K Movies, Shows, 4K Shows]
+          delete_playlist: false
+    libraries: {}
     settings:
       run_order:
         - collections
@@ -175,6 +42,7 @@ data:
       delete_not_scheduled: false
       show_missing: false
       save_report: true
+      playlist_sync_to_users: []
       verify_ssl: true
       overlay_artwork_filetype: jpg
       overlay_artwork_quality: 90
@@ -196,6 +64,18 @@ data:
       from ruamel.yaml import YAML
 
       MEDIA_ROOTS = {"Movies": Path("/media/Movies"), "4K Movies": Path("/media/Movies-uhd"), "Shows": Path("/media/Shows"), "4K Shows": Path("/media/Shows-uhd")}
+      LIBRARY_FILES = {"Movies": "movies.yml", "4K Movies": "4k-movies.yml", "Shows": "shows.yml", "4K Shows": "4k-shows.yml"}
+
+      def load_configuration(base, library_directory):
+        parser = YAML(typ="safe")
+        configuration = parser.load(base.read_text())
+        configuration["libraries"] = {}
+        for name, filename in LIBRARY_FILES.items():
+          library = parser.load((library_directory / filename).read_text())
+          if not isinstance(library, dict) or library.get("settings", {}).get("asset_directory") != str(Path("/assets") / name):
+            raise RuntimeError("Native library clean-asset mapping is missing")
+          configuration["libraries"][name] = library
+        return configuration
 
       def digest(filename):
         return hashlib.sha256(filename.read_bytes()).hexdigest()
@@ -207,11 +87,11 @@ data:
 
       def plan(items, media_root, kind="movie"):
         root = media_root.resolve(strict=True)
-        if kind not in ("movie", "show"):
+        if kind not in ("movie", "show", "episode"):
           raise RuntimeError("Unexpected library type")
         result = []
         skipped = []
-        directories = {}
+        targets = {}
         asset_names = {}
         for item in items:
           key = str(item.ratingKey)
@@ -219,7 +99,10 @@ data:
             if kind == "show":
               locations = [Path(location) for location in item.locations]
             else:
-              locations = [Path(part.file).parent for media in item.media for part in media.parts]
+              files = [Path(part.file) for media in item.media for part in media.parts]
+              if kind == "episode" and (len(files) != 1 or files[0].is_symlink() or not files[0].is_file()):
+                raise RuntimeError("Missing, symlinked or multipart episode refused")
+              locations = [filename.parent for filename in files]
             if not locations or len(set(locations)) != 1:
               raise RuntimeError("Missing or ambiguous media folder")
             directory = locations[0]
@@ -230,19 +113,30 @@ data:
             directory = directory.resolve(strict=True)
             if root not in directory.parents or not directory.is_dir():
               raise RuntimeError("Invalid media folder")
-            directories[directory] = directories.get(directory, 0) + 1
             asset_names[directory.name] = asset_names.get(directory.name, 0) + 1
-            poster = directory / "poster.jpg"
-            result.append({"key": key, "poster": poster, "before": poster_digest(poster)})
+            poster = directory / (files[0].stem + "-thumb.jpg" if kind == "episode" else "poster.jpg")
+            targets[poster] = targets.get(poster, 0) + 1
+            media_before = None
+            if kind == "episode":
+              status = files[0].stat()
+              media_before = (status.st_size, status.st_mtime_ns)
+            result.append({"key": key, "kind": kind, "poster": poster, "before": poster_digest(poster), "media_before": media_before})
           except (RuntimeError, OSError) as error:
-            skipped.append({"key": key, "reason": str(error)})
+            skipped.append({"key": key, "kind": kind, "reason": str(error)})
         unique = []
         for item in result:
-          if directories[item["poster"].parent] != 1 or asset_names[item["poster"].parent.name] != 1:
-            skipped.append({"key": item["key"], "reason": "Items share a poster directory or clean-asset name"})
+          if targets[item["poster"]] != 1 or (kind != "episode" and asset_names[item["poster"].parent.name] != 1):
+            skipped.append({"key": item["key"], "kind": kind, "reason": "Items share an artwork target or clean-asset name"})
           else:
             unique.append(item)
         return unique, skipped
+
+      def validate_artwork(image, kind):
+        minimum_height = 150 if kind == "episode" else 450
+        if image.format != "JPEG" or image.width < 300 or image.height < minimum_height:
+          raise RuntimeError("Selected artwork is not a valid JPEG")
+        if kind == "episode" and image.width <= image.height:
+          raise RuntimeError("Episode thumbnail is not landscape")
 
       def replace_poster(target, source, expected):
         if poster_digest(target) != expected:
@@ -272,18 +166,25 @@ data:
           for item in items:
             item.reload()
         planned, pending = plan(items, MEDIA_ROOTS[name], kind)
+        if kind == "show":
+          episodes, episode_pending = plan(library.search(libtype="episode"), MEDIA_ROOTS[name], "episode")
+          planned.extend(episodes)
+          pending.extend(episode_pending)
         ready = []
         for item in planned:
+          if item["kind"] == "episode":
+            ready.append(item)
+            continue
           clean = Path("/assets") / name / item["poster"].parent.name / "poster.jpg"
           if not clean.is_file() or clean.is_symlink() or clean.parent.is_symlink():
-            pending.append({"key": item["key"], "reason": "Clean Posterizarr asset missing"})
+            pending.append({"key": item["key"], "kind": kind, "reason": "Clean Posterizarr asset missing"})
           else:
             ready.append(item)
         run = Path("/assetsbackup/local-posters") / uuid.uuid4().hex
         run.mkdir(parents=True, mode=0o700)
         journal = {"library": name, "items": [], "exported": [], "unchanged": [], "pending": pending, "complete": False}
         for item in ready:
-          journal["items"].append({"key": item["key"], "poster": str(item["poster"]), "before": item["before"]})
+          journal["items"].append({"key": item["key"], "kind": item["kind"], "poster": str(item["poster"]), "before": item["before"], "media_before": item["media_before"]})
         manifest = run / "manifest.json"
         manifest.write_text(json.dumps(journal, indent=2))
         native_arguments = list(arguments)
@@ -294,8 +195,8 @@ data:
           for item in ready:
             try:
               refreshed = server.fetchItem(int(item["key"]))
-              current, rejected = plan([refreshed], MEDIA_ROOTS[name], kind)
-              if rejected or len(current) != 1 or current[0]["poster"] != item["poster"] or current[0]["before"] != item["before"]:
+              current, rejected = plan([refreshed], MEDIA_ROOTS[name], item["kind"])
+              if rejected or len(current) != 1 or any(current[0][field] != item[field] for field in ("poster", "before", "media_before")):
                 raise RuntimeError("Media path or local artwork changed during run")
               if not any(label.tag.lower() == "overlay" for label in refreshed.labels):
                 raise RuntimeError("Kometa overlay label missing")
@@ -304,8 +205,7 @@ data:
               response = session.get(server._baseurl + refreshed.thumb, timeout=60)
               response.raise_for_status()
               with Image.open(io.BytesIO(response.content)) as image:
-                if image.format != "JPEG" or image.width < 300 or image.height < 450:
-                  raise RuntimeError("Selected artwork is not a valid poster JPEG")
+                validate_artwork(image, item["kind"])
                 image.verify()
               if hashlib.sha256(response.content).hexdigest() == item["before"]:
                 journal["unchanged"].append(item["key"])
@@ -317,23 +217,26 @@ data:
                 replace_poster(item["poster"], finished, item["before"])
                 journal["exported"].append(item["key"])
             except Exception as error:
-              journal["pending"].append({"key": item["key"], "reason": type(error).__name__})
+              journal["pending"].append({"key": item["key"], "kind": item["kind"], "reason": type(error).__name__})
             manifest.write_text(json.dumps(journal, indent=2))
         journal["complete"] = True
         manifest.write_text(json.dumps(journal, indent=2))
-        print(json.dumps({"library": name, "finishedLocalPosters": len(journal["exported"]) + len(journal["unchanged"]), "pendingLocalPosters": len(journal["pending"]), "manifest": str(manifest)}), flush=True)
+        finished = set(journal["exported"] + journal["unchanged"])
+        poster_keys = {item["key"] for item in ready if item["kind"] != "episode"}
+        episode_keys = {item["key"] for item in ready if item["kind"] == "episode"}
+        print(json.dumps({"library": name, "finishedLocalPosters": len(finished & poster_keys), "finishedLocalThumbnails": len(finished & episode_keys), "pendingLocalPosters": sum(item.get("kind") != "episode" for item in journal["pending"]), "pendingLocalThumbnails": sum(item.get("kind") == "episode" for item in journal["pending"]), "manifest": str(manifest)}), flush=True)
 
       def main():
         arguments = sys.argv[1:]
-        if "--libraries" not in arguments or "--overlays-only" not in arguments:
-          raise RuntimeError("Explicit video libraries and overlays-only are required")
+        if "--libraries" not in arguments:
+          raise RuntimeError("Explicit video libraries are required")
         names = arguments[arguments.index("--libraries") + 1].split("|")
         if not names or len(names) != len(set(names)) or any(name not in MEDIA_ROOTS for name in names):
           raise RuntimeError("Unexpected artwork libraries")
-        configuration = YAML(typ="safe").load(Path("/config/config.yml").read_text())
-        for name in names:
-          if configuration["libraries"][name].get("settings", {}).get("asset_directory") != str(Path("/assets") / name):
-            raise RuntimeError("Native library clean-asset mapping is missing")
+        configuration = load_configuration(Path("/config/config.yml"), Path("/libraries"))
+        playlist_files = configuration.pop("playlist_files", None)
+        with Path("/config/config.yml").open("w") as output:
+          YAML().dump(configuration, output)
         server = PlexServer("http://10.0.10.5:32400", os.environ["KOMETA_PLEXTOKEN"], timeout=180)
         failed = []
         for name in names:
@@ -344,6 +247,14 @@ data:
             print(json.dumps({"library": name, "failed": True}), flush=True)
         if failed:
           raise RuntimeError("Artwork libraries failed; completed sidecars retained")
+        if playlist_files and "--overlays-only" not in arguments and set(names) == set(MEDIA_ROOTS):
+          configuration["playlist_files"] = playlist_files
+          with Path("/config/config.yml").open("w") as output:
+            YAML().dump(configuration, output)
+          playlist_arguments = list(arguments)
+          library_index = playlist_arguments.index("--libraries")
+          del playlist_arguments[library_index:library_index + 2]
+          subprocess.run([sys.executable, "/kometa.py", *playlist_arguments, "--playlists-only"], check=True)
 
       if __name__ == "__main__":
         try:

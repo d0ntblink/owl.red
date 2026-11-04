@@ -102,7 +102,7 @@ spec:
             - name: kometa
               image: kometateam/kometa@sha256:93b0909d1a34d75985c2258f451aac4ece4216d02f0c4914a0a4fa4be39a88c0
               command: [python3, /scripts/run.py]
-              args: [--run, --read-only-config, --no-missing, --timings, --libraries, "Movies|4K Movies|Shows|4K Shows", --overlays-only]
+              args: [--run, --read-only-config, --no-missing, --timings, --libraries, "Movies|4K Movies|Shows|4K Shows"]
               env:
                 - {name: TZ, value: America/Edmonton}
                 - {name: HOME, value: /config}
@@ -126,6 +126,7 @@ spec:
                 - {name: artwork, mountPath: /assets, subPath: assets}
                 - {name: artwork, mountPath: /assetsbackup, subPath: assetsbackup}
                 - {name: kometa-config, mountPath: /scripts, readOnly: true}
+                - {name: kometa-libraries, mountPath: /libraries, readOnly: true}
                 - {name: movies, mountPath: /media/Movies}
                 - {name: uhd-movies, mountPath: /media/Movies-uhd}
                 - {name: shows, mountPath: /media/Shows}
@@ -138,6 +139,8 @@ spec:
               persistentVolumeClaim: {claimName: artwork-assets}
             - name: kometa-config
               configMap: {name: kometa-config}
+            - name: kometa-libraries
+              configMap: {name: kometa-libraries}
             - name: posterizarr-config
               configMap: {name: posterizarr-config}
             - name: temporary

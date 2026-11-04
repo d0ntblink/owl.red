@@ -1,0 +1,38 @@
+settings:
+  asset_directory: /assets/4K Shows
+collection_files:
+  - default: basic
+  - default: imdb
+  - default: tmdb
+  - default: genre
+  - default: decade
+  - default: network
+  - default: franchise
+  - default: audio_language
+  - default: emmy
+overlay_files:
+  - file: /libraries/ratings-simple.yml
+    template_variables:
+      rating1: mdb_tomatoes
+      rating1_image: rt_tomato
+      rating2: imdb
+      rating2_image: imdb
+  - default: aspect
+    template_variables:
+      horizontal_align: right
+      vertical_align: top
+      vertical_offset: 15
+  - default: resolution
+  - default: audio_codec
+  - default: language_count
+  - default: video_format
+  - default: ratings
+    template_variables:
+      builder_level: episode
+      rating1: imdb
+      rating1_image: imdb
+  - default: runtimes
+    template_variables:
+      builder_level: episode
+      vertical_offset: 150
+  - default: episode_info

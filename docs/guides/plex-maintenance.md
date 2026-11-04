@@ -1,5 +1,65 @@
 # Plex Collections, Artwork And Image Cleanup
 
+## Current Configuration
+
+The 2026-11-03 configuration replaces the historical community badge layout
+with Kometa defaults and four independently editable library definitions:
+[Movies](../../gitops/kometa/libraries/movies.yml),
+[4K Movies](../../gitops/kometa/libraries/4k-movies.yml),
+[Shows](../../gitops/kometa/libraries/shows.yml) and
+[4K Shows](../../gitops/kometa/libraries/4k-shows.yml).
+Kustomize packages these files and the local overlays into a hashed ConfigMap;
+the existing runner assembles the native Kometa configuration before processing.
+
+Movie posters display Rotten Tomatoes and Letterboxd ratings; series posters
+display Rotten Tomatoes and IMDb. Missing ratings are omitted, not substituted.
+The local [ratings definition](../../gitops/kometa/overlays/ratings-simple.yml)
+uses the pinned native template without the Rotten Tomatoes Certified Fresh
+seal. Aspect ratio is top-right beside the audio codec; resolution, audio codec,
+audio-language count and video-format badges otherwise use the native defaults.
+Movies with matching TMDb during/after-credits keywords get a bottom-right
+[CREDITS SCENE](../../gitops/kometa/overlays/credits-scene.yml) text badge.
+No credit-scene claim is made for TV series.
+
+Collections include native IMDb charts, audio languages and franchises for
+movies and shows; movie libraries also use Letterboxd charts, Academy Awards,
+Cannes, Sundance and TIFF. Shows use Emmy and network collections. Existing
+basic, genre, decade and other previously configured collection defaults remain.
+The nine native default chronological playlists run once after all four library
+passes, restricted to those libraries, without automatically sharing to every
+Plex user. Collections/playlists do not download missing media or enable cleanup.
+
+Both show libraries also apply native episode-level IMDb ratings, runtime and
+`SxxExx` information. Runtime is moved above episode information to avoid their
+shared bottom-right default position. The configured Rotten Tomatoes and
+Letterboxd sources do not support episode ratings in this pinned version;
+series scores are not misrepresented as episode scores. Existing Plex episode
+images are the bases; Posterizarr title-card generation remains disabled.
+The guarded exporter writes `<episode-video-stem>-thumb.jpg` beside each
+unambiguous episode for Jellyfin's local-artwork convention. It refuses missing,
+symlinked, multipart, shared-target and out-of-root episode paths, and rechecks
+media size/mtime and artwork hashes before export. Existing JPEGs are backed up
+before atomic replacement; video files are never export targets. Plex/Jellyfin
+selection of a local image still requires normal metadata discovery and visual
+acceptance; writing a sidecar alone is not that acceptance.
+
+Posterizarr does not need to regenerate existing clean bases for these overlay
+changes. Its scheduled missing-base pass remains enabled, preserving manual
+artwork and caches. Season artwork, backgrounds, Music and ImageMaid deletion
+remain disabled. First-time collections/episode processing may take longer or
+hit shared provider budgets; retain caches and report pending items rather than
+clearing them or forcing repeated runs.
+
+Offline exporter/configuration checks use Python with PyYAML and ruamel.yaml:
+
+```bash
+python scripts/plex-artwork.test.py
+kubectl kustomize gitops/kometa
+```
+
+The sections describing the initial UHD/community trials below preserve their
+historical scope and acceptance; they do not override the configuration above.
+
 Status: the Fleet artwork job and NAS-local ImageMaid definition are deployed.
 All 13 UHD movies and both UHD series have styled, badged local posters. The
 operator confirmed the movie posters in Jellyfin, completing the UHD trial's
@@ -15,16 +75,18 @@ enabled.
 The Fleet-owned `plex-artwork` CronJob runs daily at 06:00 America/Edmonton.
 Posterizarr's native `Start.ps1 -Run` generates missing clean bases for Movies,
 4K Movies, Shows and 4K Shows, reusing its persistent assets. Its internal timer
-is disabled because Kubernetes owns the schedule. Kometa then runs its native
-overlays-only command sequentially for each library, using the separate clean
-asset directories and persistent 60-day provider caches. Collections, global
-award/streaming discovery, Music, seasons, episodes and backgrounds remain out
-of scope. Missing ratings are omitted, not invented.
+is disabled because Kubernetes owns the schedule. Kometa then runs native
+collections and overlays sequentially for each library, using separate clean
+asset directories and persistent 60-day provider caches, followed by one native
+playlists-only pass. Explicit overlays-only manual runs still skip collections
+and playlists. Music, season artwork and backgrounds remain out of scope.
+Missing ratings are omitted, not invented.
 
 The local-sidecar requirement is an adapter, not a native creator feature: after
 each library's overlays, it retrieves Plex's selected finished JPEG and atomically
-writes only `poster.jpg` beside the movie or series. New folders need no initial
-poster. Same-folder versions share one item poster; ambiguous multi-folder items,
+writes only `poster.jpg` beside movies/series and the episode thumbnail files
+described above. New folders need no initial poster. Same-folder movie versions
+share one item poster; ambiguous multi-folder items,
 shared folder/asset names, symlinks and missing clean bases remain pending in the
 private run manifest instead of blocking other exports. Titles added during a run
 are picked up next time. Native overlay processing still covers the whole library;
@@ -122,7 +184,7 @@ access. Its existing API credential is privately mirrored as
 `plex-maintenance-token`: `d1c34bdb-f269-4723-ae74-b4f601709440`.
 Keep runtime secret values out of Git, logs and process arguments.
 
-## Community Style
+## Historical Community Style
 
 The requested source is
 [bullmoose20](https://github.com/Kometa-Team/Community-Configs/tree/master/bullmoose20).
@@ -172,8 +234,9 @@ onboarding.
 The operator approved whole-library onboarding without more pilot batches or a
 custom quota scheduler. Quota exhaustion may leave work for the next daily run;
 do not clear caches, immediately retry requests or rotate keys to bypass it.
-Season posters, episode cards, backgrounds and broad collection builders remain
-disabled. Daily runs reuse completed native assets and cached provider results.
+Season posters, backgrounds and Posterizarr title cards remain disabled. The
+new episode overlays and broad collection builders share the same provider
+budgets; daily runs reuse completed native assets and cached provider results.
 
 After the stopped first trial, MDBList reported 10/1,000 requests used; after
 the first completed overlay/export run it reported 19/1,000. Do not

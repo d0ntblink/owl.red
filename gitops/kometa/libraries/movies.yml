@@ -1,0 +1,34 @@
+settings:
+  asset_directory: /assets/Movies
+collection_files:
+  - default: basic
+  - default: imdb
+  - default: tmdb
+  - default: genre
+  - default: decade
+  - default: franchise
+  - default: studio
+  - default: oscars
+  - default: cannes
+  - default: sundance
+  - default: tiff
+  - default: audio_language
+  - default: letterboxd
+  - default: seasonal
+overlay_files:
+  - file: /libraries/ratings-simple.yml
+    template_variables:
+      rating1: mdb_tomatoes
+      rating1_image: rt_tomato
+      rating2: mdb_letterboxd
+      rating2_image: letterboxd
+  - default: aspect
+    template_variables:
+      horizontal_align: right
+      vertical_align: top
+      vertical_offset: 15
+  - default: resolution
+  - default: audio_codec
+  - file: /libraries/credits-scene.yml
+  - default: language_count
+  - default: video_format
