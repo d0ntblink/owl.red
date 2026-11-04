@@ -25,8 +25,9 @@ Collections include native IMDb charts, audio languages and franchises for
 movies and shows; movie libraries also use Letterboxd charts, Academy Awards,
 Cannes, Sundance and TIFF. Shows use Emmy and network collections. Existing
 basic, genre, decade and other previously configured collection defaults remain.
-The nine native default chronological playlists run once after all four library
-passes, restricted to those libraries, without automatically sharing to every
+All four artwork/export passes run overlays-only before any collection builder.
+Collection-only passes follow, then the nine native chronological playlists
+run once, restricted to those libraries, without automatically sharing to every
 Plex user. Collections/playlists do not download missing media or enable cleanup.
 
 Both show libraries also apply native episode-level IMDb ratings, runtime and
@@ -42,6 +43,13 @@ media size/mtime and artwork hashes before export. Existing JPEGs are backed up
 before atomic replacement; video files are never export targets. Plex/Jellyfin
 selection of a local image still requires normal metadata discovery and visual
 acceptance; writing a sidecar alone is not that acceptance.
+
+Manual recovery runs must suspend the CronJob before checking for writers and
+starting a job. `Forbid` alone did not prevent an observed scheduled/manual job
+overlap; retain the pause until the manual writer has finished. The 2026-11-04
+repair paused scheduling and normally stopped the two overlapping jobs, keeping
+their logs and configuration under controller-local recovery state. No force
+deletion, Plex restart, cache clearing or artwork-backup deletion was used.
 
 Posterizarr does not need to regenerate existing clean bases for these overlay
 changes. Its scheduled missing-base pass remains enabled, preserving manual
@@ -75,10 +83,11 @@ enabled.
 The Fleet-owned `plex-artwork` CronJob runs daily at 06:00 America/Edmonton.
 Posterizarr's native `Start.ps1 -Run` generates missing clean bases for Movies,
 4K Movies, Shows and 4K Shows, reusing its persistent assets. Its internal timer
-is disabled because Kubernetes owns the schedule. Kometa then runs native
-collections and overlays sequentially for each library, using separate clean
-asset directories and persistent 60-day provider caches, followed by one native
-playlists-only pass. Explicit overlays-only manual runs still skip collections
+is disabled because Kubernetes owns the schedule. Kometa first runs native
+overlays and local export for each library, then separate collections-only
+passes, using separate clean asset directories and persistent 60-day provider
+caches, followed by one native playlists-only pass. Explicit overlays-only
+manual runs still skip collections
 and playlists. Music, season artwork and backgrounds remain out of scope.
 Missing ratings are omitted, not invented.
 

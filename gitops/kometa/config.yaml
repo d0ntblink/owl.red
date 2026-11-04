@@ -189,6 +189,8 @@ data:
         manifest.write_text(json.dumps(journal, indent=2))
         native_arguments = list(arguments)
         native_arguments[native_arguments.index("--libraries") + 1] = name
+        if "--overlays-only" not in native_arguments:
+          native_arguments.append("--overlays-only")
         subprocess.run([sys.executable, "/kometa.py", *native_arguments], check=True)
         with requests.Session() as session:
           session.headers["X-Plex-Token"] = os.environ["KOMETA_PLEXTOKEN"]
@@ -247,6 +249,11 @@ data:
             print(json.dumps({"library": name, "failed": True}), flush=True)
         if failed:
           raise RuntimeError("Artwork libraries failed; completed sidecars retained")
+        if "--overlays-only" not in arguments:
+          for name in names:
+            collection_arguments = list(arguments)
+            collection_arguments[collection_arguments.index("--libraries") + 1] = name
+            subprocess.run([sys.executable, "/kometa.py", *collection_arguments, "--collections-only"], check=True)
         if playlist_files and "--overlays-only" not in arguments and set(names) == set(MEDIA_ROOTS):
           configuration["playlist_files"] = playlist_files
           with Path("/config/config.yml").open("w") as output:

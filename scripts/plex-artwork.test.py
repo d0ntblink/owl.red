@@ -121,6 +121,7 @@ class ArtworkTests(unittest.TestCase):
                     return {"/config/config.yml": base, "/libraries": REPOSITORY / "gitops/kometa"}.get(str(value), Path(value))
                 def library_run(server, name, arguments):
                     self.assertNotIn("playlist_files", YAML(typ="safe").load(base.read_text()))
+                    native.assert_not_called()
                 runner, native = Mock(side_effect=library_run), Mock()
                 arguments = ["run.py", "--run", "--read-only-config", "--no-missing", "--libraries", "Movies|4K Movies|Shows|4K Shows"]
                 if overlay_only:
@@ -129,10 +130,17 @@ class ArtworkTests(unittest.TestCase):
                     with patch.object(sys, "argv", arguments), patch.dict(os.environ, {"KOMETA_PLEXTOKEN": "synthetic-test-only"}):
                         NAMESPACE["main"]()
                 self.assertEqual(runner.call_count, 4)
-                self.assertEqual(native.call_count, 0 if overlay_only else 1)
+                self.assertEqual(native.call_count, 0 if overlay_only else 5)
                 if not overlay_only:
+                    for call in native.call_args_list[:4]:
+                        self.assertIn("--collections-only", call.args[0])
                     self.assertIn("--playlists-only", native.call_args.args[0])
                     self.assertNotIn("--libraries", native.call_args.args[0])
+
+    def test_artwork_subprocess_cannot_run_collections(self):
+        function = next(node for node in TREE.body if isinstance(node, ast.FunctionDef) and node.name == "run_library")
+        source = ast.unparse(function)
+        self.assertIn("native_arguments.append('--overlays-only')", source)
 
 
 if __name__ == "__main__":
