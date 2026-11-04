@@ -333,6 +333,58 @@ Application verification included a trusted-TLS Jellyfin request sourced from
 private `10.0.20.1` returning 200 and an in-cluster source outside both trusted
 subnets returning 403. That is a policy test, not a physical phone/RF test.
 
+### Bambu LAN-Only Access
+
+Wired native management and private Wi-Fi are separate subnets, not one
+broadcast domain. Native management has broader routed IoT access; private
+Wi-Fi's generic local-IoT rule allows only TCP `80,443,554,631,9100`.
+That rule does not cover Bambu Studio's LAN-only protocols.
+
+The source rule `2821` (`OWL-PRIVATE-BAMBU`) permits only `10.0.20.0/24` on
+`eth1.20` to the A1 at `10.0.40.11` on `eth1.40`, TCP
+`990,6000,8883,50000-50100`: implicit FTPS, A1 video, MQTT and passive FTP data.
+Established replies use the existing stateful return rule; this does not allow
+IoT devices to initiate connections into the private network or reach the WAN.
+The rule was deployed on 2026-11-03 through an explicitly approved ten-minute
+native confirmed-commit trial, then confirmed and saved after acceptance.
+Wi-Fi-bound Windows probes from `10.0.20.10` to ports `8883`, `990` and `6000`
+failed before the trial and passed afterward, with Ethernet left connected for
+recovery. Every other forward rule remained byte-identical; router SSH and
+trusted management HTTPS remained available. The owner confirmed Studio status
+and camera worked. No print or authenticated file upload was performed as a
+test; passive transfer ports follow the vendor's documented requirements.
+
+A subsequent Studio 2.9.1.70 calibration job exposed a separate unresolved
+symptom: switching from Device to Calibration reported a connection failure,
+and calibration progress/time/layer information was unavailable. The active
+Studio process had an established Ethernet connection to printer TCP `8883`;
+packet-header capture showed recurring printer data and client acknowledgments.
+This establishes transport activity, not correct MQTT payload processing or
+calibration integration. No additional status port was established as missing;
+no further firewall exception or printer restart was attempted during the job.
+Calibration-tab behavior and ordinary print-progress reporting remain unverified.
+
+Private preimages and issuance/acceptance receipts are under controller-local
+`~/.local/state/owl-red/bambu-private-access-yYRQPb/`. The exact inverse is
+deleting only rule `2821`, after a fresh review under native confirmed commit;
+do not restore the full router snapshot over unrelated later changes. Do not
+apply the full Wi-Fi gateway playbook just to change this one exception.
+
+For a printer already in LAN-only mode, use Bambu Studio **Device > No Printer >
+Bind with Access Code**, entering `10.0.40.11` and the code from the printer
+directly into Studio. Never put the code in Git or troubleshooting output.
+Discovery uses UDP multicast/broadcast `1990/2021`, not ordinary routed TCP;
+opening these TCP services does not relay discovery. Bambu documents IP/code
+binding for separate VLANs and notes that it may need repeating after Studio
+restarts. No multicast relay, VLAN bridging or global firewall bypass is needed.
+
+Verify from the actual private Wi-Fi path: both connected Ethernet and Wi-Fi
+can otherwise make a successful probe use Ethernet. Require control/status,
+file-transfer access and the desired camera function, not merely discovery or
+a successful TCP handshake. Do not start a print solely as a network test.
+See Bambu's [port list](https://wiki.bambulab.com/en/general/printer-network-ports)
+and [cross-subnet binding guide](https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode).
+
 | Surface | Source |
 |---------|--------|
 | AP hardware and cabling | [Device inventory](../device-inventory.md#ap-main), [MokerLink decision](../decisions/023-mokerlink-poe-rack-switch.md) |

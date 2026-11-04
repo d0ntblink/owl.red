@@ -152,6 +152,22 @@ plan = json.loads(Path('gitops/technitium/network.json').read_text())
 rendered = environment.from_string(Path('ansible/templates/vyos-vlan-ipv6.j2').read_text()).render(
     wifi_ipv6_plan=plan, wifi_ipv6_delegate=True)
 commands = [shlex.split(line.removesuffix(' &&')) for line in rendered.splitlines() if line.startswith('set ')]
+printer_stem = ['set', 'firewall', 'ipv4', 'forward', 'filter', 'rule', '2821']
+printer_actual = [command[len(printer_stem):] for command in commands if command[:len(printer_stem)] == printer_stem]
+printer_expected = [
+  ['description', 'OWL-PRIVATE-BAMBU'],
+  ['inbound-interface', 'name', 'eth1.20'],
+  ['outbound-interface', 'name', 'eth1.40'],
+  ['source', 'address', '10.0.20.0/24'],
+  ['destination', 'address', '10.0.40.11'],
+  ['protocol', 'tcp'],
+  ['destination', 'port', '990,6000,8883,50000-50100'],
+  ['action', 'accept'],
+]
+assert sorted(printer_actual) == sorted(printer_expected), printer_actual
+assert 2820 < 2821 < 3000
+guard = Path('ansible/playbooks/vyos-wifi.yml').read_text()
+assert "('ipv4', 2821, 'OWL-PRIVATE-BAMBU')" in guard
 for family in ['ipv4', 'ipv6']:
     stem = ['set', 'firewall', family, 'forward', 'filter', 'rule', '90']
     actual = [command[len(stem):] for command in commands if command[:len(stem)] == stem]

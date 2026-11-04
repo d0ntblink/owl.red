@@ -66,6 +66,14 @@ set firewall ipv4 forward filter rule 2820 destination address 10.0.40.0/24 &&
 set firewall ipv4 forward filter rule 2820 protocol tcp &&
 set firewall ipv4 forward filter rule 2820 destination port 80,443,554,631,9100 &&
 set firewall ipv4 forward filter rule 2820 action accept &&
+set firewall ipv4 forward filter rule 2821 description OWL-PRIVATE-BAMBU &&
+set firewall ipv4 forward filter rule 2821 inbound-interface name eth1.20 &&
+set firewall ipv4 forward filter rule 2821 outbound-interface name eth1.40 &&
+set firewall ipv4 forward filter rule 2821 source address 10.0.20.0/24 &&
+set firewall ipv4 forward filter rule 2821 destination address 10.0.40.11 &&
+set firewall ipv4 forward filter rule 2821 protocol tcp &&
+set firewall ipv4 forward filter rule 2821 destination port 990,6000,8883,50000-50100 &&
+set firewall ipv4 forward filter rule 2821 action accept &&
 set firewall ipv4 forward filter rule 2830 description OWL-VLAN-CLOUD-MEDIA &&
 set firewall ipv4 forward filter rule 2830 inbound-interface name eth1.50 &&
 set firewall ipv4 forward filter rule 2830 outbound-interface name eth1 &&
