@@ -73,6 +73,26 @@ kubectl kustomize gitops/kometa
 The sections describing the initial UHD/community trials below preserve their
 historical scope and acceptance; they do not override the configuration above.
 
+### Poster Repair Acceptance, 2026-11-04
+
+The poster-only repair exported 4,499 Movies and 318 Shows successfully.
+The preceding repair exported all 13 UHD movies and both UHD shows. Forty-eight
+movie exports remained pending: 44 missing clean bases, three missing/ambiguous
+media paths, and one item (`Primetime`) without an applied overlay. Guards left
+those local files untouched. Do not equate job completion with zero pending
+items, or retry the entire library to bypass these exceptions.
+
+Collection processing and an overlapping manual/scheduled job delayed the
+original run. Both were stopped normally, scheduling was paused, and the repaired
+runner now isolates native configuration files by phase as well as CLI flags.
+The completed Movies/Shows repair is `plex-posters-only-20261104t143604`;
+its controller receipts are under
+`~/.local/state/owl-red/plex-maintenance/posters-only-25HlPf/`. The daily schedule
+was then resumed after checking no active writer, the deployed native file lock
+and phase isolation. Episode export, collections and playlists still require
+separate full-run acceptance; this result certifies posters only. Jellyfin's
+selection of changed sidecars remains a separate image-discovery check.
+
 Status: the Fleet artwork job and NAS-local ImageMaid definition are deployed.
 All 13 UHD movies and both UHD series have styled, badged local posters. The
 operator confirmed the movie posters in Jellyfin, completing the UHD trial's
