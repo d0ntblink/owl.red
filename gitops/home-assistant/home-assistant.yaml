@@ -176,7 +176,7 @@ spec:
           effect: NoSchedule
       initContainers:
         - name: install-bambu
-          image: ghcr.io/home-assistant/home-assistant:2026.10.4@sha256:23f4dfbb69ce76315dbc4de7915504f1c2dcecd7ca2648113a493a385972e133
+          image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
           command: [python3, /bootstrap/install-bambu.py]
           env:
             - {name: PYTHONDONTWRITEBYTECODE, value: '1'}
@@ -193,7 +193,7 @@ spec:
             - {name: configuration, mountPath: /bootstrap, readOnly: true}
             - {name: temporary, mountPath: /tmp}
         - name: configure-http
-          image: ghcr.io/home-assistant/home-assistant:2026.10.4@sha256:23f4dfbb69ce76315dbc4de7915504f1c2dcecd7ca2648113a493a385972e133
+          image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
           command: [python3, /bootstrap/configure-http.py]
           env:
             - {name: PYTHONDONTWRITEBYTECODE, value: '1'}
@@ -231,7 +231,7 @@ spec:
             - {name: config, mountPath: /config}
       containers:
         - name: home-assistant
-          image: ghcr.io/home-assistant/home-assistant:2026.10.4@sha256:23f4dfbb69ce76315dbc4de7915504f1c2dcecd7ca2648113a493a385972e133
+          image: ghcr.io/home-assistant/home-assistant:2026.11.1@sha256:6785d1eca68747a524c156faae1b139ed415c07357386ae6fe17291986e59e82
           command: [python3, -m, homeassistant, --config, /config]
           env:
             - name: TZ
