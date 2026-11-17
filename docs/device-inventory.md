@@ -51,7 +51,7 @@ Secrets and authentication material are excluded.
 | [printer-bambu](#printer-bambu) | 3D printer | appliance | Bambu appliance firmware | `bambu.owl.red` / VLAN 40 allocation |
 | [thermostat-ecobee](#thermostat-ecobee) | Thermostat | appliance | ecobee appliance firmware | `ecobee.owl.red` / VLAN 50 allocation |
 | [appliance-typhur-air-fryer](#appliance-typhur-air-fryer) | Typhur Sync Air Fryer | appliance | Not documented | DHCP client / currently VLAN 50 |
-| [iot-client-a0920850a5e4](#iot-client-a0920850a5e4) | Unidentified Tuya-OUI IoT client | client | Not documented | DHCP client / currently VLAN 40 |
+| [iot-client-a0920850a5e4](#iot-client-a0920850a5e4) | Merkury outdoor smart plug | appliance | Not documented | DHCP client / currently VLAN 40 |
 | [media-shield](#media-shield) | Media player | appliance | Android TV | `shield.owl.red` / private VLAN 20 |
 | [camera-foyer](#camera-foyer) | Foyer camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-foyer.owl.red` / VLAN 40 allocation |
 | [camera-office](#camera-office) | Office camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-office.owl.red` / VLAN 40 allocation |
@@ -695,12 +695,12 @@ MAC rather than its permanent address.
 | Field | Value |
 |-------|-------|
 | id | `iot-client-a0920850a5e4` |
-| kind | client |
-| model | Unidentified Wi-Fi IoT device; DHCP hostname `wlan0` |
-| platform | Not documented; MAC OUI is registered to Tuya Smart Inc., which does not identify the product |
-| role | IoT endpoint; owner identification and internet requirement pending |
+| kind | appliance |
+| model | Merkury Innovations outdoor smart plug; SKU `1DZ64X306MHR` |
+| platform | Not documented; MAC OUI is registered to Tuya Smart Inc.; LocalTuya compatibility is unverified |
+| role | Outdoor plug with individually controlled outlets; Alexa/Google features are shown by the product image, but their network requirements are unverified |
 | parent | None |
-| network_policy | Currently associated with local-only VLAN 40; keep local-only by default |
+| network_policy | Currently associated with local-only VLAN 40; keep local-only by default, and use VLAN 50 only if required cloud features are confirmed |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
