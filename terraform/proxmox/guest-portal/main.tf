@@ -64,11 +64,14 @@ resource "proxmox_virtual_environment_vm" "portal" {
   tags        = ["debian", "guest", "portal", "staging", "terraform"]
   started     = true
   on_boot     = true
-  protection  = true
-  reboot      = false
-  machine     = "q35"
-  bios        = "seabios"
-  boot_order  = ["scsi0"]
+  startup {
+    order = 3
+  }
+  protection = true
+  reboot     = false
+  machine    = "q35"
+  bios       = "seabios"
+  boot_order = ["scsi0"]
 
   kvm_arguments = join(" ", [
     "-netdev user,id=owl_portal_bootstrap,net=10.0.2.0/24,hostfwd=tcp:127.0.0.1:22104-10.0.2.15:22",

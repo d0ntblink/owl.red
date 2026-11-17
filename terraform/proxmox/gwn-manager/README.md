@@ -35,6 +35,17 @@ node scripts/gwn-manager-run.mjs ap-plan-production
 GWN_MANAGER_APPLY_ALLOWED=true node scripts/gwn-manager-run.mjs apply-production
 ```
 
+When WSL cannot route to the controller's native `10.0.10.32:8443` address,
+the production HTTPS ingress can be used for read-only inspection:
+
+```bash
+GWN_MANAGER_USE_INGRESS=true node scripts/gwn-manager-run.mjs audit-production
+```
+
+Ingress transport is refused for all mutating phases. It uses normal trusted
+HTTPS validation; do not disable certificate checks or use it to bypass the
+controller's management allowlist.
+
 `plan` accepts a no-op, creation of this single unprivileged container, or the
 reviewed memory-only reduction from 6144 to 4096 MiB. Other updates and all
 replacements are refused for review. Creation is single-request guarded;

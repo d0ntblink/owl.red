@@ -13,16 +13,18 @@ import { parseEnv } from 'node:util';
 process.umask(0o077);
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const selectedPhase = process.argv[2] ?? 'inspect-local';
-assert.ok(['inspect-local', 'enable-api-local', 'api-local', 'qualify-local', 'bootstrap-production', 'status-production', 'inspect-production', 'enable-api-production', 'api-production', 'ap-plan-production', 'audit-production', 'adopt-production', 'apply-production'].includes(selectedPhase), 'Unknown controller phase');
+assert.ok(['inspect-local', 'enable-api-local', 'api-local', 'qualify-local', 'bootstrap-production', 'status-production', 'inspect-production', 'enable-api-production', 'api-production', 'ap-plan-production', 'audit-production', 'iot-inventory-production', 'adopt-production', 'apply-production'].includes(selectedPhase), 'Unknown controller phase');
 const production = selectedPhase.endsWith('-production');
 const phase = production ? selectedPhase.replace('-production', '-local') : selectedPhase;
+const ingressTransport = production && process.env.GWN_MANAGER_USE_INGRESS === 'true';
+assert.ok(!ingressTransport || ['inspect-production', 'status-production', 'audit-production', 'iot-inventory-production'].includes(selectedPhase), 'Ingress transport is read-only');
 const home = os.homedir();
 const directory = path.join(home, '.local/state/owl-red/gwn-manager');
 const credentialFile = path.join(directory, production ? 'production-api.json' : 'wsl-api.json');
 const configuration = JSON.parse(fs.readFileSync(path.join(repository, 'ansible/vars/gwn-manager.json'), 'utf8'));
 const origin = production ? configuration.management.url : 'https://localhost:8443';
-const endpoint = production ? 'https://' + configuration.container.address.split('/')[0] + ':8443' : origin;
-const controllerCA = production ? fs.readFileSync(path.join(directory, 'controller-ca.pem')) : undefined;
+const endpoint = production ? (ingressTransport ? origin : 'https://' + configuration.container.address.split('/')[0] + ':8443') : origin;
+const controllerCA = production && !ingressTransport ? fs.readFileSync(path.join(directory, 'controller-ca.pem')) : undefined;
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
 function connection(useLocal = false) {
@@ -45,7 +47,7 @@ function connection(useLocal = false) {
       const request = https.request(requestEndpoint + route, {
         method,
         rejectUnauthorized: secure,
-        ...(secure ? { ca: controllerCA, servername: '', checkServerIdentity: (_hostname, certificate) => checkServerIdentity(new URL(requestEndpoint).hostname, certificate) } : {}),
+        ...(secure ? (ingressTransport ? {} : { ca: controllerCA, servername: '', checkServerIdentity: (_hostname, certificate) => checkServerIdentity(new URL(requestEndpoint).hostname, certificate) }) : {}),
         timeout: 15000,
         headers: {
           ...headers,
@@ -158,7 +160,7 @@ if (phase === 'bootstrap-local') {
   const result = await client.request('/app/wizard/initial_info');
   assert.ok(result.retCode === 0, 'Controller status read failed');
   console.log(JSON.stringify({ strictTls: production, wizard: result.data.setup_wizard, accountRoute: result.data.account_domain }));
-} else if (['api-local', 'qualify-local', 'ap-plan-local', 'audit-local', 'adopt-local', 'apply-local'].includes(phase)) {
+} else if (['api-local', 'qualify-local', 'ap-plan-local', 'audit-local', 'iot-inventory-local', 'adopt-local', 'apply-local'].includes(phase)) {
   if (phase === 'qualify-local') assert.equal(process.env.GWN_MANAGER_QUALIFY_ALLOWED, 'true', 'Explicit local CRUD qualification approval required');
   if (['adopt-local', 'apply-local'].includes(phase)) assert.equal(process.env.GWN_MANAGER_APPLY_ALLOWED, 'true', 'Explicit production AP change approval required');
   const credential = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
@@ -177,7 +179,7 @@ if (phase === 'bootstrap-local') {
   }
   const listing = await api('network/list', { pageNum: 1, pageSize: 100 });
   assert.ok(Array.isArray(listing.result) && listing.total <= 100, 'Incomplete network inventory');
-  if (['ap-plan-local', 'audit-local', 'adopt-local', 'apply-local'].includes(phase)) {
+  if (['ap-plan-local', 'audit-local', 'iot-inventory-local', 'adopt-local', 'apply-local'].includes(phase)) {
     assert.ok(production && listing.result.length === 1, 'Expected one production network');
     const networkId = listing.result[0].id;
     const target = configuration.access_point;
@@ -189,7 +191,23 @@ if (phase === 'bootstrap-local') {
       assert.ok(inventory.retCode === 0 && Array.isArray(inventory.data?.result) && inventory.data.total <= 100, 'Incomplete production AP inventory');
       const owned = inventory.data.result.filter(item => canonical(item.mac) === canonical(target.mac));
       assert.ok(owned.length <= 1, 'Duplicate target AP');
-      if (phase === 'audit-local') {
+      if (phase === 'iot-inventory-local') {
+        assert.ok(owned.length === 1 && owned[0].status === 1 && owned[0].configSuccess === 1,
+          'Expected the adopted production AP to be online and configured');
+        const clients = await api('client/list', { networkId, pageNum: 1, pageSize: 200 });
+        const rows = clients.result ?? clients.clients ?? clients.records;
+        assert.ok(Array.isArray(rows) && rows.length <= 200, 'Incomplete or unrecognized active client inventory');
+        const iotSsids = new Set(['owl.red-iot-local', 'owl.red-iot-cloud']);
+        const fields = ['id', 'clientId', 'name', 'clientName', 'ipv4', 'ipv6', 'ssid', 'vlanId', 'vlanName',
+          'online', 'status', 'apName', 'band', 'lastSeen', 'lastseen', 'lastactive', 'lastactiveTime'];
+        const inventory = rows.filter(row => iotSsids.has(row.ssid)).map(row =>
+          Object.fromEntries(fields.filter(field => row[field] !== undefined && row[field] !== null)
+            .map(field => [field, row[field]])));
+        const onlineCount = inventory.filter(row => row.online === true || row.online === 1 || row.online === '1').length;
+        console.log(JSON.stringify({ accessPoint: target.mac, networkId, activeClientTotal: clients.total ?? rows.length,
+          responseKeys: Object.keys(clients), clientFields: [...new Set(rows.flatMap(row => Object.keys(row)))].sort(),
+          iotClientRecords: inventory.length, iotOnlineCount: onlineCount, clients: inventory }, null, 2));
+      } else if (phase === 'audit-local') {
         const ssids = await api('ssid/list', { networkId, pageNum: 1, pageSize: 100 });
         assert.ok(Array.isArray(ssids.result) && ssids.total <= 100, 'Incomplete SSID inventory');
         const records = [];

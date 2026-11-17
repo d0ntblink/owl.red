@@ -10,6 +10,7 @@ retained only as a copy reference. No portal runs on the AP.
 
 - VM `104`, `guest-portal-stage.owl.red`, on `edge`.
 - One vCPU, 768 MiB RAM, 8 GiB local disk; protected, native automatic boot enabled.
+- Edge startup order: router VM 103 first, Technitium CT 200 second, then this VM 104. CT 200 has a 30-second startup delay so Proxmox can create `vmbr0v30` from its tagged network interface before this VM attaches its guest NIC. All three guests remain enabled for automatic boot.
 - Debian 13 genericcloud build `20261021-2638`, SHA-512 pinned in this root.
 - Debian openNDS `10.3.1+dfsg-1`, with native nftables and dnsmasq dependencies.
 - Guest NIC `02:6f:77:30:03:04` attaches to `vmbr0v30` and `br-guest`, address `10.0.30.1/24`.

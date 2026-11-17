@@ -50,6 +50,8 @@ Reference: [storage design and procedures](docs/guides/shared-storage.md).
 - [ ] Add only the device-specific IoT discovery/service paths needed by Home
   Assistant; keep broad inter-VLAN access and host networking disabled by default.
 - [ ] Integrate the thermostat, printers and other selected smart-home devices.
+- [ ] Evaluate and set up LocalTuya for compatible devices, confirming local
+  control requirements and only the narrowly scoped VLAN access those devices need.
 - [ ] When the cameras are powered on, verify each camera's current Grandstream
   2.4 GHz BSSID and update the Thingino association guard. Then verify Wi-Fi,
   DHCP, ONVIF and Frigate streams; do not reuse the retired AP's BSSID or reset
@@ -81,6 +83,14 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   path before Strict filtering, preserve hybrid trunks 22/24/25, classify access
   ports and reject injected tags. Review retained CP1 port 2 membership in VLAN 20;
   the unmanaged MokerLink cannot enforce per-endpoint VLAN permissions.
+- [ ] Qualify the proposed single IoT SSID before changing the deployed four-SSID
+  layout: create `owl-red-iot` with VLAN 40 as the default and UI-managed PPSK
+  assignments to VLAN 50 only for confirmed cloud-dependent devices. Reconcile
+  the AP/Technitium inventory and identify the Tuya-OUI client; packet-test peer
+  isolation across bands and qualify onboarding, the broad VLAN 20-to-native
+  rule 2810 and VLAN 40/50 firewall policy. Keep the current four SSIDs until
+  these gates pass and the policy is accepted; the published API/IaC currently
+  does not manage PPSK profiles.
 - [ ] Soak AP stability and test controller-outage recovery, cross-band client
   isolation, broader IoT integrations and measured MokerLink Extend-mode speed.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):
@@ -98,6 +108,12 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   these do not establish coverage, roaming or universal handset compatibility.
 - [ ] Qualify a truthful client-specific CAPPORT endpoint before advertising
   DHCP option 114; keep it absent until the endpoint is proven.
+- [ ] Review and increase the openNDS guest session duration from the current
+  120 minutes. Align the gateway session and idle timeouts with the FAS Authmon
+  session length, then qualify whether a supported AP-disassociation signal can
+  revoke an active session so every Wi-Fi reconnect requires consent. A timeout
+  alone is insufficient; retain current settings until the end-to-end behavior
+  is proven.
 - [ ] Qualify GWN Manager backup/restore and backend certificate renewal; rotate
   temporary bootstrap credentials through the established secret store.
 - [ ] Publish the reviewed controller/ingress sources and reconcile the active

@@ -46,10 +46,13 @@ resource "proxmox_virtual_environment_vm" "vyos_production" {
   tags        = var.production_active ? ["infra", "router", "terraform", "vyos"] : ["infra", "router", "staging", "terraform", "vyos"]
   started     = var.production_running
   on_boot     = var.production_active
-  protection  = true
-  reboot      = false
-  machine     = "q35"
-  bios        = "seabios"
+  startup {
+    order = 1
+  }
+  protection = true
+  reboot     = false
+  machine    = "q35"
+  bios       = "seabios"
 
   kvm_arguments = var.production_active ? "" : join(" ", [
     "-netdev hubport,id=owl_stage_wan,hubid=0",

@@ -29,7 +29,11 @@ resource "proxmox_virtual_environment_container" "technitium" {
 
   started       = true
   start_on_boot = true
-  unprivileged  = false
+  startup {
+    order    = 2
+    up_delay = 30
+  }
+  unprivileged = false
 
   initialization {
     hostname = "technitium"

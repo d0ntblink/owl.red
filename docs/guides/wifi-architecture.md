@@ -203,6 +203,119 @@ Retain the existing Bitwarden Wi-Fi credentials. Apply client isolation to the
 three untrusted SSIDs; it does not replace VLAN boundaries or firewall policy.
 Qualify radio channels, widths and power for this hardware and the site.
 
+## Proposed One-SSID IoT Design (Not Accepted)
+
+The owner is evaluating one IoT SSID named `owl-red-iot` with isolated wireless
+clients, a local-only default, per-device cloud access and explicit peer
+exceptions. The deployed four SSIDs and VLANs above remain unchanged; this
+proposal is not an implementation approval.
+
+### IoT Migration Inventory
+
+This is a read-only GWN Manager client-list and Technitium DHCP lease snapshot
+from 2026-11-17, combined with the stable device inventory. The GWN response had
+six records on the two IoT SSIDs: five online and one offline. Technitium had
+four matching lease records. A GWN client record or OUI alone does not establish
+the physical device's identity or cloud requirements.
+
+| Device | Current observation | Proposed VLAN | Decision / note |
+|--------|--------------------|---------------|-----------------|
+| Canon printer | VLAN 40; GWN online at `.10`; confirmed reservation exists, but lease-list API omitted it | 40 | Local printing; resolve the lease discrepancy before migration |
+| Bambu Lab A1 | VLAN 40; GWN online; reserved lease at `.11` | 40 | Local-only, consistent with current policy |
+| WUUK foyer camera | VLAN 40 allocation `.12`; absent from current GWN client list and lease snapshot | 40 | Existing local-only allocation; device is not currently observed online |
+| WUUK office camera | VLAN 40 allocation `.13`; GWN record offline, last seen 2026-11-16 | 40 | Existing local-only allocation; no current lease observed |
+| Unidentified `wlan0` client | VLAN 40; online; dynamic lease at `.100`; MAC OUI registered to Tuya Smart Inc. | 40 by default | Identify the appliance and confirm whether it needs internet; do not infer product from OUI |
+| Ecobee thermostat | VLAN 50; GWN online; reserved lease at `.10` | 50 | Existing cloud-connected policy |
+| Typhur Sync Air Fryer | VLAN 50; GWN online; dynamic lease at `.100` | 50 pending feature check | Confirm the required cloud features before changing access |
+
+For `owl-red-iot`, create one unique PPSK per device, bind its MAC where the
+client limit is one, assign VLAN 40 by default and VLAN 50 only to devices
+confirmed to need internet. The PPSK/VLAN entries currently require GWN Manager
+UI ownership; the published API and this repository's reconciler do not manage
+PPSK profiles. Do not retire the two existing IoT SSIDs until the new SSID,
+per-device VLAN assignments, peer isolation and onboarding have passed packet
+tests. Keep all peers blocked by default; the Custom MAC exception list is not
+documented as pair-specific.
+
+Grandstream documents per-key VLAN assignment and optional MAC binding for a
+single-client PPSK in the [GWN76xx User Manual](https://documentation.grandstream.com/knowledge-base/gwn76xx-user-manual/)
+and the [GWN Management Platforms User Guide](https://documentation2.grandstream.com/knowledge-base/gwn-management-platforms-user-guide/).
+This makes unique per-device PPSKs mapped to VLAN 40 by default and VLAN 50 for
+cloud-dependent devices a promising one-SSID design. The PPSK is the credential;
+a MAC address is only an optional binding and can be spoofed. Changing the
+current shared-PSK SSID to PPSK may require reconnecting existing devices.
+
+Do not treat the feature as IaC-ready yet. The official [GWN API overview](https://doc.grandstream.dev/GWN-API/EN/#api-160077149722401000249)
+lists SSID create/update/read/delete operations but no PPSK-profile operation,
+and the current reconciler manages SSIDs, not PPSK accounts. The UI documents
+the device capability; it does not prove PPSK CRUD, secret-safe state handling,
+or drift reconciliation through the supported API. Qualify those before making
+PPSK profiles source-managed. Capacity documentation also conflicts: the AP
+manual lists 1,000 PPSKs for GWN7660E, while the management-platform guide's
+model list places unlisted models in a 300-per-group category. Confirm the
+effective limit on this controller and firmware.
+
+The vendor's [single-SSID Multi-VLAN guide](https://documentation.grandstream.com/knowledge-base/gwn76xx-multi-vlan-guide/)
+documents per-client Dynamic VLAN through WPA2-Enterprise/802.1X and RADIUS;
+the manual limits Dynamic VLAN to that key mode. MAC-Based RADIUS uses the MAC
+as the RADIUS username and password, so it is weaker than a unique PPSK and
+requires separate compatibility and fail-closed testing. AP-level Multi-VLAN
+mapping by AP is not per-client assignment.
+
+For blanket wireless peer blocking, the vendor's [Client Isolation guide](https://documentation.grandstream.com/knowledge-base/gwn76xx-client-isolation/)
+describes Radio mode as allowing gateway/AP access while blocking wireless
+clients from communicating with one another. The current live readback showed
+`ssidIsolation=1` and `isolationMode=0`, but the numeric mode has not been
+mapped to a named mode or packet-tested. The management-platform guide describes
+Custom MAC mode as isolating all clients except the added MAC addresses. That is
+a coarse exemption list, not a documented per-pair rule; it could exempt a
+listed device from isolation with more than its intended peer. Test both
+directions between listed/listed, listed/unlisted and unlisted/unlisted clients
+before relying on it, including cross-band unicast, multicast and discovery.
+
+Dynamic VLAN is a separate option: the manual documents it for WPA2-Enterprise
+802.1X with RADIUS, not MAC-only RADIUS. PPSK with RADIUS is also a distinct
+authentication mode; do not assume it enables Dynamic VLAN. IoT support for
+802.1X and the exact RADIUS failure behavior would need qualification. IP Source
+Guard can require DHCP addressing on supported firmware, but is not peer
+isolation and must not be used to claim that static-address devices are
+contained.
+
+Router firewall rules cannot block same-subnet peer traffic that is switched at
+Layer 2. With AP-wide Radio isolation, all wireless peers are blocked and a
+firewall exception cannot override the AP block. If the Custom MAC behavior is
+not sufficiently selective, the conservative choice is to keep peers isolated.
+For explicit peer communication, distinct VLANs plus stateful VyOS allow rules
+provide a router enforcement point, at the cost of more VLAN, DHCP/DNS and trunk
+administration. Same-VLAN peers still communicate locally unless AP isolation
+blocks them. Grandstream documents a 16-VLAN limit on an AP Ethernet port's
+allowed-VLAN list.
+
+Onboarding must account for local phone-to-device setup. If AP isolation blocks
+the phone and device, use a narrowly scoped, temporary routed path or another
+qualified onboarding method; prove removal afterward. A temporary WAN exception
+must be recorded, time-bounded, removed after setup and verified not to grant
+lateral access. Keep VLAN 40 WAN-denied and VLAN 50 WAN-only, denying native,
+private, guest and other IoT networks. Also review existing VyOS rule 2810,
+which currently permits VLAN 20 to the entire native `10.0.10.0/24` subnet;
+do not describe management access as restricted until that broad rule is
+reconciled. Existing guest/openNDS ownership and the native recovery path stay
+outside this proposal.
+
+Candidate approaches, none accepted:
+
+- One SSID with PPSK-to-VLAN 40/50 assignment: best fit for a simple device
+    onboarding story and per-device credentials if GWN Manager can reconcile
+    PPSK accounts safely. It does not by itself block peer traffic inside each
+    VLAN; the AP isolation behavior remains decisive.
+- One SSID with a distinct VLAN per IoT device: gives VyOS a clear place to
+    enforce explicit peer exceptions, but increases network operations and is
+    bounded by the AP's allowed-VLAN limit. Keep VLAN 40/50 grouped policy as the
+    simpler fallback if exceptions are rare.
+- Keep the current separate VLAN 40/50 SSIDs: preserves the known configuration
+    and avoids a cutover while PPSK/API/isolation behavior is qualified, but does
+    not meet the one-IoT-SSID preference.
+
 ## Components And Traffic Paths
 
 ```mermaid
@@ -296,8 +409,16 @@ The portal requires a signed, short-lived browser-bound offer and same-origin
 form POST. `Referrer-Policy: same-origin` preserves browser consent Origin without
 leaking handoff URLs cross-site. Origin, signature and cookie checks remain on.
 Native Authmon startup clearing must finish before acceptance readiness is claimed.
-Ordinary sessions are 120 minutes. DHCP option 114 is not advertised without a
-truthful, client-specific CAPPORT endpoint; normal captive detection is used.
+The current guest session policy is 120 minutes in the gateway's `sessiontimeout`
+and the FAS Authmon response. The gateway leaves `authidletimeout` at its
+120-minute default. A future 24-hour policy must align all three values.
+`allow_preemptive_authentication=0` prevents grants before preauthentication;
+it does not revoke an already-authorized session when a device disconnects from
+Wi-Fi. The current gateway has no qualified AP-disassociation signal, so a
+timeout change alone cannot guarantee a fresh consent prompt on every reconnect.
+Prove that behavior with an actual client before claiming it. DHCP option 114 is
+not advertised without a truthful, client-specific CAPPORT endpoint; normal
+captive detection is used.
 
 ## Configuration Owners
 

@@ -50,6 +50,8 @@ Secrets and authentication material are excluded.
 | [printer-canon](#printer-canon) | Network printer | appliance | Canon appliance firmware | `printer.owl.red` / VLAN 40 allocation |
 | [printer-bambu](#printer-bambu) | 3D printer | appliance | Bambu appliance firmware | `bambu.owl.red` / VLAN 40 allocation |
 | [thermostat-ecobee](#thermostat-ecobee) | Thermostat | appliance | ecobee appliance firmware | `ecobee.owl.red` / VLAN 50 allocation |
+| [appliance-typhur-air-fryer](#appliance-typhur-air-fryer) | Typhur Sync Air Fryer | appliance | Not documented | DHCP client / currently VLAN 50 |
+| [iot-client-a0920850a5e4](#iot-client-a0920850a5e4) | Unidentified Tuya-OUI IoT client | client | Not documented | DHCP client / currently VLAN 40 |
 | [media-shield](#media-shield) | Media player | appliance | Android TV | `shield.owl.red` / private VLAN 20 |
 | [camera-foyer](#camera-foyer) | Foyer camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-foyer.owl.red` / VLAN 40 allocation |
 | [camera-office](#camera-office) | Office camera | appliance | Thingino / Buildroot Linux | `wuuk-ptz-office.owl.red` / VLAN 40 allocation |
@@ -670,6 +672,39 @@ MAC rather than its permanent address.
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
 | Wi-Fi | `44:61:32:08:d6:2c` | Allocation `10.0.50.10` | Cloud-IoT Wi-Fi |
+
+### appliance-typhur-air-fryer
+
+| Field | Value |
+|-------|-------|
+| id | `appliance-typhur-air-fryer` |
+| kind | appliance |
+| model | Typhur Sync Air Fryer; exact SKU not documented |
+| platform | Not documented |
+| role | Smart cooking appliance; verify whether intended features require internet |
+| parent | None |
+| reported_hostname | `Typhur-Sync-Air-Fryer` |
+| network_policy | Currently associated with internet-enabled IoT VLAN 50; retain pending feature check |
+
+| Interface | MAC | Address | Connection |
+|-----------|-----|---------|------------|
+| Wi-Fi | `90:70:69:8e:a1:70` | DHCP dynamic; no fixed allocation | `owl.red-iot-cloud`; GWN Manager reports online |
+
+### iot-client-a0920850a5e4
+
+| Field | Value |
+|-------|-------|
+| id | `iot-client-a0920850a5e4` |
+| kind | client |
+| model | Unidentified Wi-Fi IoT device; DHCP hostname `wlan0` |
+| platform | Not documented; MAC OUI is registered to Tuya Smart Inc., which does not identify the product |
+| role | IoT endpoint; owner identification and internet requirement pending |
+| parent | None |
+| network_policy | Currently associated with local-only VLAN 40; keep local-only by default |
+
+| Interface | MAC | Address | Connection |
+|-----------|-----|---------|------------|
+| Wi-Fi | `a0:92:08:50:a5:e4` | DHCP dynamic; no fixed allocation | `owl.red-iot-local`; GWN Manager reports online |
 
 ### media-shield
 
