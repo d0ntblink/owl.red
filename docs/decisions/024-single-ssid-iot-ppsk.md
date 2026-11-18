@@ -3,8 +3,8 @@
 ## Status
 
 Accepted on 2026-11-17. The observed mixed-VLAN DHCP failure was resolved after
-upgrading the GWN7660E to 1.0.27.20. Cross-band isolation and the two appliances
-absent from the post-upgrade client list still require verification.
+upgrading the GWN7660E to 1.0.27.20. Cross-band isolation, Typhur connectivity
+and Merkury's offline application functionality still require verification.
 
 ## Context
 
@@ -16,8 +16,8 @@ wireless peer isolation and a short shared passphrase for manual entry.
 
 - Use `owl-red-iot`, PPSK without RADIUS, WPA2/AES and both radio bands.
 - Keep VLAN 40 local-only and VLAN 50 internet-enabled. Bind every PPSK account
-  to its device MAC, one-client limit and explicit VLAN. Merkury's current
-  user-managed assignment is VLAN 50, alongside ecobee and Typhur.
+  to its device MAC, one-client limit and explicit VLAN. Ecobee and Typhur use
+  VLAN 50. Merkury used temporary VLAN 50 onboarding and then returned to 40.
 - Use one shared two-word passphrase separated by one space, stored in both
   Bitwarden products as `owl-red-wifi-iot`. MAC binding is not strong identity;
   sharing a phrase loses independent per-device credential rotation.
@@ -63,6 +63,12 @@ common VLAN 40 and unchanged PPSK bindings. Both cameras retained gateway
 access, peer HTTP/ICMP denial and WAN HTTP denial. Typhur and Merkury were absent
 from the native current-client list, so their post-upgrade connectivity is not
 claimed. No router, switch, DHCP authority, DNS or Traefik change was required.
+
+Temporary internet revocation requires actual reassociation/address verification
+and removal of the device's retained old-IP connection state where present.
+Merkury's return to VLAN 40 was packet-verified: new cloud attempts had no WAN
+egress, and only its old VLAN 50 connection state was removed. Mobile-data tests
+must distinguish actual cloud control from cached status or local Bluetooth.
 
 ## References
 
