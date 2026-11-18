@@ -18,6 +18,10 @@ retired implementations. They are not instructions to replay migrations.
 
 ## Network Operations
 
+- [IoT Wi-Fi UI setup and maintenance](guides/iot-wifi-ui.md): `owl-red-iot`
+  settings, device VLAN mappings, encrypted import CSV and maintenance.
+- [Decision 024](decisions/024-single-ssid-iot-ppsk.md): single-SSID IoT policy,
+  SSID retirement and the firmware correction for mixed-VLAN DHCP.
 - [Wi-Fi architecture](guides/wifi-architecture.md): current SSIDs, VLAN paths,
   bridge bindings, guest rules, diagrams and guarded firmware refresh.
 - [Guest Wi-Fi troubleshooting](guides/guest-wifi-troubleshooting.md): separate

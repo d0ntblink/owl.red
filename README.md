@@ -17,7 +17,7 @@ and Kubernetes cluster.
 Guest VLAN 30 is enforced by native openNDS on a separate Debian gateway;
 the [Astro portal](https://github.com/d0ntblink/owl.red-guest-captive-portal)
 serves consent at `https://guest.owl.red`. The AP is bridge-only. See the
-[Wi-Fi architecture](docs/guides/wifi-architecture.md) for the accepted four-SSID
+[Wi-Fi architecture](docs/guides/wifi-architecture.md) for the three-SSID
 layout, VLAN paths and access rules.
 
 | Network | Purpose |

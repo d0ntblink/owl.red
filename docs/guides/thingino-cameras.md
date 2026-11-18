@@ -7,8 +7,8 @@ camera.
 
 | Camera | Address | Hostname | Wi-Fi |
 |--------|---------|----------|-------|
-| Foyer | `10.0.40.12` | `wuuk-ptz-foyer.owl.red` | `owl.red-iot-local`, 2.4 GHz |
-| Office | `10.0.40.13` | `wuuk-ptz-office.owl.red` | `owl.red-iot-local`, 2.4 GHz |
+| Foyer | `10.0.40.12` | `wuuk-ptz-foyer.owl.red` | `owl-red-iot`, 2.4 GHz |
+| Office | `10.0.40.13` | `wuuk-ptz-office.owl.red` | `owl-red-iot`, 2.4 GHz |
 
 Both use DHCP reservations, mask `/24`, gateway `10.0.40.1` and DNS
 `10.0.40.30`. Their web login pages and TCP 554 listeners were verified after
@@ -34,9 +34,9 @@ settings, device identity material, roaming options and formatting are retained.
 The PSK is derived using standard WPA PBKDF2; neither passphrase nor equivalent
 PSK is passed in command arguments or printed.
 
-The AP advertises the target SSID on radio0 only. Verification requires the
+The SSID is dual-band, but these cameras use 2.4 GHz. Verification requires the
 expected BSSID and an actual association frequency between 2412 and 2462 MHz;
-both cameras currently use 2412 MHz/channel 1. A matching SSID name alone is not
+the retained IoT profile currently uses BSSID `ee:74:d7:a3:3e:bb`. A matching SSID name alone is not
 accepted as evidence of 2.4 GHz operation. DHCP mode is required, not rewritten.
 
 ## Run
@@ -47,6 +47,13 @@ From the repository root:
 node scripts/thingino-run.mjs inspect
 node scripts/thingino-run.mjs plan
 ```
+
+The runner reads its credential references from the camera group variables;
+Wi-Fi uses the shared `owl-red-wifi-iot` vault item. For read-only network
+checks, run `node scripts/thingino-health.mjs policy foyer` or replace `foyer`
+with `office`. This checks gateway reachability, a local HTTP positive control,
+peer HTTP/ICMP denial and WAN HTTP denial; it does not certify cross-band
+isolation or every protocol.
 
 The plan prints its private recovery directory. An Ansible changed result in
 plan mode is a forecast; it does not modify the camera. To apply, use that
@@ -85,6 +92,10 @@ native-management jump host; no new SSH firewall rule is required. Camera SSH
 host keys are pinned in `~/.local/state/owl-red/thingino-known_hosts` under
 stable aliases, so an IP change does not bypass identity checking. New or
 changed host keys require an independent identity/fingerprint check.
+
+The read-only `policy` check uses the camera's existing `curl` and `ping`;
+no additional camera package is installed. A failed local HTTP positive control
+stops that check rather than treating missing tools as successful isolation.
 
 The runner pins Bitwarden CLI `2026.7.0` and its previously verified private
 profile. System CLI `2026.4.1` has the documented

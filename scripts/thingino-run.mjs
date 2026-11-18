@@ -37,8 +37,12 @@ function main() {
   environment.BW_SESSION = vault(['unlock', '--passwordenv', 'BW_SECRET', '--raw']);
   vault(['sync']);
   if (['inspect', 'plan', 'apply', 'verify'].includes(phase)) {
-    const login = JSON.parse(vault(['get', 'item', '79c52c46-77d5-46b6-8d7d-b4dd00ff75ae'])).login;
-    const wifi = JSON.parse(vault(['get', 'item', '9a8a2769-6c84-48a7-bf9e-b4e70030d1af'])).login;
+    const parsed = spawnSync(path.join(repository, '.venv/bin/python'), ['-c', "import json,yaml;print(json.dumps(yaml.safe_load(open('ansible/inventory/group_vars/thingino_cameras.yml'))))"], { cwd: repository, encoding: 'utf8' });
+    ensure(parsed.status === 0, 'Camera profile could not be read.');
+    const settings = JSON.parse(parsed.stdout);
+    ensure(settings.thingino_wifi_profile?.ssid === 'owl-red-iot' && settings.thingino_camera_item && settings.thingino_wifi_item, 'Unexpected camera Wi-Fi profile.');
+    const login = JSON.parse(vault(['get', 'item', settings.thingino_camera_item])).login;
+    const wifi = JSON.parse(vault(['get', 'item', settings.thingino_wifi_item])).login;
     ensure(login?.username === 'root' && login.password && wifi?.password, 'Private camera/Wi-Fi entries are incomplete.');
     fs.mkdirSync(stateRoot, { recursive: true, mode: 0o700 });
     const recovery = suppliedRecovery ? path.resolve(suppliedRecovery) : fs.mkdtempSync(path.join(stateRoot, 'thingino-'));

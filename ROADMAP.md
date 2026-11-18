@@ -83,14 +83,9 @@ Reference: [Wi-Fi architecture, intended SSIDs, rules and AP acceptance](docs/gu
   path before Strict filtering, preserve hybrid trunks 22/24/25, classify access
   ports and reject injected tags. Review retained CP1 port 2 membership in VLAN 20;
   the unmanaged MokerLink cannot enforce per-endpoint VLAN permissions.
-- [ ] Qualify the proposed single IoT SSID before changing the deployed four-SSID
-  layout: create `owl-red-iot` with VLAN 40 as the default and UI-managed PPSK
-  assignments to VLAN 50 only for confirmed cloud-dependent devices. Reconcile
-  the AP/Technitium inventory and identify the Tuya-OUI client; packet-test peer
-  isolation across bands and qualify onboarding, the broad VLAN 20-to-native
-  rule 2810 and VLAN 40/50 firewall policy. Keep the current four SSIDs until
-  these gates pass and the policy is accepted; the published API/IaC currently
-  does not manage PPSK profiles.
+- [ ] Recheck Typhur/Merkury on `owl-red-iot` when associated and qualify
+  cross-band isolation. [Decision 024](docs/decisions/024-single-ssid-iot-ppsk.md)
+  records the firmware correction and bounded network acceptance.
 - [ ] Soak AP stability and test controller-outage recovery, cross-band client
   isolation, broader IoT integrations and measured MokerLink Extend-mode speed.
 - [ ] Complete the [device migration and physical checks](docs/guides/vlan-client-migration.md):

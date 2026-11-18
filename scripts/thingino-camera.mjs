@@ -19,7 +19,7 @@ const recoveryRoot = path.join(home, '.local/state/owl-red');
 ensure(path.dirname(path.resolve(request.recovery)) === recoveryRoot && path.basename(request.recovery).startsWith('thingino-'), 'Invalid private recovery directory.');
 ensure(/^camera_(foyer|office)$/.test(camera.name), 'Unknown camera.');
 ensure(['10.0.40.12', '10.0.40.13'].includes(camera.target), 'Unexpected target network.');
-ensure(profile.ssid === 'owl.red-iot-local' && profile.frequencies.every(value => Number.isInteger(value) && value >= 2412 && value <= 2462), 'Only 2.4 GHz local IoT is allowed.');
+ensure(profile.ssid === 'owl-red-iot' && profile.frequencies.every(value => Number.isInteger(value) && value >= 2412 && value <= 2462), 'Only 2.4 GHz IoT on the configured local VLAN is allowed.');
 ensure(request.rollbackSeconds >= 240 && request.rollbackSeconds <= 600, 'Unsafe rollback interval.');
 ensure(credentials.username === 'root' && credentials.password && credentials.wifi, 'Private inputs are incomplete.');
 const directory = path.join(request.recovery, camera.name);
@@ -82,7 +82,13 @@ try {
   fs.writeFileSync(path.join(directory, 'initial-target.log'), JSON.stringify({ status: initial.status, stdout: initial.stdout, stderr: initial.stderr }), { mode: 0o600 });
   if (initial.status !== 0 && request.phase !== 'verify') { host = camera.bootstrap; initial = ssh(host, stateScript); }
   const before = parseState(initial);
+  let scanDetails;
   if (request.phase === 'inspect') {
+    const scan = ssh(host, 'wpa_cli -i wlan0 scan_results\n');
+    const visibleTarget = (scan.stdout ?? '').split('\n').map(line => line.split('\t'))
+      .filter(fields => fields.length >= 5 && fields[4].trim() === 'owl-red-iot')
+      .map(fields => ({ bssid: fields[0], frequencyMHz: Number(fields[1]) }));
+    scanDetails = { scanRead: scan.status === 0, visibleTarget };
     const diagnostic = ssh(host, `printf 'TRIALS\\n'; for state in /etc/owl-red-wifi-*; do test ! -d "$state" || { printf '%s\\n' "$state"; test ! -f "$state/switch.log" || cat "$state/switch.log"; }; done; printf 'CRON\\n'; crontab -l; printf 'CURRENT-CONFIG-HASH\\n'; sha256sum /etc/wpa_supplicant.conf`);
     fs.writeFileSync(path.join(directory, 'diagnostics.log'), diagnostic.stdout + diagnostic.stderr, { mode: 0o600 });
   }
@@ -108,7 +114,7 @@ try {
       fs.writeFileSync(path.join(directory, 'accepted.json'), JSON.stringify({ target: camera.target, ssid: before.status.ssid, frequencyMHz: Number(before.status.freq), rollbackCancelled: true, nativeConfigurationPreserved: true }), { mode: 0o600 });
     }
     console.log(JSON.stringify({ camera: camera.name, phase: request.phase, changed: request.phase === 'plan' && changed,
-      currentAddress: before.status.ip_address, targetAddress: camera.target, ssid: before.status.ssid, frequencyMHz: Number(before.status.freq), wouldChange: changed }));
+      currentAddress: before.status.ip_address, targetAddress: camera.target, ssid: before.status.ssid, frequencyMHz: Number(before.status.freq), wouldChange: changed, ...scanDetails }));
     process.exit(0);
   }
   const remote = '/etc/owl-red-wifi-' + randomUUID();

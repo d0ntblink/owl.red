@@ -10,7 +10,7 @@
         that:
           - platform == 'thingino'
           - thingino_phase | default('plan') in ['inspect', 'plan', 'apply', 'verify']
-          - thingino_wifi_profile.ssid == 'owl.red-iot-local'
+          - thingino_wifi_profile.ssid == 'owl-red-iot'
           - thingino_wifi_profile.frequencies | min >= 2412
           - thingino_wifi_profile.frequencies | max <= 2462
           - thingino_phase | default('plan') != 'apply' or thingino_apply_allowed | default(false) | bool

@@ -7,7 +7,7 @@ import { parseEnv } from 'node:util';
 
 process.umask(0o077);
 const phase = process.argv[2] || 'inspect';
-assert.ok(['inspect', 'repair-netwatch', 'match-netwatch'].includes(phase), 'Use inspect, repair-netwatch or match-netwatch.');
+assert.ok(['inspect', 'policy', 'repair-netwatch', 'match-netwatch'].includes(phase), 'Use inspect, policy, repair-netwatch or match-netwatch.');
 const cameraName = process.argv[3] || 'foyer';
 const camera = {
   foyer: { host: '10.0.40.12', mac: '02:7f:f6:05:40:fc' },
@@ -94,8 +94,28 @@ test -s /var/run/netwatch.pid
 kill -0 "$(cat /var/run/netwatch.pid)"
 printf 'software_watchdog_running=true\n'
 `;
+const policy = String.raw`
+command -v curl >/dev/null
+curl --noproxy '*' -s --connect-timeout 2 --max-time 3 -o /dev/null http://127.0.0.1/
+printf 'loopback_http=true\n'
+if curl --noproxy '*' -s --connect-timeout 3 --max-time 4 -o /dev/null http://${cameraName === 'foyer' ? '10.0.40.13' : '10.0.40.12'}/; then
+  printf 'peer_http_blocked=false\n'
+else
+  printf 'peer_http_blocked=true\n'
+fi
+if ping -c 1 -W 2 ${cameraName === 'foyer' ? '10.0.40.13' : '10.0.40.12'} >/dev/null 2>&1; then
+  printf 'peer_ping_blocked=false\n'
+else
+  printf 'peer_ping_blocked=true\n'
+fi
+if curl --noproxy '*' -s --connect-timeout 3 --max-time 4 -o /dev/null http://1.1.1.1/; then
+  printf 'internet_http_blocked=false\n'
+else
+  printf 'internet_http_blocked=true\n'
+fi
+`;
 const directory = fs.mkdtempSync(path.join(stateRoot, cameraName + '-health-'));
-const script = (phase === 'repair-netwatch' ? repair : phase === 'match-netwatch' ? match : '') + read;
+const script = (phase === 'repair-netwatch' ? repair : phase === 'match-netwatch' ? match : '') + read + (phase === 'policy' ? policy : '');
 const syntax = spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' });
 assert.equal(syntax.status, 0, 'Generated native shell syntax failed.');
 const result = spawnSync('sshpass', ['-e', 'ssh', '-T', '-o', 'StrictHostKeyChecking=yes', '-o', 'UserKnownHostsFile=' + path.join(stateRoot, 'thingino-known_hosts'), '-o', 'HostKeyAlias=thingino-' + cameraName, '-o', 'ConnectTimeout=5', '-o', 'NumberOfPasswordPrompts=1', '-o', 'PubkeyAuthentication=no', '-o', 'PreferredAuthentications=password', '-o', 'LogLevel=ERROR', '-o', 'ProxyCommand=ssh -i ' + path.join(home, '.ssh/id_ed25519_owl_ansible') + ' -o BatchMode=yes -o StrictHostKeyChecking=yes -W %h:%p root@10.0.10.3', 'root@' + camera.host, 'sh -s'], { input: script, env: { ...process.env, SSHPASS: login.password }, encoding: 'utf8', timeout: 25000, maxBuffer: 2 * 1024 * 1024 });
@@ -103,7 +123,7 @@ fs.writeFileSync(path.join(directory, 'output.log'), (result.stdout || '') + (re
 assert.equal(result.status, 0, 'Camera operation failed; private diagnostics: ' + directory);
 const fields = {};
 for (const line of result.stdout.split('\n')) {
-  const match = line.match(/^(boot_id|uptime_seconds|netwatch_enabled|netwatch_target|netwatch_interval|netwatch_fail_count|gateway_reachable|changed|software_watchdog_running)=(.*)$/);
+  const match = line.match(/^(boot_id|uptime_seconds|netwatch_enabled|netwatch_target|netwatch_interval|netwatch_fail_count|gateway_reachable|changed|software_watchdog_running|loopback_http|peer_http_blocked|peer_ping_blocked|internet_http_blocked)=(.*)$/);
   if (match) fields[match[1]] = match[2];
 }
 console.log(JSON.stringify({ camera: cameraName, phase, ...fields, privateDiagnostics: directory }));

@@ -42,9 +42,22 @@ the production HTTPS ingress can be used for read-only inspection:
 GWN_MANAGER_USE_INGRESS=true node scripts/gwn-manager-run.mjs audit-production
 ```
 
-Ingress transport is refused for all mutating phases. It uses normal trusted
-HTTPS validation; do not disable certificate checks or use it to bypass the
-controller's management allowlist.
+Ingress uses normal trusted HTTPS validation; do not disable certificate checks
+or bypass the controller's management allowlist. Mutation phases are refused
+over ingress. Completed IoT migration and forwarding-trial write commands have
+been removed; the three accepted profiles and the unresolved DHCP acceptance
+boundary are described in [Decision 024](../../../docs/decisions/024-single-ssid-iot-ppsk.md).
+Private preimages and receipts remain available for controlled recovery, not
+blind replay. The ordinary reconciler skips the UI-owned IoT profile.
+
+`access_point.firmware` in the [manifest](../../../ansible/vars/gwn-manager.json)
+records the approved model-specific versioned HTTPS image and SHA-256. It is an
+operator maintenance reference, not an automatic firmware deployment trigger.
+Verify wired management, a private native configuration snapshot and the image
+checksum before using Manager's single-device upgrade workflow. Verify the AP's
+actual running version and both IoT VLANs afterward; cached Manager version or
+schedule status alone is not acceptance. Firmware security-version changes can
+restrict downgrade recovery.
 
 `plan` accepts a no-op, creation of this single unprivileged container, or the
 reviewed memory-only reduction from 6144 to 4096 MiB. Other updates and all

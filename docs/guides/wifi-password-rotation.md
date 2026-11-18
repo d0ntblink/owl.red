@@ -13,14 +13,17 @@ Keep passwords out of Git, command arguments, temporary scripts and chat.
 | Wi-Fi network | Bitwarden item | Effect |
 |---------------|----------------|--------|
 | `owl.red` | `owl-red-wifi-private` | Private Wi-Fi, VLAN 20; 2.4 / 5 GHz |
-| `owl.red-iot-local` | `owl-red-wifi-iot-local` | Local-only IoT, VLAN 40; 2.4 / 5 GHz |
-| `owl.red-iot-cloud` | `owl-red-wifi-iot-cloud` | Internet-enabled IoT, VLAN 50; 2.4 / 5 GHz |
+| `owl-red-iot` | `owl-red-wifi-iot` | UI-managed MAC-bound PPSK accounts, VLAN 40/50; shared two-word phrase |
 | `silence of the lans` | `owl-red-wifi-guest` | Guest Wi-Fi, VLAN 30; 2.4 / 5 GHz; portal consent remains separate |
 
 Change the item's **Password** field, not its name, username or notes. Save it
 and let the Bitwarden application sync only as part of a reviewed rotation.
-Prefer a generated printable-ASCII passphrase of 20 or more characters within
-the AP/security mode's supported limits. Keep local/cloud IoT keys distinct.
+For IoT, update the same phrase in both Bitwarden stores and every PPSK account
+in GWN, then reseal the versioned CSV using the [IoT maintenance guide](iot-wifi-ui.md).
+Its separate encryption-key field must not change during an ordinary Wi-Fi
+rotation. The production API runner deliberately skips the IoT profile.
+For private and guest networks, prefer generated printable-ASCII passphrases
+within the AP/security mode's supported limits.
 
 ## Production Apply
 

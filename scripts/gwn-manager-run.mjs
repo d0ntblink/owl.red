@@ -17,7 +17,7 @@ assert.ok(['inspect-local', 'enable-api-local', 'api-local', 'qualify-local', 'b
 const production = selectedPhase.endsWith('-production');
 const phase = production ? selectedPhase.replace('-production', '-local') : selectedPhase;
 const ingressTransport = production && process.env.GWN_MANAGER_USE_INGRESS === 'true';
-assert.ok(!ingressTransport || ['inspect-production', 'status-production', 'audit-production', 'iot-inventory-production'].includes(selectedPhase), 'Ingress transport is read-only');
+assert.ok(!ingressTransport || ['inspect-production', 'status-production', 'audit-production', 'iot-inventory-production', ].includes(selectedPhase), 'Ingress transport is read-only');
 const home = os.homedir();
 const directory = path.join(home, '.local/state/owl-red/gwn-manager');
 const credentialFile = path.join(directory, production ? 'production-api.json' : 'wsl-api.json');
@@ -197,17 +197,28 @@ if (phase === 'bootstrap-local') {
         const clients = await api('client/list', { networkId, pageNum: 1, pageSize: 200 });
         const rows = clients.result ?? clients.clients ?? clients.records;
         assert.ok(Array.isArray(rows) && rows.length <= 200, 'Incomplete or unrecognized active client inventory');
-        const iotSsids = new Set(['owl.red-iot-local', 'owl.red-iot-cloud']);
+        const iotSsids = new Set(['owl-red-iot', 'owl.red-iot-local', 'owl.red-iot-cloud']);
         const fields = ['id', 'clientId', 'name', 'clientName', 'ipv4', 'ipv6', 'ssid', 'vlanId', 'vlanName',
-          'online', 'status', 'apName', 'band', 'lastSeen', 'lastseen', 'lastactive', 'lastactiveTime'];
+          'vid', 'bssid', 'online', 'status', 'apName', 'band', 'lastSeen', 'lastseen', 'lastactive', 'lastactiveTime'];
         const inventory = rows.filter(row => iotSsids.has(row.ssid)).map(row =>
           Object.fromEntries(fields.filter(field => row[field] !== undefined && row[field] !== null)
             .map(field => [field, row[field]])));
         const onlineCount = inventory.filter(row => row.online === true || row.online === 1 || row.online === '1').length;
-        console.log(JSON.stringify({ accessPoint: target.mac, networkId, activeClientTotal: clients.total ?? rows.length,
-          responseKeys: Object.keys(clients), clientFields: [...new Set(rows.flatMap(row => Object.keys(row)))].sort(),
+        console.log(JSON.stringify({ accessPoint: target.mac, networkId, associationEvidence: 'historical; confirm device state independently', clientRecordTotal: clients.total ?? rows.length,
           iotClientRecords: inventory.length, iotOnlineCount: onlineCount, clients: inventory }, null, 2));
       } else if (phase === 'audit-local') {
+        let apDiagnostics;
+        if (process.env.GWN_MANAGER_DIAGNOSTICS === 'true') {
+          const responses = {};
+          for (const [name, route] of [['configuration', '/app/ap/config/detail/info'], ['capture', '/app/ap/monitor/capture/show'], ['ssidForm', '/app/ssid/editItem']]) {
+            responses[name] = await browser.request(route + '?network=' + networkId, 'POST', { mac: target.mac, apId: owned[0]?.id });
+          }
+          fs.writeFileSync(path.join(directory, 'ap-diagnostics.json'), JSON.stringify(responses), { mode: 0o600 });
+          apDiagnostics = Object.fromEntries(Object.entries(responses).map(([name, response]) => [name, {
+            code: response.retCode, type: typeof response.data, fields: Object.keys(response.data ?? {}),
+            firstItemFields: Array.isArray(response.data) ? Object.keys(response.data[0] ?? {}) : undefined,
+          }]));
+        }
         const ssids = await api('ssid/list', { networkId, pageNum: 1, pageSize: 100 });
         assert.ok(Array.isArray(ssids.result) && ssids.total <= 100, 'Incomplete SSID inventory');
         const records = [];
@@ -215,16 +226,22 @@ if (phase === 'bootstrap-local') {
           const response = await api('ssid/configuration', { id: ssid.id }, 'GET');
           const actual = response.configuration;
           assert.ok(actual, 'SSID configuration missing');
-          records.push({ ssid: ssid.ssidName, enabled: actual.ssidEnable, vlanEnabled: actual.ssidVlan,
+          records.push({ id: ssid.id, ssid: ssid.ssidName, enabled: actual.ssidEnable, vlanEnabled: actual.ssidVlan,
             vlan: actual.ssidVlanid, bands: actual.ssidNewSsidBand, securityType: actual.ssidSecurityType,
+            ppskProfile: actual.ppskProfile,
             encryption: actual.ssidEncryption, clientIsolation: actual.ssidIsolation,
             isolationMode: actual.ssidIsolationMode, portalEnabled: actual.ssidPortalEnable,
             ipAssignment: actual.ssidClientIPAssignment, onlineDevices: ssid.onlineDevices,
             bindingFields: Object.keys(response).filter(key => /bind|device|mac/i.test(key)) });
         }
+        const groups = await browser.request('/app/ppsk/group/list?network=' + networkId, 'POST', { pageNum: 1, pageSize: 100 });
+        assert.ok(groups.retCode === 0, 'PPSK group inventory failed; private response withheld');
+        const groupRows = groups.data?.result ?? groups.data?.list ?? (Array.isArray(groups.data) ? groups.data : []);
+        const groupFields = ['id', 'name', 'groupName', 'ppskName', 'networkId', 'count', 'ppskCount'];
         console.log(JSON.stringify({ accessPoint: owned.map(item => ({ mac: item.mac, ip: item.ipv4 ?? item.ip,
           status: item.status, paired: item.paired, configSuccess: item.configSuccess, natSwitch: item.natSwitch,
-          portFields: { devicePortInfos: item.devicePortInfos, portsInfo: item.portsInfo } })), ssids: records }, null, 2));
+          portFields: { devicePortInfos: item.devicePortInfos, portsInfo: item.portsInfo } })), ssids: records, apDiagnostics,
+          ppskGroups: groupRows.map(row => Object.fromEntries(groupFields.filter(field => row[field] !== undefined).map(field => [field, row[field]]))) }, null, 2));
       } else if (phase === 'adopt-local' && !owned.length) {
         const stored = parseEnv(fs.readFileSync(path.join(repository, 'env.secret'), 'utf8'));
         assert.ok(stored.grandstream, 'Existing AP bootstrap credential required');
@@ -258,6 +275,10 @@ if (phase === 'bootstrap-local') {
           console.log(JSON.stringify({ ssid: name, retired: true, verified: true }));
         }
         for (const [name, network] of Object.entries(networks)) {
+          if (network.ssid_owner === 'gwn-manager-ui') {
+            console.log(JSON.stringify({ ssid: network.ssid, vlan: network.vlan, managedBy: network.ssid_owner, skipped: true }));
+            continue;
+          }
           const matches = ssids.result.filter(item => item.ssidName === network.ssid);
           assert.ok(matches.length <= 1, 'Duplicate managed SSID');
           const secret = await credentials(network.credential_item);

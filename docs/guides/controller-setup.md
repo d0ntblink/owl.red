@@ -332,13 +332,21 @@ and a Homepage link. AP adoption, all eight BSS broadcasts and phone private/
 guest access are accepted. See the [controller root](../../terraform/proxmox/gwn-manager/README.md)
 for the Nix/Terraform/OpenSSH lifecycle prerequisites and guarded commands.
 
-The [shared network profile](../../ansible/vars/wifi-networks.yml) supplies SSID
-names, bands, vault references and enablement to the production API runner, and
-upstream policy to VyOS. Guest gateway ownership stays on openNDS even while
-the SSID is enabled. Use the existing [password authority](wifi-password-rotation.md).
+The [shared network profile](../../ansible/vars/wifi-networks.yml) supplies private
+and guest SSID settings to the API runner and upstream policy to VyOS. The
+UI-owned `owl-red-iot` PPSK profile is skipped by that runner. Guest gateway
+ownership stays on openNDS. Use the existing [password authority](wifi-password-rotation.md).
 Review desired changes and private recovery inputs before applying; restore and
 controller-outage testing remain follow-ups.
 Sensitive plan masking alone does not keep keys out of Terraform state.
+
+The [IoT CSV command](../../scripts/iot-wifi-csv.mjs) needs Node.js 24,
+Python 3's standard `csv` module, `.venv/bin/ansible-vault` from the existing
+Ansible installation and the pinned Bitwarden CLI/profile. `export` decrypts
+the versioned CSV into ignored artifacts; `seal` encrypts local edits and
+verifies an exact round trip. The encryption key is a hidden field in the
+`owl-red-wifi-iot` Password Manager item, separate from the Wi-Fi passphrase.
+See [IoT maintenance](iot-wifi-ui.md) for commands and ownership.
 
 Qualify coverage for the 900-sq-ft site and radio power on this hardware;
 initial weak-spot signal target is about `-67` dBm. Lower transmit power cannot

@@ -637,7 +637,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi | `20:0b:74:a5:15:05` | Allocation `10.0.40.10` | Local-IoT Wi-Fi |
+| Wi-Fi | `20:0b:74:a5:15:05` | Allocation `10.0.40.10` | `owl-red-iot`; VLAN 40 assignment |
 
 ### printer-bambu
 
@@ -654,7 +654,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi | `80:65:99:a1:5f:9c` | Allocation `10.0.40.11` | Local-IoT Wi-Fi |
+| Wi-Fi | `80:65:99:a1:5f:9c` | Allocation `10.0.40.11` | `owl-red-iot`; VLAN 40 assignment |
 
 ### thermostat-ecobee
 
@@ -688,7 +688,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi | `90:70:69:8e:a1:70` | DHCP dynamic; no fixed allocation | `owl.red-iot-cloud`; GWN Manager reports online |
+| Wi-Fi | `90:70:69:8e:a1:70` | DHCP dynamic; no fixed allocation | `owl-red-iot`; VLAN 50 assignment |
 
 ### iot-client-a0920850a5e4
 
@@ -700,11 +700,11 @@ MAC rather than its permanent address.
 | platform | Not documented; MAC OUI is registered to Tuya Smart Inc.; LocalTuya compatibility is unverified |
 | role | Outdoor plug with individually controlled outlets; Alexa/Google features are shown by the product image, but their network requirements are unverified |
 | parent | None |
-| network_policy | Currently associated with local-only VLAN 40; keep local-only by default, and use VLAN 50 only if required cloud features are confirmed |
+| network_policy | User-selected internet-connected VLAN 50; LocalTuya and offline operation remain unverified |
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi | `a0:92:08:50:a5:e4` | DHCP dynamic; no fixed allocation | `owl.red-iot-local`; GWN Manager reports online |
+| Wi-Fi | `a0:92:08:50:a5:e4` | DHCP dynamic; no fixed allocation | `owl-red-iot`; VLAN 50 assignment |
 
 ### media-shield
 
@@ -742,7 +742,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi / `wlan0` | `02:7f:f6:05:40:fc` | Allocation `10.0.40.12` | `owl.red-iot-local`; 2.4 GHz |
+| Wi-Fi / `wlan0` | `02:7f:f6:05:40:fc` | Allocation `10.0.40.12` | `owl-red-iot`; VLAN 40 assignment |
 
 ### camera-office
 
@@ -763,7 +763,7 @@ MAC rather than its permanent address.
 
 | Interface | MAC | Address | Connection |
 |-----------|-----|---------|------------|
-| Wi-Fi / `wlan0` | `02:2d:1f:56:ee:b8` | Allocation `10.0.40.13` | `owl.red-iot-local`; 2.4 GHz |
+| Wi-Fi / `wlan0` | `02:2d:1f:56:ee:b8` | Allocation `10.0.40.13` | `owl-red-iot`; VLAN 40 assignment |
 
 ## Rack Connections
 

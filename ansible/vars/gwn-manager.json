@@ -9,7 +9,12 @@
   "access_point": {
     "mac": "ec:74:d7:b3:3e:ba",
     "model": "GWN7660E",
-    "name": "ap"
+    "name": "ap",
+    "firmware": {
+      "version": "1.0.27.20",
+      "url": "https://firmware.grandstream.com/gwnap/1_0_27_20/gwn7660efw.bin",
+      "sha256": "a89145de6e91c3bdf7513c715d7658ae91d8c03447e9ce2caf9f74c3f23965a9"
+    }
   },
   "retired_bootstrap_ssids": ["GWN Manager"],
   "source": {
